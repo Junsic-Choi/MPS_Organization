@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPS2603-1 생산계획 대시보드</title>
+    <!-- Google Fonts for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- PapaParse for CSV reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --surface-hover: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --border-color: #334155;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Styles */
+        header {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        /* Main Container */
+        main {
+            padding: 2rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Uploader Area */
+        .upload-area {
+            background: var(--surface-color);
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--accent-color);
+            background: rgba(59, 130, 246, 0.05);
+            box-shadow: 0 0 20px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-btn {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .upload-btn:hover {
+            background: #2563eb;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* Extraction Button Area */
+        .action-area {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .extract-btn {
+            background: linear-gradient(135deg, var(--accent-color), #8b5cf6);
+            color: white;
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px var(--accent-glow);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .extract-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+        }
+
+        .extract-btn:active {
+            transform: translateY(1px);
+        }
+
+        .extract-btn:disabled {
+            background: var(--surface-hover);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            color: var(--text-secondary);
+        }
+
+        /* Controls / Filters */
+        .controls {
+            display: none;
+            /* Hidden until data loads */
+            background: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .controls.active {
+            display: grid;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .select-custom {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem top 50%;
+            background-size: 0.65rem auto;
+            cursor: pointer;
+        }
+
+        .select-custom:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Stats */
+        .stats {
+            display: none;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stats.active {
+            display: flex;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-val {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Table Area */
+        .table-container {
+            display: none;
+            /* Hidden initially */
+            background: var(--surface-color);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow: auto;
+            max-height: 65vh;
+            /* Responsive height */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .table-container.active {
+            display: block;
+        }
+
+        /* Thin Scrollbar for Table */
+        .table-container::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: var(--bg-color);
+            border-radius: 5px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: var(--surface-hover);
+            border-radius: 5px;
+            border: 2px solid var(--bg-color);
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            background: var(--surface-hover);
+            z-index: 10;
+        }
+
+        th {
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.8rem 1.2rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            /* Allow wrapping for long group/model names */
+            white-space: normal;
+            word-break: keep-all;
+        }
+
+        tbody tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Loading Spinner */
+        .loader {
+            display: none;
+            width: 48px;
+            height: 48px;
+            border: 5px solid var(--surface-hover);
+            border-bottom-color: var(--accent-color);
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">MPS Dashboard ✨</div>
+        <div class="user-info" style="color: var(--text-secondary); font-size: 0.9rem;">
+            생산계획 데이터 뷰어
+        </div>
+    </header>
+
+    <main>
+        <!-- Action Area -->
+        <div class="action-area" id="action-area">
+            <div>
+                <h2 style="font-weight: 600; margin-bottom: 0.5rem;">새 데이터 동기화</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">폴더에 있는 최신 MPS 엑셀 파일을 읽어와 대시보드 데이터를 업데이트합니다.
+                    (약 10~30초 소요)</p>
+            </div>
+            <button class="extract-btn" id="extract-btn" onclick="startExtraction()">
+                <span>⚡ 데이터 추출 및 갱신 시작</span>
+            </button>
+            <p id="status-msg" style="color: var(--success); font-size: 0.9rem; display: none; margin-top: 1rem;">✅ 데이터
+                갱신 완료!</p>
+            <div id="processing-text"
+                style="color: var(--accent-color); font-size: 0.95rem; font-weight: 500; display: none; margin-top: 0.5rem; animation: pulse 1.5s infinite;">
+                서버가 DRM 보안을 해제하고 엑셀 데이터를 전개 중입니다... 잠시만 기다려주세요!
+            </div>
+        </div>
+
+        <style>
+            @keyframes pulse {
+                0% {
+                    opacity: 0.6;
+                }
+
+                50% {
+                    opacity: 1;
+                }
+
+                100% {
+                    opacity: 0.6;
+                }
+            }
+        </style>
+
+        <div class="loader" id="loader"></div>
+
+        <!-- Filters -->
+        <div class="controls" id="controls">
+            <div class="filter-group">
+                <label for="filter-site">생산처 (Site)</label>
+                <select class="select-custom" id="filter-site">
+                    <option value="">전체보기</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-group">기종분류 (Group)</label>
+                <select class="select-custom" id="filter-group">
+                    <option value="">전체보기</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-month">월 (Month)</label>
+                <select class="select-custom" id="filter-month">
+                    <option value="">전체보기</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="search-model">기종 검색 (Search Model)</label>
+                <input type="text" class="select-custom" id="search-model" placeholder="기종명을 입력하세요..."
+                    style="background-image: none; padding-right: 1rem;">
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <div class="stat-item">
+                <span class="stat-val" id="total-rows">0</span>
+                <span class="stat-label">총 생산 대수 (행 수)</span>
+            </div>
+        </div>
+
+        <!-- Data Grid -->
+        <div class="table-container" id="table-container">
+            <table id="data-table">
+                <thead>
+                    <tr id="table-head">
+                        <!-- Filled dynamically -->
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Filled dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const extractBtn = document.getElementById('extract-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const processingText = document.getElementById('processing-text');
+        const controls = document.getElementById('controls');
+        const tableContainer = document.getElementById('table-container');
+        const tableHead = document.getElementById('table-head');
+        const tableBody = document.getElementById('table-body');
+        const loader = document.getElementById('loader');
+        const stats = document.getElementById('stats');
+        const totalRowsSpan = document.getElementById('total-rows');
+
+        const filterSite = document.getElementById('filter-site');
+        const filterGroup = document.getElementById('filter-group');
+        const filterMonth = document.getElementById('filter-month');
+        const searchModel = document.getElementById('search-model');
+
+        let rawData = [];
+        let filteredData = [];
+        let headers = [];
+
+        async function startExtraction() {
+            // UI Update for loading
+            extractBtn.disabled = true;
+            statusMsg.style.display = 'none';
+            processingText.style.display = 'block';
+            loader.style.display = 'block';
+            tableContainer.classList.remove('active');
+            stats.classList.remove('active');
+            controls.classList.remove('active');
+
+            try {
+                // Call local backend server to run PowerShell script
+                const response = await fetch('/api/extract', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.file) {
+                    // Script executed successfully, now load the generated CSV from the server
+                    loadCSVFromServer(result.file);
+                } else {
+                    throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
+                }
+            } catch (error) {
+                alert("서버 오류: " + error.message + "\nNode.js 서버가 켜져 있는지 확인해주세요.");
+                extractBtn.disabled = false;
+                processingText.style.display = 'none';
+                loader.style.display = 'none';
+            }
+        }
+
+        function loadCSVFromServer(filename) {
+            // Fetch the generated CSV file via HTTP GET
+            Papa.parse('/' + filename, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function (results) {
+                    rawData = results.data;
+                    headers = results.meta.fields;
+
+                    // Restore UI
+                    extractBtn.disabled = false;
+                    processingText.style.display = 'none';
+                    loader.style.display = 'none';
+                    statusMsg.style.display = 'block';
+                    setTimeout(() => { statusMsg.style.display = 'none'; }, 5000);
+
+                    controls.classList.add('active');
+                    stats.classList.add('active');
+                    tableContainer.classList.add('active');
+
+                    populateFilters();
+                    applyFilters();
+                },
+                error: function (error) {
+                    loader.style.display = 'none';
+                    processingText.style.display = 'none';
+                    extractBtn.disabled = false;
+                    alert('추출은 완료되었으나, CSV 파일을 화면에 불러오는 중 오류가 발생했습니다: ' + error.message);
+                }
+            });
+        }
+
+        function populateFilters() {
+            const sites = new Set();
+            const groups = new Set();
+            const months = new Set();
+
+            rawData.forEach(row => {
+                if (row['Site']) sites.add(row['Site']);
+                if (row['Group']) groups.add(row['Group']);
+                if (row['Month']) months.add(row['Month']);
+            });
+
+            const sortMonths = (a, b) => {
+                const numA = parseInt(a) || 0;
+                const numB = parseInt(b) || 0;
+                return numA - numB;
+            };
+
+            fillSelect(filterSite, Array.from(sites).sort());
+            fillSelect(filterGroup, Array.from(groups).sort());
+            fillSelect(filterMonth, Array.from(months).sort(sortMonths));
+        }
+
+        function fillSelect(selectElement, items) {
+            // Keep the first default option
+            selectElement.innerHTML = '<option value="">전체보기</option>';
+            items.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item;
+                opt.textContent = item;
+                selectElement.appendChild(opt);
+            });
+        }
+
+        [filterSite, filterGroup, filterMonth].forEach(select => {
+            select.addEventListener('change', applyFilters);
+        });
+        searchModel.addEventListener('input', applyFilters);
+
+        function applyFilters() {
+            const siteVal = filterSite.value;
+            const groupVal = filterGroup.value;
+            const monthVal = filterMonth.value;
+            const searchVal = searchModel.value.toLowerCase();
+
+            filteredData = rawData.filter(row => {
+                const matchSite = !siteVal || row['Site'] === siteVal;
+                const matchGroup = !groupVal || row['Group'] === groupVal;
+                const matchMonth = !monthVal || row['Month'] === monthVal;
+                const matchSearch = !searchVal || (row['Model'] && row['Model'].toLowerCase().includes(searchVal));
+                return matchSite && matchGroup && matchMonth && matchSearch;
+            });
+
+            totalRowsSpan.textContent = filteredData.length.toLocaleString();
+            renderTable();
+        }
+
+        function renderTable() {
+            // Render Headers
+            tableHead.innerHTML = '';
+            headers.forEach(h => {
+                const th = document.createElement('th');
+                th.textContent = h === 'Month' ? '월' : h;
+                tableHead.appendChild(th);
+            });
+
+            // Render Body
+            tableBody.innerHTML = '';
+
+            // Limit to 500 rows for performance, just to keep DOM light
+            const limit = Math.min(filteredData.length, 500);
+
+            for (let i = 0; i < limit; i++) {
+                const row = filteredData[i];
+                const tr = document.createElement('tr');
+                headers.forEach(h => {
+                    const td = document.createElement('td');
+                    // Add subtle styling to Model and Month
+                    if (h === 'Model') {
+                        td.style.fontWeight = '600';
+                        td.style.color = 'var(--accent-color)';
+                    }
+                    if (h === 'Month') {
+                        td.style.color = 'var(--success)';
+                    }
+                    td.textContent = row[h];
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            }
+
+            if (filteredData.length > 500) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = headers.length;
+                td.textContent = `... (외 ${filteredData.length - 500}개의 데이터가 더 있습니다. 필터를 사용하여 범위를 좁혀주세요.)`;
+                td.style.textAlign = 'center';
+                td.style.color = 'var(--text-secondary)';
+                td.style.fontStyle = 'italic';
+                tr.appendChild(td);
+                tableBody.appendChild(tr);
+            }
+        }
+    </script>
+</body>
+
+</html>
