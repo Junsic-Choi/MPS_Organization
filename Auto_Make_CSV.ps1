@@ -109,7 +109,7 @@ try {
     if ($null -ne $mpsTab) {
         $mpsRows = $mpsTab.UsedRange.Rows.Count + $mpsTab.UsedRange.Row
         # D열(4) ~ H열(8) 데이터 한 번에 가져오기
-        $mpsRange = $mpsTab.Range("D7:H$mpsRows").Value2
+        $mpsRange = $mpsTab.Range("D6:H$mpsRows").Value2
         if ($null -ne $mpsRange) {
             $rowLimit = $mpsRange.GetUpperBound(0)
             for ($r = 1; $r -le $rowLimit; $r++) {
