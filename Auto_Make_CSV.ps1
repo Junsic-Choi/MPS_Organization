@@ -205,56 +205,72 @@ try {
         # 1. Site가 일치하는 MPS 항목 필터링
         $possible = $mpsEntries | Where-Object { $_.Site -eq $site }
         
+        # 1-A. Exact Match (Model/Product)
+        $match = $null
         if ($possible.Count -gt 0) {
-            # 1-A. Exact Match (Model/Product)
             $match = $possible | Where-Object { 
                 $_.Product -eq $model -or $_.Code -eq $model -or
                 ($_.Product -replace '\s+', '') -eq $cleanModel
             } | Select-Object -First 1
-            
-            # 1-B. Similarity Match (Contains / Reverse Contains)
-            if ($null -eq $match) {
+        }
+        
+        # 1-B. Global Exact Match (Site 불일치 대비)
+        if ($null -eq $match) {
+            $match = $mpsEntries | Where-Object { 
+                $_.Product -eq $model -or $_.Code -eq $model -or
+                ($_.Product -replace '\s+', '') -eq $cleanModel
+            } | Select-Object -First 1
+        }
+
+        # 1-C. Similarity Match (Contains / Reverse Contains)
+        if ($null -eq $match) {
+            # 먼저 Site 내에서 검색
+            if ($possible.Count -gt 0) {
                 $match = $possible | Where-Object { 
                     $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
                     ($_.Product -replace '\s+', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '\s+', '')*"
                 } | Select-Object -First 1
             }
-            
-            # 1-C. site.xlsx 브릿지 (사이트 제약 없이 검색 시도)
-            if ($null -eq $match -and $masterList.Count -gt 0) {
-                # 먼저 사이트 일치하는 항목 찾기
-                $bridge = $masterList | Where-Object { 
-                    $_.Plant -eq $site -and (
-                        $_.Desc -eq $model -or 
-                        $_.Desc -like "*$model*" -or 
-                        $model -like "*$($_.Desc)*" -or
-                        ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
-                    )
+            # 못 찾으면 전체에서 검색
+            if ($null -eq $match) {
+                $match = $mpsEntries | Where-Object { 
+                    $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
+                    ($_.Product -replace '\s+', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '\s+', '')*"
                 } | Select-Object -First 1
-                
-                # 사이트 일치 실패 시 전체에서 검색
-                if ($null -eq $bridge) {
-                    $bridge = $masterList | Where-Object { 
-                        $_.Desc -eq $model -or 
-                        $_.Desc -like "*$model*" -or 
-                        $model -like "*$($_.Desc)*" -or
-                        ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
-                    } | Select-Object -First 1
-                }
-                
-                if ($null -ne $bridge) {
-                    # 브릿지에서 찾은 Code로 MPS 탭 다시 검색 (역시 사이트 제약 없이 시도)
-                    $match = $possible | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
-                    if ($null -eq $match) {
-                        $match = $mpsEntries | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
-                    }
-                }
             }
+        }
+        
+        # 1-D. site.xlsx 브릿지 (사이트 제약 없이 검색 시도)
+        if ($null -eq $match -and $masterList.Count -gt 0) {
+            # 먼저 사이트 일치하는 항목 찾기
+            $bridge = $masterList | Where-Object { 
+                $_.Plant -eq $site -and (
+                    $_.Desc -eq $model -or 
+                    $_.Desc -like "*$model*" -or 
+                    $model -like "*$($_.Desc)*" -or
+                    ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                )
+            } | Select-Object -First 1
+            
+            # 사이트 일치 실패 시 전체에서 검색
+            if ($null -eq $bridge) {
+                $bridge = $masterList | Where-Object { 
+                    $_.Desc -eq $model -or 
+                    $_.Desc -like "*$model*" -or 
+                    $model -like "*$($_.Desc)*" -or
+                    ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                } | Select-Object -First 1
+            }
+            
+            if ($null -ne $bridge) {
+                # 브릿지에서 찾은 Code로 MPS 탭 다시 검색 (역시 사이트 제약 없이 시도)
+                $match = $mpsEntries | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
+            }
+        }
 
-            if ($null -ne $match) {
-                $resCode = $match.Code
-                $resProd = $match.Product
-            }
+        if ($null -ne $match) {
+            $resCode = $match.Code
+            $resProd = $match.Product
         }
         
         # --- 데이터 전개 기록 ---
