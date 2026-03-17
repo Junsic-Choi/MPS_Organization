@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MPS2603-1 생산계획 대시보드</title>
+    <title>MPS 생산계획 대시보드</title>
     <!-- Google Fonts for modern typography -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- PapaParse for CSV reading -->
@@ -385,7 +385,7 @@
 <body>
 
     <header>
-        <div class="logo">MPS Dashboard ✨</div>
+        <div class="logo">MPS 생산계획 대시보드 ✨</div>
         <div class="user-info" style="color: var(--text-secondary); font-size: 0.9rem;">
             생산계획 데이터 뷰어
         </div>
@@ -623,16 +623,29 @@
         function renderTable() {
             // Render Headers
             tableHead.innerHTML = '';
+
+            // Define clean labels for headers
+            const headerLabels = {
+                'Site': '생산처',
+                'Group': '기종분류',
+                'Model': '기종',
+                'RPM': 'RPM',
+                'Month': '월',
+                'SerialNo': 'Serial No',
+                'ModelCode': '모델코드',
+                'ProductName': '품명'
+            };
+
             headers.forEach(h => {
                 const th = document.createElement('th');
-                th.textContent = h === 'Month' ? '월' : h;
+                th.textContent = headerLabels[h] || h;
                 tableHead.appendChild(th);
             });
 
             // Render Body
             tableBody.innerHTML = '';
 
-            // Limit to 500 rows for performance, just to keep DOM light
+            // Limit to 500 rows for performance
             const limit = Math.min(filteredData.length, 500);
 
             for (let i = 0; i < limit; i++) {
@@ -640,15 +653,21 @@
                 const tr = document.createElement('tr');
                 headers.forEach(h => {
                     const td = document.createElement('td');
-                    // Add subtle styling to Model and Month
-                    if (h === 'Model') {
+
+                    // Specific styling for important columns
+                    if (h === 'Model' || h === 'ModelCode') {
                         td.style.fontWeight = '600';
                         td.style.color = 'var(--accent-color)';
                     }
                     if (h === 'Month') {
                         td.style.color = 'var(--success)';
                     }
-                    td.textContent = row[h];
+                    if (h === 'ProductName') {
+                        td.style.color = 'var(--text-secondary)';
+                        td.style.fontSize = '0.85rem';
+                    }
+
+                    td.textContent = row[h] || '';
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);

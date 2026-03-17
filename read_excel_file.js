@@ -5,7 +5,7 @@ try {
     const xlsx = require('xlsx');
     fs.appendFileSync('result_js.txt', 'xlsx required successfully.\n');
 
-    const workbook = xlsx.readFile('MPS2603-1(생산배포용).xlsx');
+    const workbook = xlsx.readFile('일반비_MPS2603-1(생산배포용).xlsx');
     fs.appendFileSync('result_js.txt', 'Sheets: ' + workbook.SheetNames.join(', ') + '\n');
 
     if (workbook.SheetNames.includes('[생산배포용]')) {
