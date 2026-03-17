@@ -197,10 +197,56 @@ try {
         $resCode = ""; $resProd = ""
         
         # 이름 정규화 (공백/특수문자 제거, 대문자 변환)
-        $cleanModel = $model -replace '[^A-Z0-9]', ''
-        # NHM5000 -> NHM500, PUMA -> PUM 등 정규화 (데이터셋 특성 반영)
-        if ($cleanModel -match "^NHM(\d+)0$") { $cleanModel = "NHM" + $Matches[1] }
-        if ($cleanModel -match "^PUMA(\d+)") { $cleanModel = "PUM" + $Matches[1] }
+        $cleanModel = $model.ToUpper() -replace '[^A-Z0-9]', ''
+        
+        # 1-1. 특정 접미사 변환 및 제거
+        # ST 시리즈의 II는 2로 변환 (ST10GS2 등), 그 외는 제거
+        if ($cleanModel -match "PUMAST|ST\d+") {
+            $cleanModel = $cleanModel -replace 'II$', '2'
+        }
+        else {
+            $cleanModel = $cleanModel -replace 'II$|SR$|LSR$|T50$|50$', ''
+        }
+        
+        # 1-2. NHM/NHP 특정 패턴 정규화 (NHM5000 -> NHM500, NHP4000 -> NHP400 등)
+        if ($cleanModel -match "^(NHM|NHP)(\d+)0$") { 
+            $cleanModel = $Matches[1] + $Matches[2] 
+        }
+        
+        # 1-3. PUMA 시리즈 특화
+        if ($cleanModel -match "^PUMAST(\d+.*)$") {
+            # PUMA ST 10GS -> ST10GS (Match Row 10: ST10GS2)
+            $cleanModel = "ST" + $Matches[1]
+        }
+        elseif ($cleanModel -match "^PUMA(\d+.*)$") { 
+            # PUMA 4100 -> P4100
+            $cleanModel = "P" + $Matches[1] 
+        }
+
+        # 1-4. LYNX / MYNX 시리즈 (LYNX -> L, MYNX -> M)
+        if ($cleanModel -match "^LYNX(\d+.*)$") {
+            $cleanModel = "L" + $Matches[1]
+        }
+        elseif ($cleanModel -match "^MYNX(\d+.*)$") {
+            $cleanModel = "M" + $Matches[1]
+        }
+
+        # 1-5. VCF -> VF / VCF850 -> VF8
+        if ($cleanModel -match "^VCF850(.*)$") {
+            $cleanModel = "VF8" + $Matches[1]
+        }
+        elseif ($cleanModel -match "^VCF(\d+.*)$") {
+            $cleanModel = "VF" + $Matches[1]
+        }
+
+        # 1-6. SMX (00 제거) 및 ST 옵션 제거
+        if ($cleanModel -match "^SMX(\d\d)00(.*)$") {
+            $cleanModel = "SMX" + $Matches[1] + $Matches[2]
+        }
+        # 맨 뒤의 ST는 옵션이므로 제거 (모델명 본체만 남김)
+        if ($cleanModel -match ".+ST$") {
+            $cleanModel = $cleanModel -replace "ST$", ""
+        }
         
         # 1. Site가 일치하는 MPS 항목 필터링
         $possible = $mpsEntries | Where-Object { $_.Site -eq $site }
