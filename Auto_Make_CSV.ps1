@@ -69,8 +69,9 @@ try {
     
     [System.IO.File]::WriteAllBytes($csvPath, [byte[]](239, 187, 191))
     
-    $headerLine = '"Site","Group","Model","RPM","Month","SerialNo"'
-    Out-File -FilePath $csvPath -InputObject $headerLine -Append -Encoding UTF8
+    [System.IO.File]::WriteAllBytes($csvPath, [byte[]](239, 187, 191))
+    
+    # Removed initial header line to avoid duplicates
     
     $last_site = ""
     $last_group = ""
@@ -78,11 +79,12 @@ try {
     
     # Read the month columns dynamically based on row 7
     $monthCols = @()
-    # Safely scan columns 8 to 20 to find numeric month headers like "3", "4", "5", etc.
+    # Safely scan columns 6 to 20 to find numeric month headers like "3", "4", "5", etc.
     for ($c = 6; $c -le 20; $c++) {
         $headerText = $targetSheet.Cells.Item(7, $c).Text
-        if ($null -ne $headerText -and $headerText -match "^(\d+)$") {
-            $monthObj = @{ Col = $c; Name = $headerText }
+        if ($null -ne $headerText -and $headerText -match "^(\d+)") {
+            $monthNum = $Matches[1]
+            $monthObj = [PSCustomObject]@{ Col = $c; Name = $monthNum }
             $monthCols += $monthObj
         }
     }
@@ -90,11 +92,11 @@ try {
     # If couldn't find dynamic headers, fallback to previous manual map
     if ($monthCols.Count -eq 0) {
         $monthCols = @(
-            @{ Col = 8; Name = "3" },
-            @{ Col = 9; Name = "4" },
-            @{ Col = 10; Name = "5" },
-            @{ Col = 11; Name = "6" },
-            @{ Col = 13; Name = "7" }
+            [PSCustomObject]@{ Col = 8; Name = "3" },
+            [PSCustomObject]@{ Col = 9; Name = "4" },
+            [PSCustomObject]@{ Col = 10; Name = "5" },
+            [PSCustomObject]@{ Col = 11; Name = "6" },
+            [PSCustomObject]@{ Col = 13; Name = "7" }
         )
     }
     
@@ -127,26 +129,36 @@ try {
             }
         }
         Write-Log "MPS 데이터 확보: $($mpsEntries.Count) 건" "Gray"
+        if ($mpsEntries.Count -gt 0) {
+            Write-Log "MPS 샘플: Code=$($mpsEntries[0].Code), Site=$($mpsEntries[0].Site)" "Gray"
+        }
     }
     
-    # 2.6 site.MHTML 마스터 데이터 로딩 (보조 매핑)
+    # 2.6 site.xlsx 마스터 데이터 로딩 (보조 매핑)
     $masterList = @()
-    $mhtmlPath = "$dir\site.MHTML"
-    if (Test-Path $mhtmlPath) {
-        Write-Log "site.MHTML 마스터 로드 중..." "Gray"
-        $content = Get-Content $mhtmlPath -Raw
-        $rows = [regex]::Matches($content, '<tr.*?>\s*(.*?)\s*</tr>', [System.Text.RegularExpressions.RegexOptions]::Singleline)
-        foreach ($row in $rows) {
-            $cells = [regex]::Matches($row.Groups[1].Value, '<td.*?>(.*?)</td>', [System.Text.RegularExpressions.RegexOptions]::Singleline)
-            if ($cells.Count -ge 4) {
-                $pPlant = ($cells[0].Groups[1].Value -replace '<[^>]+>', '').Trim()
-                $pCode = ($cells[1].Groups[1].Value -replace '<[^>]+>', '').Trim()
-                $pDesc = ($cells[2].Groups[1].Value -replace '<[^>]+>', '').Trim()
+    $siteXlsxPath = "$dir\site.xlsx"
+    if (Test-Path $siteXlsxPath) {
+        Write-Log "site.xlsx 마스터 로드 중..." "Gray"
+        try {
+            $siteWb = $excel.Workbooks.Open($siteXlsxPath, 0, $true)
+            $siteSh = $siteWb.Sheets.Item(1)
+            $siteRows = $siteSh.UsedRange.Rows.Count
+            
+            # Data starts from Row 3 (Row 2 is header: Plant, Prod. Ver, Prod. Ver Description)
+            for ($r = 3; $r -le $siteRows; $r++) {
+                $pPlant = "$($siteSh.Cells.Item($r, 3).Value2)".Trim() # Column 3: Plant
+                $pCode = "$($siteSh.Cells.Item($r, 4).Value2)".Trim()  # Column 4: Prod. Ver (Code)
+                $pDesc = "$($siteSh.Cells.Item($r, 5).Value2)".Trim()  # Column 5: Description
                 
-                if ($pPlant -match "^\d+$") {
+                if ($pPlant -and $pCode) {
                     $masterList += [PSCustomObject]@{ Plant = $pPlant; Code = $pCode; Desc = $pDesc }
                 }
             }
+            $siteWb.Close($false)
+            Write-Log "site.xlsx 로드 완료: $($masterList.Count) 건" "Gray"
+        }
+        catch {
+            Write-Log "!! site.xlsx 로드 실패: $_" "Yellow"
         }
     }
 
@@ -159,7 +171,10 @@ try {
     # 여기서는 기존 루프를 유지하되 매핑 로직을 최적화함
     
     # 루프 최적화: 모든 데이터를 메모리에 담아 처리
-    $lastCol = ($monthCols | Measure-Object -Property Col -Maximum).Maximum
+    $lastCol = 20 # Fallback max column
+    if ($monthCols.Count -gt 0) {
+        $lastCol = ($monthCols | Measure-Object -Property Col -Maximum).Maximum
+    }
     
     for ($r = 7; $r -le $maxRows; $r++) {
         # 한 줄 전체 데이터를 한 번의 COM 호출로 가져옴
@@ -184,27 +199,55 @@ try {
         # --- 유사도 기반 매핑 (Similarity Heuristics) ---
         $resCode = ""; $resProd = ""
         
+        # 이름 정규화 (공백 제거, 대문자 변환 등)
+        $cleanModel = $model -replace '\s+', ''
+        
         # 1. Site가 일치하는 MPS 항목 필터링
         $possible = $mpsEntries | Where-Object { $_.Site -eq $site }
         
         if ($possible.Count -gt 0) {
-            # 1-A. Exact Match (Model)
-            $match = $possible | Where-Object { $_.Product -eq $model -or $_.Code -eq $model } | Select-Object -First 1
+            # 1-A. Exact Match (Model/Product)
+            $match = $possible | Where-Object { 
+                $_.Product -eq $model -or $_.Code -eq $model -or
+                ($_.Product -replace '\s+', '') -eq $cleanModel
+            } | Select-Object -First 1
             
-            # 1-B. Similarity Match (Contains)
+            # 1-B. Similarity Match (Contains / Reverse Contains)
             if ($null -eq $match) {
-                # Model이 Product에 포함되거나 그 반대인 경우
                 $match = $possible | Where-Object { 
                     $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
-                    $_.Product -like "*$group*" -or $group -like "*$($_.Product)*"
+                    ($_.Product -replace '\s+', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '\s+', '')*"
                 } | Select-Object -First 1
             }
             
-            # 1-C. site.MHTML 브릿지
-            if ($null -eq $match) {
-                $bridge = $masterList | Where-Object { $_.Plant -eq $site -and ($_.Desc -like "*$model*" -or $model -like "*$($_.Desc)*") } | Select-Object -First 1
+            # 1-C. site.xlsx 브릿지 (사이트 제약 없이 검색 시도)
+            if ($null -eq $match -and $masterList.Count -gt 0) {
+                # 먼저 사이트 일치하는 항목 찾기
+                $bridge = $masterList | Where-Object { 
+                    $_.Plant -eq $site -and (
+                        $_.Desc -eq $model -or 
+                        $_.Desc -like "*$model*" -or 
+                        $model -like "*$($_.Desc)*" -or
+                        ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                    )
+                } | Select-Object -First 1
+                
+                # 사이트 일치 실패 시 전체에서 검색
+                if ($null -eq $bridge) {
+                    $bridge = $masterList | Where-Object { 
+                        $_.Desc -eq $model -or 
+                        $_.Desc -like "*$model*" -or 
+                        $model -like "*$($_.Desc)*" -or
+                        ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                    } | Select-Object -First 1
+                }
+                
                 if ($null -ne $bridge) {
+                    # 브릿지에서 찾은 Code로 MPS 탭 다시 검색 (역시 사이트 제약 없이 시도)
                     $match = $possible | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
+                    if ($null -eq $match) {
+                        $match = $mpsEntries | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
+                    }
                 }
             }
 
