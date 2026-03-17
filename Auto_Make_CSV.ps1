@@ -67,11 +67,9 @@ try {
     # Name the output file based on the found Excel file dynamic name
     $csvPath = "$dir\${baseName}_FinalList.csv"
     
-    [System.IO.File]::WriteAllBytes($csvPath, [byte[]](239, 187, 191))
-    
-    [System.IO.File]::WriteAllBytes($csvPath, [byte[]](239, 187, 191))
-    
-    # Removed initial header line to avoid duplicates
+    # Initialize CSV with Header (Standard unquoted header for simpler property names)
+    $headerLine = 'Site,Group,Model,RPM,Month,SerialNo,ModelCode,ProductName'
+    $headerLine | Set-Content -Path $csvPath -Encoding UTF8
     
     $last_site = ""
     $last_group = ""
@@ -164,8 +162,7 @@ try {
 
     Write-Log "데이터 전개 시작..." "Cyan"
     
-    $headerLine = '"Site","Group","Model","RPM","Month","SerialNo","ModelCode","ProductName"'
-    Out-File -FilePath $csvPath -InputObject $headerLine -Append -Encoding UTF8
+    # Header is already written at initialization
     
     # 속도를 위해 생산배포용 데이터도 미리 메모리에 담기 (필요시)
     # 여기서는 기존 루프를 유지하되 매핑 로직을 최적화함
@@ -199,8 +196,11 @@ try {
         # --- 유사도 기반 매핑 (Similarity Heuristics) ---
         $resCode = ""; $resProd = ""
         
-        # 이름 정규화 (공백 제거, 대문자 변환 등)
-        $cleanModel = $model -replace '\s+', ''
+        # 이름 정규화 (공백/특수문자 제거, 대문자 변환)
+        $cleanModel = $model -replace '[^A-Z0-9]', ''
+        # NHM5000 -> NHM500, PUMA -> PUM 등 정규화 (데이터셋 특성 반영)
+        if ($cleanModel -match "^NHM(\d+)0$") { $cleanModel = "NHM" + $Matches[1] }
+        if ($cleanModel -match "^PUMA(\d+)") { $cleanModel = "PUM" + $Matches[1] }
         
         # 1. Site가 일치하는 MPS 항목 필터링
         $possible = $mpsEntries | Where-Object { $_.Site -eq $site }
@@ -210,7 +210,7 @@ try {
         if ($possible.Count -gt 0) {
             $match = $possible | Where-Object { 
                 $_.Product -eq $model -or $_.Code -eq $model -or
-                ($_.Product -replace '\s+', '') -eq $cleanModel
+                ($_.Product -replace '[^A-Z0-9]', '') -eq $cleanModel
             } | Select-Object -First 1
         }
         
@@ -218,7 +218,7 @@ try {
         if ($null -eq $match) {
             $match = $mpsEntries | Where-Object { 
                 $_.Product -eq $model -or $_.Code -eq $model -or
-                ($_.Product -replace '\s+', '') -eq $cleanModel
+                ($_.Product -replace '[^A-Z0-9]', '') -eq $cleanModel
             } | Select-Object -First 1
         }
 
@@ -228,19 +228,19 @@ try {
             if ($possible.Count -gt 0) {
                 $match = $possible | Where-Object { 
                     $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
-                    ($_.Product -replace '\s+', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '\s+', '')*"
+                    ($_.Product -replace '[^A-Z0-9]', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '[^A-Z0-9]', '')*"
                 } | Select-Object -First 1
             }
             # 못 찾으면 전체에서 검색
             if ($null -eq $match) {
                 $match = $mpsEntries | Where-Object { 
                     $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
-                    ($_.Product -replace '\s+', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '\s+', '')*"
+                    ($_.Product -replace '[^A-Z0-9]', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '[^A-Z0-9]', '')*"
                 } | Select-Object -First 1
             }
         }
         
-        # 1-D. site.xlsx 브릿지 (사이트 제약 없이 검색 시도)
+        # 1-D. site.xlsx 브릿지
         if ($null -eq $match -and $masterList.Count -gt 0) {
             # 먼저 사이트 일치하는 항목 찾기
             $bridge = $masterList | Where-Object { 
@@ -248,7 +248,7 @@ try {
                     $_.Desc -eq $model -or 
                     $_.Desc -like "*$model*" -or 
                     $model -like "*$($_.Desc)*" -or
-                    ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                    ($_.Desc -replace '[^A-Z0-9]', '') -like "*$cleanModel*"
                 )
             } | Select-Object -First 1
             
@@ -258,12 +258,11 @@ try {
                     $_.Desc -eq $model -or 
                     $_.Desc -like "*$model*" -or 
                     $model -like "*$($_.Desc)*" -or
-                    ($_.Desc -replace '\s+', '') -like "*$cleanModel*"
+                    ($_.Desc -replace '[^A-Z0-9]', '') -like "*$cleanModel*"
                 } | Select-Object -First 1
             }
             
             if ($null -ne $bridge) {
-                # 브릿지에서 찾은 Code로 MPS 탭 다시 검색 (역시 사이트 제약 없이 시도)
                 $match = $mpsEntries | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
             }
         }
