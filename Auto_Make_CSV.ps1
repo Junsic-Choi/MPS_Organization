@@ -1,10 +1,19 @@
-﻿$ErrorActionPreference = "Stop"
-$logFile = "run_debug_log.txt"
+$ErrorActionPreference = "Stop"
+$logFile = "run_debug_v2.txt"
 "--- Start ---" | Out-File $logFile -Encoding utf8
 
+# Unicode constants
+$strProd = [char]0xc0dd + [char]0xc0b0 # 생산
+$strMonth = [char]0xc6d4 # 월
+$strTotal = [char]0xd569 + [char]0xacc4 # 합계
+$strDist = [char]0xbc30 + [char]0xd3ec # 배포
+
 function Write-Log($msg, $color = "White") {
-    Write-Host $msg -ForegroundColor $color
-    $msg | Out-File $logFile -Append -Encoding utf8
+    if ($null -eq $msg) { $msg = "NULL MSG" }
+    $ts = Get-Date -Format "HH:mm:ss"
+    $line = "[$ts] $msg"
+    Write-Host $line -ForegroundColor $color
+    $line | Out-File $logFile -Append -Encoding utf8 -ErrorAction SilentlyContinue
 }
 
 try {
@@ -12,356 +21,259 @@ try {
     $excel.Visible = $false
     $excel.DisplayAlerts = $false
     
-    # Run in the directory where the script is located
     $dir = $PSScriptRoot
-    Write-Log "실행 경로: $dir"
+    if ($null -eq $dir) { $dir = Get-Location }
+    Write-Log ("Current Dir: " + $dir)
     
-    # 1. MPS와 (생산배포용)이 포함된 엑셀 파일을 찾습니다.
-    $files = Get-ChildItem -Path $dir -Filter "*.xlsx" | Where-Object { 
-        $_.Name -like "*MPS*" -and $_.Name -like "*(생산배포용)*"
-    }
-
-    if ($null -eq $files -or $files.Count -eq 0) {
-        $files = Get-ChildItem -Path $dir -Filter "*.xlsx" | Where-Object { $_.Name -like "*MPS*" }
-    }
-
-    if ($files.Count -eq 0) { throw "MPS 엑셀 파일을 이 폴더에서 찾을 수 없습니다." }
-    
-    # Use the most recently modified file if there are multiple
-    $files = $files | Sort-Object LastWriteTime -Descending
+    $files = Get-ChildItem -Path $dir -Filter "*MPS*.xls*" | Sort-Object LastWriteTime -Descending
+    if ($files.Count -eq 0) { throw "MPS File NOT found" }
     $path = $files[0].FullName
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($path)
+    Write-Log ("File: " + $files[0].Name) "Green"
     
-    Write-Log "[$($files[0].Name)] 파일을 처리중입니다..." "Green"
-    
-    # [중요] 파일 형식이 .xls인데 확장자가 .xlsx인 경우 오픈 시 멈춤(Hang) 현상이 발생할 수 있습니다.
-    # 이를 방지하기 위해 임시 .xls 파일로 복사하여 엽니다.
-    $tempPath = "$dir\temp_processing_file.xls"
+    $tempPath = $dir + "\temp_processing_file.xls"
     Copy-Item $path $tempPath -Force
     
-    Write-Log "워크북을 여는 중..." "Gray"
-    $workbook = $excel.Workbooks.Open($tempPath, 0, $true) # ReadOnly로 오픈
+    Write-Log "Opening..." "Gray"
+    $workbook = $excel.Workbooks.Open($tempPath, 0, $true)
     
-    # 2. "생산배포용" 시트 찾기
+    # ============================================================
+    # 2. Find target sheet
+    # ============================================================
     $targetSheet = $null
-    Write-Log "시트 목록 확인 중..." "Gray"
-    foreach ($s in $workbook.Sheets) {
-        Write-Log "- 시트명: $($s.Name)" "Gray"
-        if ($s.Name -like "*생산배포용*") {
-            $targetSheet = $s
-            Write-Log ">> '$($s.Name)' 시트를 사용합니다." "Cyan"
-            break
-        }
+    foreach ($sh in $workbook.Sheets) {
+        if ($sh.Name -match $strDist) { $targetSheet = $sh; break }
     }
-    
-    if (-not $targetSheet) { 
-        Write-Log "!! '생산배포용' 이름의 시트를 찾지 못해 2번째 시트를 선택합니다." "Yellow"
-        $targetSheet = $workbook.Sheets.Item(2) 
+    if ($null -eq $targetSheet) {
+        if ($workbook.Sheets.Count -ge 2) { $targetSheet = $workbook.Sheets.Item(2) }
+        else { $targetSheet = $workbook.Sheets.Item(1) }
     }
+    Write-Log ("Selected Sheet: " + $targetSheet.Name) "Green"
     
-    Write-Log "데이터 범위를 확인 중..." "Gray"
-    $usedRange = $targetSheet.UsedRange
-    $maxRows = $usedRange.Rows.Count + $usedRange.Row
-    Write-Log "총 예상 행 수: $maxRows" "Gray"
-    
-    # Name the output file based on the found Excel file dynamic name
-    $csvPath = "$dir\${baseName}_FinalList.csv"
-    
-    # Initialize CSV with Header (Standard unquoted header for simpler property names)
-    $headerLine = 'Site,Group,Model,RPM,Month,SerialNo,ModelCode,ProductName'
-    $headerLine | Set-Content -Path $csvPath -Encoding UTF8
-    
-    $last_site = ""
-    $last_group = ""
-    $last_model = ""
-    
-    # Read the month columns dynamically based on row 7
+    # ============================================================
+    # 3. Header Detection (Row 3 = month labels, Row 4 = categories)
+    # ============================================================
     $monthCols = @()
-    # 7행에서 월 헤더(예: "3", "4", "5", "3월" 등)를 동적으로 찾습니다.
-    Write-Log "월 헤더 검색 중 (7행)..." "Gray"
-    for ($c = 6; $c -le 30; $c++) {
-        $headerText = $targetSheet.Cells.Item(7, $c).Text
-        # 숫자가 포함되어 있으면 월로 간주 (단, 이미 찾은 월은 제외)
-        if ($null -ne $headerText -and $headerText -match "(\d+)") {
-            $monthNum = $Matches[1]
-            # 중복 체크
-            if ($null -eq ($monthCols | Where-Object { $_.Name -eq $monthNum })) {
-                $monthObj = [PSCustomObject]@{ Col = $c; Name = $monthNum }
-                $monthCols += $monthObj
-                Write-Log "  - 월 발견: $($monthNum)월 (컬럼 $c)" "Gray"
-            }
-        }
-    }
+    $r3 = $targetSheet.Range("A3:AZ3").Value2
+    $r4 = $targetSheet.Range("A4:AZ4").Value2
     
-    # 동적 헤더를 찾지 못한 경우에만 이전 수동 매핑 사용
-    if ($monthCols.Count -eq 0) {
-        Write-Log "동적 헤더 검색 실패. 기본 매핑 사용 (3~7월)." "Yellow"
-        $monthCols = @(
-            [PSCustomObject]@{ Col = 8; Name = "3" },
-            [PSCustomObject]@{ Col = 9; Name = "4" },
-            [PSCustomObject]@{ Col = 10; Name = "5" },
-            [PSCustomObject]@{ Col = 11; Name = "6" },
-            [PSCustomObject]@{ Col = 13; Name = "7" }
-        )
-    }
-    else {
-        Write-Log "총 $($monthCols.Count)개의 월 데이터를 찾았습니다." "Green"
-    }
-    
-    # 2.5 MPS 탭 데이터 로딩 (전체 범위를 한 번에 읽어 속도 최적화)
-    Write-Log "MPS 탭 데이터 로딩 중 (메모리 최적화)..." "Gray"
-    $mpsTab = $null
-    foreach ($s in $workbook.Sheets) { if ($s.Name -eq "MPS") { $mpsTab = $s; break } }
-    
-    $mpsEntries = @()
-    if ($null -ne $mpsTab) {
-        $mpsRows = $mpsTab.UsedRange.Rows.Count + $mpsTab.UsedRange.Row
-        # D열(4) ~ H열(8) 데이터 한 번에 가져오기
-        $mpsRange = $mpsTab.Range("D6:H$mpsRows").Value2
-        if ($null -ne $mpsRange) {
-            $rowLimit = $mpsRange.GetUpperBound(0)
-            for ($r = 1; $r -le $rowLimit; $r++) {
-                $mCode = "$($mpsRange[$r, 1])"; # D
-                $mProd = "$($mpsRange[$r, 2])"; # E
-                $mSite = "$($mpsRange[$r, 4])"; # G
-                $mVer = "$($mpsRange[$r, 5])"; # H
-                
-                if ($mCode -or $mProd) {
-                    $mpsEntries += [PSCustomObject]@{
-                        Code    = if ($mCode) { $mCode.Trim() } else { "" }
-                        Product = if ($mProd) { $mProd.Trim() } else { "" }
-                        Site    = if ($mSite) { $mSite.Trim() } else { "" }
-                        Ver     = if ($mVer) { $mVer.Trim() } else { "" }
+    for ($col = 5; $col -le 50; $col++) {
+        $cat = $r4[1, $col]
+        if ($null -eq $cat) { continue }
+        if ($cat.ToString().Trim() -match $strProd) {
+            for ($lc = $col; $lc -ge 1; $lc--) {
+                $v = $r3[1, $lc]
+                if ($null -ne $v) {
+                    $vStr = $v.ToString().Trim()
+                    if ($vStr -match "(\d+)\.?(\d+)?" + $strMonth -or $vStr -match "^(\d+)$") {
+                        $mVal = if ($Matches[2]) { $Matches[2] } else { $Matches[1] }
+                        $monthCols += [PSCustomObject]@{ Col = $col; Name = $mVal }
+                        break
                     }
                 }
             }
         }
-        Write-Log "MPS 데이터 확보: $($mpsEntries.Count) 건" "Gray"
-        if ($mpsEntries.Count -gt 0) {
-            Write-Log "MPS 샘플: Code=$($mpsEntries[0].Code), Site=$($mpsEntries[0].Site)" "Gray"
-        }
+    }
+
+    if ($monthCols.Count -eq 0) { throw "Could NOT detect data columns" }
+    Write-Log ("Month columns found: " + $monthCols.Count) "Gray"
+
+    $csvPath = $dir + "\" + $baseName + "_FinalList.csv"
+    
+    # ============================================================
+    # 4. Load Master Data from MPS tab
+    #    Col4=ModelCode, Col5=Product
+    #    Build a map: 기종명(from '생산배포용' Col3) -> List of (ModelCode, Product)
+    #
+    #    Strategy:
+    #    A) From MPS tab: Build a flat list of (ModelCode, Product)
+    #    B) The 기종명 in '생산배포용' is essentially a prefix of the Product name
+    #       e.g. 기종="HM1000" matches Product containing "HM1000"
+    #    C) For 기종s with multiple Models, store all of them
+    # ============================================================
+    
+    # List of {ModelCode, Product} from MPS tab
+    $mpsList = @()
+    $mpsTab = $null
+    foreach ($sh in $workbook.Sheets) {
+        if ($sh.Name -eq "MPS") { $mpsTab = $sh; break }
     }
     
-    # 2.6 site.xlsx 마스터 데이터 로딩 (보조 매핑)
-    $masterList = @()
-    $siteXlsxPath = "$dir\site.xlsx"
-    if (Test-Path $siteXlsxPath) {
-        Write-Log "site.xlsx 마스터 로드 중..." "Gray"
-        try {
-            $siteWb = $excel.Workbooks.Open($siteXlsxPath, 0, $true)
-            $siteSh = $siteWb.Sheets.Item(1)
-            $siteRows = $siteSh.UsedRange.Rows.Count
-            
-            # Data starts from Row 3 (Row 2 is header: Plant, Prod. Ver, Prod. Ver Description)
-            for ($r = 3; $r -le $siteRows; $r++) {
-                $pPlant = "$($siteSh.Cells.Item($r, 3).Value2)".Trim() # Column 3: Plant
-                $pCode = "$($siteSh.Cells.Item($r, 4).Value2)".Trim()  # Column 4: Prod. Ver (Code)
-                $pDesc = "$($siteSh.Cells.Item($r, 5).Value2)".Trim()  # Column 5: Description
-                
-                if ($pPlant -and $pCode) {
-                    $masterList += [PSCustomObject]@{ Plant = $pPlant; Code = $pCode; Desc = $pDesc }
+    if ($null -ne $mpsTab) {
+        $mpsMax = $mpsTab.UsedRange.Rows.Count + $mpsTab.UsedRange.Row
+        # Row 6+ : Col1=NR, Col2=PL, Col3=CH, Col4=Model, Col5=Product, Col7=Site
+        $mpsRange = $mpsTab.Range("D6:H" + $mpsMax)
+        $md = $mpsRange.Value2
+        if ($md -is [System.Array]) {
+            for ($i = 1; $i -le $md.GetUpperBound(0); $i++) {
+                if ($null -ne $md[$i, 1]) {
+                    $modelCode = $md[$i, 1].ToString().Trim()
+                    $productName = if ($null -ne $md[$i, 2]) { $md[$i, 2].ToString().Trim() } else { "" }
+                    if ($modelCode -ne "") {
+                        $mpsList += [PSCustomObject]@{ C = $modelCode; P = $productName }
+                    }
                 }
             }
-            $siteWb.Close($false)
-            Write-Log "site.xlsx 로드 완료: $($masterList.Count) 건" "Gray"
+        }
+    }
+    
+    # Build 기종 -> model/product lookup
+    # Key insight: Product name (e.g. "XG800-F0TP-0-K10") doesn't directly match 기종 name (e.g. "HM1000")
+    # BUT: Same ModelCode can have multiple Products (variants)
+    # AND: Same 기종 can have multiple ModelCodes
+    #
+    # The hint is: "같은 기종은 같은 Model 값을 가짐" -> Model column in "생산배포용" has 기종 names!
+    # In Row 6 of "생산배포용": Col3 = "Model" header, Data rows Col3 = 기종명 (HM1000, etc.)
+    # In "생산기종별": Col1 = 기종군, Col2 = 기종명 (same format)
+    # In "생산기종별" Row 6: "행 레이블 | Model | ..." -> here "Model" is actually the 기종명 column
+    # 
+    # Key: In "MPS" tab Col4, "Model" = SAP material code (ML0486)
+    #      In "생산배포용/생산기종별" Col3, "Model" = 기종명 (HM1000)
+    #
+    # Link: Product (e.g., "XG800-F0TP-0-K10") -- the base model name is in the product code
+    #       "XG800" is the 기종 base name; "ML0486" is the SAP model code
+    #       We need to match by extracting the base from Product name
+    
+    # Build a reverse map: ModelCode -> List of Products (unique by ModelCode)
+    $modCodeToProducts = @{}
+    foreach ($entry in $mpsList) {
+        if ($entry.C -ne "") {
+            if (-not $modCodeToProducts.ContainsKey($entry.C)) {
+                $modCodeToProducts[$entry.C] = @()
+            }
+            if ($entry.P -ne "" -and $modCodeToProducts[$entry.C] -notcontains $entry.P) {
+                $modCodeToProducts[$entry.C] += $entry.P
+            }
+        }
+    }
+    
+    # Function to find matching ModelCode(s)/Product(s) for a given 기종명
+    # Matching strategy: extract base model name from Product and compare with 기종명
+    # Product format: "HM1000-F0TP-0-K10" -> base = "HM1000" -> matches 기종 "HM1000"
+    # Note: some products are "XG800-F0TP..." -> 기종 might be "XG800" or "XG800 II" etc.
+    function Get-ModelMappings($kikongName, $mpsList) {
+        if ($kikongName -eq "") { return @() }
+        $results = @()
+        $seen = @{}
+        foreach ($entry in $mpsList) {
+            # Try exact prefix match: Product starts with 기종명
+            if ($entry.P -ne "" -and $entry.P -match ("^" + [Regex]::Escape($kikongName) + "[-\s/]")) {
+                $key = $entry.C + "|" + $entry.P
+                if (-not $seen.ContainsKey($key)) {
+                    $results += [PSCustomObject]@{ C = $entry.C; P = $entry.P }
+                    $seen[$key] = $true
+                }
+            }
+        }
+        # If no match found, try contains match
+        if ($results.Count -eq 0) {
+            foreach ($entry in $mpsList) {
+                if ($entry.P -ne "" -and $entry.P.ToUpper().Contains($kikongName.ToUpper().Replace(" ", "").Replace(".", ""))) {
+                    $key = $entry.C + "|" + $entry.P
+                    if (-not $seen.ContainsKey($key)) {
+                        $results += [PSCustomObject]@{ C = $entry.C; P = $entry.P }
+                        $seen[$key] = $true
+                    }
+                }
+            }
+        }
+        return $results
+    }
+    
+    Write-Log ("MPS entries: " + $mpsList.Count) "Gray"
+    
+    # ============================================================
+    # 5. Extract to CSV
+    # ============================================================
+    $headers = "Site,Group,Model,RPM,Month,SerialNo,ModelCode,ProductName"
+    $headers | Out-File $csvPath -Encoding UTF8
+    
+    $lastS = ""; $lastG = ""; $lastM = ""; $lastR = ""
+    $maxRows = $targetSheet.UsedRange.Rows.Count + $targetSheet.UsedRange.Row
+    
+    # Cache for 기종->mapping lookups
+    $kikongCache = @{}
+    
+    Write-Log ("Processing rows up to " + $maxRows) "Gray"
+    for ($r = 7; $r -le $maxRows; $r++) {
+        try {
+            $cells = $targetSheet.Range("A$r:AZ$r").Value2
+            if ($null -eq $cells) { continue }
+            
+            $v1 = $cells[1, 1]; $v2 = $cells[1, 2]; $v3 = $cells[1, 3]; $v4 = $cells[1, 4]
+            
+            $site = if ($null -eq $v1 -or $v1.ToString().Trim() -eq "") { $lastS } else { $v1.ToString().Trim() }
+            $group = if ($null -eq $v2 -or $v2.ToString().Trim() -eq "") { $lastG } else { $v2.ToString().Trim() }
+            $model = if ($null -eq $v3 -or $v3.ToString().Trim() -eq "") { $lastM } else { $v3.ToString().Trim() }
+            $rpm = if ($null -eq $v4) { $lastR } else { $v4.ToString().Trim() }
+
+            $lastS = $site; $lastG = $group; $lastM = $model
+            if ($v4 -ne $null -and $v4.ToString().Trim() -ne "") { $lastR = $rpm }
+            
+            if ($model -eq "" -and $rpm -eq "") { continue }
+            if ($site -match $strTotal -or $site -match "Total") { continue }
+            
+            # Lookup ModelCode/Product for this 기종
+            if (-not $kikongCache.ContainsKey($model)) {
+                $kikongCache[$model] = Get-ModelMappings $model $mpsList
+            }
+            $mappings = $kikongCache[$model]
+            
+            foreach ($mc in $monthCols) {
+                $qv = $cells[1, $mc.Col]
+                $qty = 0
+                if ($qv -is [double] -or $qv -is [int]) { $qty = [int]$qv }
+                elseif ($qv -as [double]) { $qty = [int][double]$qv }
+                
+                if ($qty -gt 0) {
+                    $mDisplay = $mc.Name + $strMonth
+                    
+                    if ($mappings.Count -eq 0) {
+                        # No mapping found: output one row with empty ModelCode/Product
+                        for ($idx = 1; $idx -le $qty; $idx++) {
+                            $fields = @($site, $group, $model, $rpm, $mDisplay, $idx, "", "")
+                            $line = ($fields | ForEach-Object { 
+                                    $val = if ($_ -eq $null) { "" } else { $_.ToString() }
+                                    '"{0}"' -f ($val -replace '"', '""') 
+                                }) -join ","
+                            $line | Out-File $csvPath -Append -Encoding UTF8
+                        }
+                    }
+                    else {
+                        # Each unit gets assigned a ModelCode/Product in round-robin if multiple
+                        for ($idx = 1; $idx -le $qty; $idx++) {
+                            $mapIdx = ($idx - 1) % $mappings.Count
+                            $resC = $mappings[$mapIdx].C
+                            $resP = $mappings[$mapIdx].P
+                            $fields = @($site, $group, $model, $rpm, $mDisplay, $idx, $resC, $resP)
+                            $line = ($fields | ForEach-Object { 
+                                    $val = if ($_ -eq $null) { "" } else { $_.ToString() }
+                                    '"{0}"' -f ($val -replace '"', '""') 
+                                }) -join ","
+                            $line | Out-File $csvPath -Append -Encoding UTF8
+                        }
+                    }
+                }
+            }
+            if ($r % 100 -eq 0) { Write-Log "Processed Row $r..." "Gray" }
         }
         catch {
-            Write-Log "!! site.xlsx 로드 실패: $_" "Yellow"
+            Write-Log ("Error at Row $r : " + $_.Exception.Message) "Yellow"
         }
     }
 
-    Write-Log "데이터 전개 시작..." "Cyan"
-    
-    # Header is already written at initialization
-    
-    # 속도를 위해 생산배포용 데이터도 미리 메모리에 담기 (필요시)
-    # 여기서는 기존 루프를 유지하되 매핑 로직을 최적화함
-    
-    # 루프 최적화: 모든 데이터를 메모리에 담아 처리
-    $lastCol = 20 # Fallback max column
-    if ($monthCols.Count -gt 0) {
-        $lastCol = ($monthCols | Measure-Object -Property Col -Maximum).Maximum
-    }
-    
-    for ($r = 7; $r -le $maxRows; $r++) {
-        # 한 줄 전체 데이터를 한 번의 COM 호출로 가져옴
-        $rowRange = $targetSheet.Range($targetSheet.Cells.Item($r, 1), $targetSheet.Cells.Item($r, $lastCol)).Value2
-        if ($null -eq $rowRange) { continue }
-        
-        $site = ""; $group = ""; $model = ""; $rpm = ""
-        
-        $c1 = $rowRange[1, 1]; $c2 = $rowRange[1, 2]; $c3 = $rowRange[1, 3]; $c4 = $rowRange[1, 4]
-        
-        if ($null -ne $c1) { $site = "$c1".Trim() }
-        if ($null -ne $c2) { $group = "$c2".Trim() }
-        if ($null -ne $c3) { $model = "$c3".Trim() }
-        if ($null -ne $c4) { $rpm = "$c4".Trim() }
-        
-        if ($site.Length -gt 0) { $last_site = $site } else { $site = $last_site }
-        if ($group.Length -gt 0) { $last_group = $group } else { $group = $last_group }
-        if ($model.Length -gt 0) { $last_model = $model } else { $model = $last_model }
-        
-        if ($model.Length -eq 0 -and $rpm.Length -eq 0) { continue }
-
-        # --- 유사도 기반 매핑 (Similarity Heuristics) ---
-        $resCode = ""; $resProd = ""
-        
-        # 이름 정규화 (공백/특수문자 제거, 대문자 변환)
-        $cleanModel = $model.ToUpper() -replace '[^A-Z0-9]', ''
-        
-        # 1-1. 특정 접미사 변환 및 제거
-        # ST 시리즈의 II는 2로 변환 (ST10GS2 등), 그 외는 제거
-        if ($cleanModel -match "PUMAST|ST\d+") {
-            $cleanModel = $cleanModel -replace 'II$', '2'
-        }
-        else {
-            $cleanModel = $cleanModel -replace 'II$|SR$|LSR$|T50$|50$', ''
-        }
-        
-        # 1-2. NHM/NHP 특정 패턴 정규화 (NHM5000 -> NHM500, NHP4000 -> NHP400 등)
-        if ($cleanModel -match "^(NHM|NHP)(\d+)0$") { 
-            $cleanModel = $Matches[1] + $Matches[2] 
-        }
-        
-        # 1-3. 기종군별 접두사 변환 및 베이스 모델 추출
-        if ($cleanModel -match "^PUMAST(\d+.*)$") {
-            # PUMA ST 시리즈 (예: ST10GS)
-            $cleanModel = "ST" + $Matches[1]
-        }
-        elseif ($cleanModel -match "^PUMA(\d+)") { 
-            # PUMA 4100LB -> P4100 (베이스 모델 위주 매칭)
-            $cleanModel = "P" + $Matches[1] 
-        }
-        elseif ($cleanModel -match "^LYNX(\d+)") {
-            # LYNX2100 -> L2100
-            $cleanModel = "L" + $Matches[1]
-        }
-        elseif ($cleanModel -match "^MYNX(\d+)") {
-            # MYNX6500 -> M6500
-            $cleanModel = "M" + $Matches[1]
-        }
-
-        # 1-4. VCF -> VF / VCF850 -> VF8
-        if ($cleanModel -match "^VCF850(.*)$") {
-            $cleanModel = "VF8" + $Matches[1]
-        }
-        elseif ($cleanModel -match "^VCF(\d+)") {
-            $cleanModel = "VF" + $Matches[1]
-        }
-
-        # 1-5. SMX 시리즈 00 제거 (SMX2600 -> SMX26)
-        if ($cleanModel -match "^SMX(\d\d)00(.*)$") {
-            $cleanModel = "SMX" + $Matches[1] + $Matches[2]
-        }
-        
-        # 1-6. ST 옵션 제거 (맨 뒤의 ST는 기종이 아님)
-        if ($cleanModel.Length -gt 2 -and $cleanModel -match "(.+)ST$") {
-            $cleanModel = $Matches[1]
-        }
-        
-        # 1. Site가 일치하는 MPS 항목 필터링
-        $possible = $mpsEntries | Where-Object { $_.Site -eq $site }
-        
-        # 1-A. Exact Match (Model/Product)
-        $match = $null
-        if ($possible.Count -gt 0) {
-            $match = $possible | Where-Object { 
-                $_.Product -eq $model -or $_.Code -eq $model -or
-                ($_.Product -replace '[^A-Z0-9]', '') -eq $cleanModel
-            } | Select-Object -First 1
-        }
-        
-        # 1-B. Global Exact Match (Site 불일치 대비)
-        if ($null -eq $match) {
-            $match = $mpsEntries | Where-Object { 
-                $_.Product -eq $model -or $_.Code -eq $model -or
-                ($_.Product -replace '[^A-Z0-9]', '') -eq $cleanModel
-            } | Select-Object -First 1
-        }
-
-        # 1-C. Similarity Match (Contains / Reverse Contains)
-        if ($null -eq $match) {
-            # 먼저 Site 내에서 검색
-            if ($possible.Count -gt 0) {
-                $match = $possible | Where-Object { 
-                    $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
-                    ($_.Product -replace '[^A-Z0-9]', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '[^A-Z0-9]', '')*"
-                } | Select-Object -First 1
-            }
-            # 못 찾으면 전체에서 검색
-            if ($null -eq $match) {
-                $match = $mpsEntries | Where-Object { 
-                    $_.Product -like "*$model*" -or $model -like "*$($_.Product)*" -or
-                    ($_.Product -replace '[^A-Z0-9]', '') -like "*$cleanModel*" -or $cleanModel -like "*$($_.Product -replace '[^A-Z0-9]', '')*"
-                } | Select-Object -First 1
-            }
-        }
-        
-        # 1-D. site.xlsx 브릿지
-        if ($null -eq $match -and $masterList.Count -gt 0) {
-            # 먼저 사이트 일치하는 항목 찾기
-            $bridge = $masterList | Where-Object { 
-                $_.Plant -eq $site -and (
-                    $_.Desc -eq $model -or 
-                    $_.Desc -like "*$model*" -or 
-                    $model -like "*$($_.Desc)*" -or
-                    ($_.Desc -replace '[^A-Z0-9]', '') -like "*$cleanModel*"
-                )
-            } | Select-Object -First 1
-            
-            # 사이트 일치 실패 시 전체에서 검색
-            if ($null -eq $bridge) {
-                $bridge = $masterList | Where-Object { 
-                    $_.Desc -eq $model -or 
-                    $_.Desc -like "*$model*" -or 
-                    $model -like "*$($_.Desc)*" -or
-                    ($_.Desc -replace '[^A-Z0-9]', '') -like "*$cleanModel*"
-                } | Select-Object -First 1
-            }
-            
-            if ($null -ne $bridge) {
-                $match = $mpsEntries | Where-Object { $_.Code -eq $bridge.Code } | Select-Object -First 1
-            }
-        }
-
-        if ($null -ne $match) {
-            $resCode = $match.Code
-            $resProd = $match.Product
-        }
-        
-        # --- 데이터 전개 기록 ---
-        foreach ($m in $monthCols) {
-            $qtyVal = $rowRange[1, $m.Col]
-            if ($null -eq $qtyVal -or $qtyVal -le 0) { continue }
-            
-            $qty = [int]$qtyVal
-            $monthText = "$($m.Name)월"
-            for ($i = 1; $i -le $qty; $i++) {
-                $rowCsv = '"{0}","{1}","{2}","{3}","{4}","{5}","{6}","{7}"' -f $site, $group, $model, $rpm, $monthText, $i, $resCode, $resProd
-                Out-File -FilePath $csvPath -InputObject $rowCsv -Append -Encoding UTF8
-            }
-        }
-        
-        if ($r % 50 -eq 0) { Write-Log "진행 중: $r / $maxRows..." "Gray" }
-    }
-    
     $workbook.Close($false)
     $excel.Quit()
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
     
-    Write-Log "`n✅ 추출 성공!" "Green"
-    Write-Log "저장된 경로: $csvPath" "White"
-    Start-Sleep -Seconds 3
+    # Report mapping stats
+    $totalRows = (Get-Content $csvPath).Count - 1
+    $mappedRows = (Get-Content $csvPath | Select-String '","[A-Z][A-Z]\d+","' | Measure-Object).Count
+    Write-Log ("Success: " + $csvPath) "Green"
+    Write-Log ("Total rows: $totalRows, Rows with ModelCode: $mappedRows") "Green"
     exit 0
 }
 catch {
-    $err = "❌ 오류 발생: " + $_.ToString()
-    if ($_.Exception) { $err += "`nException: " + $_.Exception.Message }
-    if ($_.ScriptStackTrace) { $err += "`nStack: " + $_.ScriptStackTrace }
-    Write-Log $err "Red"
-    if ($excel) {
-        $excel.Quit()
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-    }
+    Write-Log ("Critical Error: " + $_.Exception.Message) "Red"
+    if ($excel) { $excel.Quit() }
     exit 1
 }

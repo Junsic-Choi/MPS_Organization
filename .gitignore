@@ -1,7 +1,65 @@
 node_modules/
+
+# Excel / 대용량 데이터 파일
 *.MHTML
+*.xlsb
+*.xlsm
 *.xls
 *.xlsx
 *.csv
+
+# 로그 및 임시 출력 파일
 *.txt
 *.log
+output.txt
+err.txt
+
+# 서버 실행 로그
+server_execution.log
+
+# 디버깅/진단 스크립트 (임시 작업용)
+debug_*.ps1
+debug_*.js
+diag_*.ps1
+diag_*.js
+diag_*.vbs
+dump_*.ps1
+inspect_*.ps1
+peek_*.ps1
+research_*.ps1
+read_excel*.ps1
+read_excel*.js
+read_mps*.js
+read_headers.ps1
+read_debug_files.py
+extract_headers.py
+check_*.js
+check_*.ps1
+test_*.ps1
+test_*.js
+find_unmatched.ps1
+verify_results.ps1
+export_expanded*.ps1
+export_final.ps1
+extract_mps*.ps1
+extract_com*.ps1
+extract_xlsx.js
+deep_search*.ps1
+search_smx.ps1
+
+# 임시 처리 파일
+temp_*.xls
+temp_*.json
+
+# Python
+*.py
+
+# 내부 파일
+__git_status_out.txt
+git_check*.txt
+git_d.txt
+git_s.txt
+git_diff_server.txt
+git_log*.txt
+git_status*.txt
+git_err.txt

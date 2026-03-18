@@ -16,18 +16,16 @@ app.get('/', (req, res) => {
     res.redirect('/dashboard.html');
 });
 
-// Endpoint to trigger the PowerShell extraction script
+// Endpoint to trigger the extraction (Now using Node-only libraries)
 app.post('/api/extract', (req, res) => {
-    console.log('Extraction requested from client.');
-    const scriptPath = path.join(__dirname, 'Auto_Make_CSV.ps1');
+    console.log('Extraction requested from client using Node-XLSX.');
 
-    // Execute the PowerShell script
-    const command = `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${scriptPath}"`;
+    // Execute the PowerShell extraction script (handles DRM files via COM)
+    const command = `powershell -ExecutionPolicy Bypass -NoProfile -File Auto_Make_CSV.ps1`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
-            console.error(`exec error: ${error}`);
-            // Log it but we might still have a partial success, we'll return error status
+            console.error(`Extraction error: ${error}`);
             return res.status(500).json({ error: 'Extraction failed', details: error.message });
         }
 
@@ -36,22 +34,26 @@ app.post('/api/extract', (req, res) => {
             console.error(`Extraction stderr: ${stderr}`);
         }
 
-        // Let's find the newest generated CSV file to return to the client
-        const files = fs.readdirSync(__dirname);
-        const csvFiles = files.filter(f => f.endsWith('_FinalList.csv'));
+        // Find the newest CSV file
+        try {
+            const files = fs.readdirSync(__dirname);
+            const csvFiles = files.filter(f => f.endsWith('_FinalList.csv'));
 
-        if (csvFiles.length === 0) {
-            return res.status(404).json({ error: 'Extraction completed, but no FinalList.csv found.' });
+            if (csvFiles.length === 0) {
+                return res.status(404).json({ error: 'Extraction completed, but no FinalList.csv found.' });
+            }
+
+            csvFiles.sort((a, b) => {
+                return fs.statSync(path.join(__dirname, b)).mtime.getTime() - fs.statSync(path.join(__dirname, a)).mtime.getTime();
+            });
+
+            const latestCsv = csvFiles[0];
+            console.log(`Extraction successful. Found file: ${latestCsv}`);
+            res.json({ success: true, file: latestCsv });
+        } catch (readError) {
+            console.error(`Error reading output directory: ${readError}`);
+            res.status(500).json({ error: 'Failed to read extraction result' });
         }
-
-        // Sort by modified time descending to get the newest file (in case of multiple)
-        csvFiles.sort((a, b) => {
-            return fs.statSync(path.join(__dirname, b)).mtime.getTime() - fs.statSync(path.join(__dirname, a)).mtime.getTime();
-        });
-
-        const latestCsv = csvFiles[0];
-        console.log(`Extraction successful. Found file: ${latestCsv}`);
-        res.json({ success: true, file: latestCsv });
     });
 });
 
