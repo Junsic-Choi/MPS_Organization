@@ -77,18 +77,25 @@ try {
     
     # Read the month columns dynamically based on row 7
     $monthCols = @()
-    # Safely scan columns 6 to 20 to find numeric month headers like "3", "4", "5", etc.
-    for ($c = 6; $c -le 20; $c++) {
+    # 7행에서 월 헤더(예: "3", "4", "5", "3월" 등)를 동적으로 찾습니다.
+    Write-Log "월 헤더 검색 중 (7행)..." "Gray"
+    for ($c = 6; $c -le 30; $c++) {
         $headerText = $targetSheet.Cells.Item(7, $c).Text
-        if ($null -ne $headerText -and $headerText -match "^(\d+)") {
+        # 숫자가 포함되어 있으면 월로 간주 (단, 이미 찾은 월은 제외)
+        if ($null -ne $headerText -and $headerText -match "(\d+)") {
             $monthNum = $Matches[1]
-            $monthObj = [PSCustomObject]@{ Col = $c; Name = $monthNum }
-            $monthCols += $monthObj
+            # 중복 체크
+            if ($null -eq ($monthCols | Where-Object { $_.Name -eq $monthNum })) {
+                $monthObj = [PSCustomObject]@{ Col = $c; Name = $monthNum }
+                $monthCols += $monthObj
+                Write-Log "  - 월 발견: $($monthNum)월 (컬럼 $c)" "Gray"
+            }
         }
     }
     
-    # If couldn't find dynamic headers, fallback to previous manual map
+    # 동적 헤더를 찾지 못한 경우에만 이전 수동 매핑 사용
     if ($monthCols.Count -eq 0) {
+        Write-Log "동적 헤더 검색 실패. 기본 매핑 사용 (3~7월)." "Yellow"
         $monthCols = @(
             [PSCustomObject]@{ Col = 8; Name = "3" },
             [PSCustomObject]@{ Col = 9; Name = "4" },
@@ -96,6 +103,9 @@ try {
             [PSCustomObject]@{ Col = 11; Name = "6" },
             [PSCustomObject]@{ Col = 13; Name = "7" }
         )
+    }
+    else {
+        Write-Log "총 $($monthCols.Count)개의 월 데이터를 찾았습니다." "Green"
     }
     
     # 2.5 MPS 탭 데이터 로딩 (전체 범위를 한 번에 읽어 속도 최적화)
@@ -213,39 +223,40 @@ try {
             $cleanModel = $Matches[1] + $Matches[2] 
         }
         
-        # 1-3. PUMA 시리즈 특화
+        # 1-3. 기종군별 접두사 변환 및 베이스 모델 추출
         if ($cleanModel -match "^PUMAST(\d+.*)$") {
-            # PUMA ST 10GS -> ST10GS (Match Row 10: ST10GS2)
+            # PUMA ST 시리즈 (예: ST10GS)
             $cleanModel = "ST" + $Matches[1]
         }
-        elseif ($cleanModel -match "^PUMA(\d+.*)$") { 
-            # PUMA 4100 -> P4100
+        elseif ($cleanModel -match "^PUMA(\d+)") { 
+            # PUMA 4100LB -> P4100 (베이스 모델 위주 매칭)
             $cleanModel = "P" + $Matches[1] 
         }
-
-        # 1-4. LYNX / MYNX 시리즈 (LYNX -> L, MYNX -> M)
-        if ($cleanModel -match "^LYNX(\d+.*)$") {
+        elseif ($cleanModel -match "^LYNX(\d+)") {
+            # LYNX2100 -> L2100
             $cleanModel = "L" + $Matches[1]
         }
-        elseif ($cleanModel -match "^MYNX(\d+.*)$") {
+        elseif ($cleanModel -match "^MYNX(\d+)") {
+            # MYNX6500 -> M6500
             $cleanModel = "M" + $Matches[1]
         }
 
-        # 1-5. VCF -> VF / VCF850 -> VF8
+        # 1-4. VCF -> VF / VCF850 -> VF8
         if ($cleanModel -match "^VCF850(.*)$") {
             $cleanModel = "VF8" + $Matches[1]
         }
-        elseif ($cleanModel -match "^VCF(\d+.*)$") {
+        elseif ($cleanModel -match "^VCF(\d+)") {
             $cleanModel = "VF" + $Matches[1]
         }
 
-        # 1-6. SMX (00 제거) 및 ST 옵션 제거
+        # 1-5. SMX 시리즈 00 제거 (SMX2600 -> SMX26)
         if ($cleanModel -match "^SMX(\d\d)00(.*)$") {
             $cleanModel = "SMX" + $Matches[1] + $Matches[2]
         }
-        # 맨 뒤의 ST는 옵션이므로 제거 (모델명 본체만 남김)
-        if ($cleanModel -match ".+ST$") {
-            $cleanModel = $cleanModel -replace "ST$", ""
+        
+        # 1-6. ST 옵션 제거 (맨 뒤의 ST는 기종이 아님)
+        if ($cleanModel.Length -gt 2 -and $cleanModel -match "(.+)ST$") {
+            $cleanModel = $Matches[1]
         }
         
         # 1. Site가 일치하는 MPS 항목 필터링
