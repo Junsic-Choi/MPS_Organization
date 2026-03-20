@@ -1,66 +1,100 @@
 const express = require('express');
-const { exec } = require('child_process');
+const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
-const PORT = 8888; // Default port
+const PORT = 8888;
 
 app.use(cors());
 app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
-// Redirect root to dashboard.html
 app.get('/', (req, res) => {
     res.redirect('/dashboard.html');
 });
 
-// Endpoint to trigger the extraction (Now using Node-only libraries)
-app.post('/api/extract', (req, res) => {
-    console.log('Extraction requested from client using Node-XLSX.');
+function performExtraction() {
+    console.log('Internal Extraction Started (Sheet 2, Row 4 "생산")...');
+    const buffer = fs.readFileSync(path.join(__dirname, 'data_working.xlsx'));
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[1]; // 생산배포용
+    const ws = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-    // Execute the PowerShell extraction script (handles DRM files via COM)
-    const command = `powershell -ExecutionPolicy Bypass -NoProfile -File Auto_Make_CSV.ps1`;
+    const row3 = data[2]; // Month row
+    const row4 = data[3]; // "생산" row
 
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Extraction error: ${error}`);
-            return res.status(500).json({ error: 'Extraction failed', details: error.message });
+    const targetCols = [];
+    row4.forEach((v, idx) => {
+        if (v && v.toString().includes('생산')) {
+            targetCols.push({ idx, month: row3[idx] });
         }
+    });
 
-        console.log(`Extraction stdout: ${stdout}`);
-        if (stderr) {
-            console.error(`Extraction stderr: ${stderr}`);
-        }
+    const output = [['Site', 'Group', 'Model', 'RPM', 'Month', 'Code', 'Product']];
+    let totalRows = 0;
 
-        // Find the newest CSV file
-        try {
-            const files = fs.readdirSync(__dirname);
-            const csvFiles = files.filter(f => f.endsWith('_FinalList.csv'));
+    for (let r = 6; r < data.length; r++) {
+        const row = data[r];
+        if (!row || (!row[0] && !row[2])) continue;
 
-            if (csvFiles.length === 0) {
-                return res.status(404).json({ error: 'Extraction completed, but no FinalList.csv found.' });
+        const site = row[0] || '';
+        const group = row[1] || '';
+        const model = row[2] || '';
+        const rpm = row[3] || '';
+
+        targetCols.forEach(col => {
+            const qty = row[col.idx];
+            if (typeof qty === 'number' && qty > 0) {
+                for (let i = 0; i < qty; i++) {
+                    output.push([site, group, model, rpm, col.month, '', '']);
+                    totalRows++;
+                }
             }
+        });
+    }
 
-            csvFiles.sort((a, b) => {
-                return fs.statSync(path.join(__dirname, b)).mtime.getTime() - fs.statSync(path.join(__dirname, a)).mtime.getTime();
-            });
+    const csvContent = "\ufeff" + output.map(row => row.map(v => `"${v}"`).join(',')).join('\n'); // UTF-8 BOM
+    const fileName = '_FinalList_4650.csv';
+    fs.writeFileSync(path.join(__dirname, fileName), csvContent);
+    console.log(`Extraction complete. Created ${fileName} with ${totalRows} rows.`);
+    return { success: true, file: fileName, total: totalRows };
+}
 
-            const latestCsv = csvFiles[0];
-            console.log(`Extraction successful. Found file: ${latestCsv}`);
-            res.json({ success: true, file: latestCsv });
-        } catch (readError) {
-            console.error(`Error reading output directory: ${readError}`);
-            res.status(500).json({ error: 'Failed to read extraction result' });
+const { exec } = require('child_process');
+
+app.post('/api/extract', (req, res) => {
+    console.log('4650 Extraction requested via PowerShell...');
+    const command = `powershell -ExecutionPolicy Bypass -File Final_Extract_4650.ps1`;
+
+    exec(command, { cwd: __dirname }, (error) => {
+        if (error) {
+            console.error(`PowerShell Error: ${error}`);
+            return res.status(500).json({ error: 'Extraction failed via PowerShell', details: error.message });
+        }
+
+        const fileName = '_FinalList_4650.csv';
+        if (fs.existsSync(path.join(__dirname, fileName))) {
+            res.json({ success: true, file: fileName });
+        } else {
+            res.status(404).json({ error: 'VBS completed but file not found' });
         }
     });
 });
 
+/*
+try {
+    performExtraction();
+} catch (e) {
+    console.error('Initial extraction failed:', e);
+}
+*/
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`====================================================`);
-    console.log(`🚀 MPS Dashboard Server is running!`);
-    console.log(`🌐 Local access URL: http://localhost:${PORT}`);
-    console.log(`📡 Network access URL (from other PCs): Check your IP and use port ${PORT}`);
+    console.log(`🚀 MPS Dashboard Server recovered on port ${PORT}`);
+    console.log(`🌐 Dashboard: http://localhost:${PORT}`);
     console.log(`====================================================`);
 });
