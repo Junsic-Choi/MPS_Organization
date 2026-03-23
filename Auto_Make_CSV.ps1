@@ -4,122 +4,74 @@ $excel.DisplayAlerts = $false
 
 $dir = Get-Location
 $logPath = "$dir\debug_output.txt"
+if (Test-Path $logPath) { Remove-Item $logPath }
 Start-Transcript -Path $logPath -Force
 
 try {
     Write-Output "Searching for Excel files..."
-    $files = Get-ChildItem -Path "$dir" -Filter "*MPS*.xlsx"
+    $files = Get-ChildItem -Path "$dir" -Filter "*MPS*.xlsx" | Where-Object { $_.Name -notlike "~$*" }
     if ($files.Count -eq 0) { throw "Excel file not found" }
     
     $path = $files[0].FullName
-    Write-Output "Opening workbook: $path"
-    $workbook = $excel.Workbooks.Open($path)
+    $tempPath = "$dir\temp_data_extraction.xlsx"
+    Write-Output "Copying file to temp: $tempPath"
+    Copy-Item $path $tempPath -Force
     
-    # 1. Build Metadata Map from Sheet 2 (생산배포용)
-    Write-Output "Building metadata map from Sheet 2..."
-    $wsMeta = $workbook.Sheets.Item(2)
-    $metaMap = @{}
-    $lastRowMeta = $wsMeta.UsedRange.Rows.Count
-    $lastSite = ""
-    $lastGroup = ""
+    Write-Output "Opening workbook (Read-Only): $tempPath"
+    $workbook = $excel.Workbooks.Open($tempPath, 0, $true)
+    $ws = $workbook.Sheets.Item(2)
+    Write-Output "Sheet accessed: $($ws.Name)"
     
-    for ($r = 7; $r -le $lastRowMeta; $r++) {
-        $site = "$($wsMeta.Cells.Item($r, 1).Value2)"
-        $group = "$($wsMeta.Cells.Item($r, 2).Value2)"
-        $model = "$($wsMeta.Cells.Item($r, 3).Value2)".Trim()
-        $rpm = "$($wsMeta.Cells.Item($r, 4).Value2)"
-        
-        if ($site -eq "") { $site = $lastSite } else { $lastSite = $site }
-        if ($group -eq "") { $group = $lastGroup } else { $lastGroup = $group }
-        
-        if ($model -ne "") {
-            $key = $model.ToUpper() -replace "LYNX ", ""
-            if (-not $metaMap.ContainsKey($key)) {
-                $metaMap[$key] = @{ Site = $site; Group = $group; Model = $model; RPM = $rpm }
-            }
-        }
-    }
-    Write-Output "Map built with $($metaMap.Count) unique models."
-
-    # 2. Extract Data from Sheet 4 (MPS)
-    Write-Output "Extracting data from Sheet 4..."
-    $wsMps = $workbook.Sheets.Item(4)
-    $targetCols = @(9, 13, 18, 23, 29, 35) # I, M, R, W, AC, AI
-    $months = @()
-    foreach ($col in $targetCols) {
-        $h = "$($wsMps.Cells.Item(3, $col).Value2)"
-        if ($h -match "(\d+)") { $months += "$($Matches[1])월" } else { $months += $h }
-    }
-    Write-Output "Target Months: $($months -join ', ')"
-
-    $results = @()
-    $lastCode = ""
-    $lastProduct = ""
-    $lastMeta = $null
+    $tCols = @(
+        @{ i = 5; m = 2 },
+        @{ i = 8; m = 3 },
+        @{ i = 9; m = 4 },
+        @{ i = 10; m = 5 },
+        @{ i = 11; m = 6 },
+        @{ i = 13; m = 7 }
+    )
     
-    # Process up to 10000 rows, but break if we see consecutive empties
-    $consecutiveEmpties = 0
-    for ($r = 7; $r -le 10000; $r++) {
-        $code = "$($wsMps.Cells.Item($r, 4).Value2)".Trim()
-        $prod = "$($wsMps.Cells.Item($r, 5).Value2)".Trim()
+    $res = @()
+    $suffix = [char]0xC6D4
+    
+    for ($r = 7; $r -le 5000; $r++) {
+        $v = $ws.Cells.Item($r, 3).Value2
+        if ($null -eq $v -and $r -gt 2500) { break }
+        if ($null -eq $v) { continue }
         
-        if ($code -eq "" -and $prod -eq "") {
-            $consecutiveEmpties++
-            if ($consecutiveEmpties -gt 10 -and $r -gt 1000) { break }
-            continue
-        }
-        $consecutiveEmpties = 0
+        $mo = "$v".Trim()
+        $si = "$($ws.Cells.Item($r, 1).Value2)"
+        $gp = "$($ws.Cells.Item($r, 2).Value2)"
+        $rp = "$($ws.Cells.Item($r, 4).Value2)"
         
-        if ($code -ne "") { $lastCode = $code }
-        if ($prod -ne "") { 
-            $lastProduct = $prod 
-            $mpsKey = $prod.ToUpper().Split("-")[0]
-            
-            # Match
-            $found = $null
-            if ($metaMap.ContainsKey($mpsKey)) {
-                $found = $metaMap[$mpsKey]
-            }
-            else {
-                foreach ($mK in $metaMap.Keys) {
-                    if ($mK -match [regex]::Escape($mpsKey) -or $mpsKey -match [regex]::Escape($mK)) {
-                        $found = $metaMap[$mK]
-                        break
-                    }
-                }
-            }
-            $lastMeta = $found
-        }
-        
-        # Check quantities
-        foreach ($i in 0..($months.Count - 1)) {
-            $val = $wsMps.Cells.Item($r, $targetCols[$i]).Value2
-            if ($null -eq $val) { continue }
-            $qty = [int]$val
-            if ($qty -gt 0) {
-                for ($q = 1; $q -le $qty; $q++) {
-                    $results += [PSCustomObject]@{
-                        Site    = if ($lastMeta) { $lastMeta.Site } else { "" }
-                        Group   = if ($lastMeta) { $lastMeta.Group } else { "" }
-                        Model   = if ($lastMeta) { $lastMeta.Model } else { "" }
-                        RPM     = if ($lastMeta) { $lastMeta.RPM } else { "" }
-                        Month   = $months[$i]
-                        Code    = $lastCode
-                        Product = $lastProduct
+        foreach ($c in $tCols) {
+            $q = $ws.Cells.Item($r, $c.i).Value2
+            if ($null -ne $q -and $q -gt 0) {
+                $count = [int]$q
+                for ($k = 1; $k -le $count; $k++) {
+                    $res += [PSCustomObject]@{
+                        Site    = $si
+                        Group   = $gp
+                        Model   = $mo
+                        RPM     = $rp
+                        Month   = "$($c.m)$suffix"
+                        Code    = ""
+                        Product = ""
                     }
                 }
             }
         }
     }
     
-    Write-Output "Extraction complete. Total rows: $($results.Count)"
-    $results | Export-Csv -Path "$dir\_FinalList.csv" -NoTypeInformation -Encoding UTF8
+    Write-Output "Extraction complete. Total rows: $($res.Count)"
+    $res | Export-Csv -Path "$dir\_FinalList.csv" -NoTypeInformation -Encoding UTF8
 }
 catch {
-    Write-Host "ERROR: $_"
+    Write-Output "ERROR: $_"
 }
 finally {
-    Stop-Transcript
     if ($null -ne $workbook) { $workbook.Close($false) }
     $excel.Quit()
+    Stop-Transcript
+    if (Test-Path $tempPath) { Remove-Item $tempPath -ErrorAction SilentlyContinue }
 }

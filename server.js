@@ -67,7 +67,7 @@ const { exec } = require('child_process');
 
 app.post('/api/extract', (req, res) => {
     console.log('4650 Extraction requested via PowerShell...');
-    const command = `powershell -ExecutionPolicy Bypass -File Final_Extract_4650.ps1`;
+    const command = `powershell -ExecutionPolicy Bypass -File Auto_Extract_Final.ps1`;
 
     exec(command, { cwd: __dirname }, (error) => {
         if (error) {
@@ -75,7 +75,7 @@ app.post('/api/extract', (req, res) => {
             return res.status(500).json({ error: 'Extraction failed via PowerShell', details: error.message });
         }
 
-        const fileName = '_FinalList_4650.csv';
+        const fileName = '_FinalList_4650_Latest.csv';
         if (fs.existsSync(path.join(__dirname, fileName))) {
             res.json({ success: true, file: fileName });
         } else {

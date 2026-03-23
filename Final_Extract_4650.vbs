@@ -9,7 +9,7 @@ On Error Resume Next
 LogErr "--- VBS Extraction Started ---"
 
 Set fso = CreateObject("Scripting.FileSystemObject")
-Set outFile = fso.CreateTextFile("_FinalList_4650.csv", True, True)
+Set outFile = fso.CreateTextFile("_FinalList.csv", True, True)
 If Err.Number <> 0 Then LogErr "Failed to create CSV: " & Err.Description : Err.Clear
 
 Set excel = CreateObject("Excel.Application")
