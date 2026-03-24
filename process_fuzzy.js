@@ -58,27 +58,34 @@ try {
                 let code = "";
                 let prod = "";
 
-                if (exactMatches[model]) {
+                // --- SPECIAL VCF/VF8 LOGIC AND GLOBAL RPM SUFFIXES ---
+                if (model.startsWith("VCF850")) {
+                    code = "MV0112";
+                    let rpmCode = rpm.includes("18K") ? "1" : "0";
+                    let suffix = "F35P";
+                    if (rpm.includes("(H/H)")) suffix = "HT64";
+                    else if (rpm.includes("(SONE)")) suffix = "SONF";
+
+                    let endStr = suffix === "HT64" ? "X33" : (suffix === "SONF" ? "Z73" : "K31");
+                    prod = `VF8LSR2-${suffix}-${rpmCode}-${endStr}`;
+
+                } else if (exactMatches[model]) {
                     code = exactMatches[model].code;
                     prod = exactMatches[model].product;
                 } else {
-                    // Fuzzy prefix matching
                     for (const prefix in archetypes) {
                         if (model.startsWith(prefix)) {
                             code = archetypes[prefix].code;
-                            const suffix = model.substring(prefix.length).trim();
-                            // Just use model as product if template is complex, 
-                            // or follow the archetype
                             prod = model + "-" + archetypes[prefix].productTemplate.split('-').slice(1).join('-');
                             break;
-                            // prod = archetypes[prefix].productTemplate.replace("{MODEL_SUFFIX}", suffix);
                         }
                     }
                 }
 
-                // Fallback for CODE if still empty but same model seen before
-                if (!code) {
-                    // Assign a generic code based on prefix if possible
+                // GLOBAL (H/H) and (SONE) Logic check and partial correction
+                if (!prod.startsWith("VF8LSR2")) {
+                    if (rpm.includes("(H/H)")) prod = prod.replace(/-[^-]+-/, "-HT-");
+                    if (rpm.includes("(SONE)")) prod = prod.replace(/-[^-]+-/, "-SO-");
                 }
 
                 out.push(`"${site}","${group}","${model}","${rpm}","${month}","${code}","${prod}"`);
@@ -91,7 +98,7 @@ try {
     }
 
     fs.writeFileSync(dest, out.join('\n'), 'utf8');
-    console.log("FUZZY SUCCESS. 4650 ROWS GENERATED.");
+    console.log("FINAL GLOBAL FUZZY SUCCESS.");
 } catch (err) {
-    console.error("FUZZY ERROR:", err.message);
+    console.error("FINAL FUZZY ERROR:", err.message);
 }

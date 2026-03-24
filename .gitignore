@@ -17,6 +17,37 @@ tmp_extraction/
 output.txt
 err.txt
 server_execution.log
+diag_*.ps1
+test_*.ps1
+*_log_*.txt
+ps_err*.txt
+cmd_*.txt
+node_*.txt
+*_error.txt
+*_report.md
+*_final_gap.txt
+*_out.txt
+audit_*.txt
+column_*.txt
+*_headers_*.txt
+dump_*.ps1
+check_*.ps1
+verify_*.ps1
+prefix_candidates.json
+site_map_all.json
+master_map.json
+_FinalList_4650_Latest.csv
+cleanup.js
+process_node.js
+process_fuzzy.js
+build_site_map.js
+extract_map.js
+final_process.ps1
+full_process_v2.ps1
+final_mega_process.ps1
+final_fix.ps1
+final_delivery.ps1
+process_clean.ps1
 
 # Python
 *.py
