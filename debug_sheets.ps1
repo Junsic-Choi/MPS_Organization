@@ -1,22 +1,25 @@
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
+$excel.DisplayAlerts = $false
 $dir = Get-Location
-$path = "$dir\data_working.xlsx"
-$wb = $excel.Workbooks.Open($path, 0, $true)
-$res = "Sheets:`n"
-foreach ($s in $wb.Sheets) {
-    $res += "- " + $s.Name + "`n"
+$files = Get-ChildItem -Path $dir -Filter "*MPS2603-1*.xlsx"
+if ($files.Count -eq 0) {
+    Write-Host "No target Excel file found."
+    $excel.Quit()
+    exit
 }
-
-$ws = $wb.Sheets.Item(2)
-$res += "`nSheet 2 (Index 2) Name: " + $ws.Name + "`n"
-$res += "Row 4 Scan:`n"
-for ($c = 1; $c -le 100; $c++) {
-    $v4 = "$($ws.Cells.Item(4, $c).Value2)"
-    if ($v4 -ne "") {
-        $res += "Col $c : Value2=[$v4]`n"
+$path = $files[0].FullName
+Write-Host "Opening: $path"
+try {
+    $wb = $excel.Workbooks.Open($path, 0, $true)
+    foreach ($ws in $wb.Sheets) {
+        Write-Host "Sheet Name: $($ws.Name)"
+        $v4 = $ws.Cells.Item(4, 18).Text # Looking at column 18 which was 4월 in previous scripts
+        Write-Host "  Row 4, Col 18: [$v4]"
     }
+    $wb.Close($false)
 }
-$res | Out-File -FilePath "$dir\sheet_debug.txt" -Encoding UTF8
-$wb.Close($false)
+catch {
+    Write-Host "Error: $_"
+}
 $excel.Quit()
