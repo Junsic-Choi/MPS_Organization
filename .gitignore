@@ -39,7 +39,6 @@ master_map.json
 _FinalList_4650_Latest.csv
 cleanup.js
 process_node.js
-process_fuzzy.js
 build_site_map.js
 extract_map.js
 final_process.ps1
@@ -48,6 +47,21 @@ final_mega_process.ps1
 final_fix.ps1
 final_delivery.ps1
 process_clean.ps1
+
+# 디버깅/탐색용 유틸리티 스크립트
+Extract_MPS_Mapping.ps1
+extract_full_mps.vbs
+extract_mapping_vbs.vbs
+extract_mps_data.vbs
+find_mps_files.vbs
+find_series.js
+find_vcf.js
+list_sheets.vbs
+list_sheets_robust.vbs
+list_sheets_wildcard.vbs
+read_mps.vbs
+search_global.vbs
+vcf_test.js
 
 # Python
 *.py
