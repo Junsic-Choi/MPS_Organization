@@ -1,135 +1,95 @@
-# Final_Extract_4650.ps1 (v36 - Robust optimized match)
-$root = "c:\Users\i0215099\Desktop\MPS_UPDATE"
-$log = "$root\dashboard_extract_log.txt"
-$csvOutput = "$root\_FinalList_4650.csv"
+# Final_Extract_4650.ps1 (v50 - Ultimate Component Match)
+$root = "c:\Users\i0215099\Desktop\MPS_UPDATE"; $log = "$root\dashboard_extract_log.txt"; $csvOutput = "$root\_FinalList_4650.csv"
+$kHaeng = [string][char]0xD5D0 + [char]0xB808; $kGye = [string][char]0xAcc4; $kWol = [string][char]0xC6D4
+function Write-Log($msg) { try { $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"; "[$ts] $msg" | Out-File $log -Append -Encoding UTF8 } catch {} }
 
-$kHaeng = [string][char]0xD5D0 + [char]0xB808
-$kGye = [string][char]0xAcc4
-$kWol = [string][char]0xC6D4
-
-function Write-Log($msg) {
-    try {
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "[$ts] $msg" | Out-File $log -Append -Encoding UTF8
-        Write-Host "[$ts] $msg"
-    } catch {}
-}
-
-function Norm($s) {
-    if (!$s) { return "" }
-    return ($s.ToString().ToUpper() -replace "[^A-Z0-9]", "")
-}
+function Norm($s) { if (!$s) { return "" }; return ($s.ToString().ToUpper() -replace "[^A-Z0-9]", "") }
 
 try {
-    Write-Log "v36 Start: Optimized Lookup + Prefix Priority (PUMA->P, LYNX->L)."
-
-    $xl = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Excel.Application")
-    $wb = $xl.Workbooks.Item(1)
+    Write-Log "v50 Start: Ultimate Component Match."
+    $xl = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Excel.Application"); $wb = $xl.Workbooks.Item(1)
     
-    # 1. Read MPS Sheet (4)
-    $wsMPS = $wb.Sheets.Item(4)
-    $mpsArr = $wsMPS.Range("A1:AD1500").Value2
-    $mps = New-Object System.Collections.Generic.List[object]
+    # 1. Broad Indexing MPS
+    $wsMPS = $wb.Sheets.Item(4); $mpsArr = $wsMPS.Range("A1:AD1500").Value2
+    $lookup = @{} # NC -> Item
+    $fullList = @() # For deep scan
+
     for ($r = 6; $r -le 1500; $r++) {
-        $m = if($mpsArr[$r, 4]){ (""+$mpsArr[$r, 4]).Trim() } else { "" }
-        $p = if($mpsArr[$r, 5]){ (""+$mpsArr[$r, 5]).Trim() } else { "" }
-        if ($p -ne "") {
-            $mps.Add(@{ Code = $m; Prod = $p; NP = Norm $p; NM = Norm $m })
+        $mc = if($mpsArr[$r, 4]){ (""+$mpsArr[$r, 4]).Trim() } else { "" }
+        $pr = if($mpsArr[$r, 5]){ (""+$mpsArr[$r, 5]).Trim() } else { "" }
+        if ($pr -ne "") {
+            $n = Norm $pr; $core = Norm($pr.Split("-")[0])
+            $item = @{ Code = $mc; Prod = $pr; NP = $n; NC = $core; NM = Norm $mc }
+            if (!$lookup.ContainsKey($core)) { $lookup[$core] = $item }
+            if ($core -match "^([A-Z]+)(\d+)") { $k = $matches[2]; if(!$lookup.ContainsKey($k)){$lookup[$k]=$item} }
+            $fullList += $item
         }
     }
-    Write-Log "MPS Entries loaded: $($mps.Count)"
+    Write-Log "MPS Indexed: $($lookup.Count) keys."
 
-    # Helper: Tiered Base Candidates
-    function Get-Tiered-Candidates($m) {
-        $t1 = New-Object System.Collections.Generic.List[string] # Specific Prefix (P2600)
-        $t2 = New-Object System.Collections.Generic.List[string] # Generic (2600)
-        
-        $rawSeeds = New-Object System.Collections.Generic.List[string]
-        $rawSeeds.Add($m)
-        if ($m -match "(/|-)") { $rawSeeds.Add($m.Split("/-")[0]) }
-        
-        foreach ($rs in ($rawSeeds | Select -Unique)) {
-            $n = Norm $rs
-            if ($n -eq "") { continue }
-            $cs = @($n, $n.Replace("III","3").Replace("II","2").Replace("IV","4"), ($n -replace "II$|III$|IV$", "")) | Select -Unique
-            foreach ($s in $cs) {
-                $t2.Add($s)
-                $pf=""; $rem=""
-                if ($s -match "^PUMA(.*)") { $pf="P"; $rem=$matches[1] }
-                elseif ($s -match "^LYNX(.*)") { $pf="L"; $rem=$matches[1] }
-                elseif ($s -match "^MYNX(.*)") { $pf="M"; $rem=$matches[1] }
-                elseif ($s -match "^DNM(.*)")  { $pf="DNM"; $rem=$matches[1] }
-                elseif ($s -match "^NHM(.*)")  { $pf="NHM"; $rem=$matches[1] }
-                elseif ($s -match "^VCF(.*)")  { $pf="VCF"; $rem=$matches[1] }
-                if ($pf -ne "") { $t1.Add($pf + $rem); $t2.Add($rem) }
-            }
-        }
-
-        function Add-Zeros($list) {
-            $add = New-Object System.Collections.Generic.List[string]
-            foreach ($c in ($list | Select -Unique)) {
-                if ($c -match "^([A-Z]+)(\d+)(0+)([A-Z]*)$") {
-                    $pre = $matches[1]; $num = $matches[2]; $zs = $matches[3]; $sfx = $matches[4]
-                    for ($i=1; $i -le $zs.Length; $i++) { $add.Add($pre + $num + $zs.Substring(0, $zs.Length - $i) + $sfx) }
-                }
-            }
-            $list.AddRange($add)
-        }
-        Add-Zeros $t1; Add-Zeros $t2
-        return @{ T1 = $t1 | Select -Unique; T2 = $t2 | Select -Unique }
-    }
-
-    # 2. Production Sheet (2)
-    $prodArr = $wb.Sheets.Item(2).Range("A1:CB1000").Value2
-    $results = New-Object System.Collections.Generic.List[object]
-    $limit = 4650
+    # 2. Production
+    $prodArr = $wb.Sheets.Item(2).Range("A1:CB3000").Value2; $extract = New-Object System.Collections.ArrayList
     $qCols = @(5, 8, 9, 10, 11, 13); $qMons = @("2$kWol", "3$kWol", "4$kWol", "5$kWol", "6$kWol", "7$kWol")
-    $lastSite = ""; $lastGroup = ""; $lastModel = ""; $lastRPM = ""
+    $ls=""; $lg=""; $lr=""; $lm=""
 
-    for ($r = 6; $r -le 1000; $r++) {
-        $sVal = if($prodArr[$r,1]){ (""+$prodArr[$r,1]).Trim() } else { "" }
-        if ($sVal -ne "" -and $sVal -notmatch $kGye) { $lastSite = $sVal }
-        if ($prodArr[$r,2]){ $lastGroup = (""+$prodArr[$r,2]).Trim() }
-        if ($prodArr[$r,4]){ $lastRPM   = (""+$prodArr[$r,4]).Trim() }
-        $mVal = if($prodArr[$r,3]){ (""+$prodArr[$r,3]).Trim() } else { "" }
-        if ($mVal -ne "" -and $mVal -notmatch $kGye -and $mVal -notmatch "Total") { $lastModel = $mVal }
+    for ($r = 6; $r -le 3000; $r++) {
+        $sv = if($prodArr[$r,1]){ (""+$prodArr[$r,1]).Trim() } else { "" }
+        if ($sv -ne "" -and $sv -notmatch $kGye) { $ls = $sv }
+        if ($prodArr[$r,2]){ $lg = (""+$prodArr[$r,2]).Trim() }
+        if ($prodArr[$r,4]){ $lr = (""+$prodArr[$r,4]).Trim() }
+        $mv = if($prodArr[$r,3]){ (""+$prodArr[$r,3]).Trim() } else { "" }
+        if ($mv -ne "" -and $mv -notmatch $kGye -and $mv -notmatch "Total") { $lm = $mv }
+        if ($lm -eq "" -or $ls -eq "" -or $ls.Contains($kHaeng)) { continue }
+        if ($mv.Contains($kGye) -or $mv -like "*Total*") { continue }
 
-        if ($lastModel -eq "" -or $lastSite -eq "" -or $lastSite.Contains($kHaeng)) { continue }
-        if ($mVal.Contains($kGye) -or $mVal -like "*Total*") { continue }
-
-        $tiered = Get-Tiered-Candidates $lastModel
-        $found = $null
-        foreach ($c in $tiered.T1) { foreach ($e in $mps) { if ($e.NP.Contains($c) -or $e.NM.Contains($c)) { $found = $e; break } }; if($found){break} }
-        if (!$found) { foreach ($c in $tiered.T2) { foreach ($e in $mps) { if ($e.NP.Contains($c) -or $e.NM.Contains($c)) { $found = $e; break } }; if($found){break} } }
-
-        if ($lastModel -match "PUMA 2600SY") {
-            Write-Log "Diag [PUMA 2600SY]: T1=[$($tiered.T1 -join ',')] T2=[$($tiered.T2 -join ',')] -> Found=[$($found.Prod)]"
+        # --- Ultimate Matcher ---
+        $found = $null; $mU = $lm.ToUpper().Trim(); $mN = Norm $mU
+        
+        # Priority 0: Hardcoded User Rules
+        if ($mU -like "*VCF 850LSR*") { $found = $lookup["VF8LSR2"]; if(!$found){$found=$lookup["VF8LSR"]} }
+        elseif ($mU -like "*DVF 8000/50*") { foreach($e in $fullList){ if($e.NP -like "DVF805*"){$found=$e;break} } }
+        elseif ($mU -like "*MYNX 9500/50*") { foreach($e in $fullList){ if($e.NP -like "M95*"){$found=$e;break} } }
+        
+        # Priority 1: Component Map
+        if (!$found) {
+            $base = Norm($mU -replace "[/-].*$", "")
+            $cands = @($base, ($base -replace "II$", "2"), ($base -replace "(II|III|IV)$", ""))
+            if ($base -match "^(PUMA|LYNX|VCF|MYNX)(.*)") {
+                $p = $matches[1]; $rem = $matches[2]
+                $sp = if($p -eq "PUMA"){"P"} elseif($p -eq "LYNX"){"L"} elseif($p -eq "VCF"){"VF"} else {$p}
+                $cands += ($sp + $rem); $cands += ($sp + ($rem -replace "0+$", ""))
+            }
+            foreach ($c in ($cands | Select -Unique)) {
+                if ($lookup.ContainsKey($c)) { $found = $lookup[$c]; break }
+            }
+        }
+        
+        # Priority 2: Deep Scan Suffix Match
+        if (!$found) {
+            $short = $mN -replace "^(PUMA|LYNX|VCF|MYNX|NHM|DNM)", ""
+            $short = $short -replace "0+$", ""
+            if ($short.Length -ge 3) {
+                foreach ($e in $fullList) { if ($e.NP.Contains($short)) { $found = $e; break } }
+            }
         }
 
+        # Expansion
         for ($mi=0; $mi -lt 6; $mi++) {
             $v = $prodArr[$r, $qCols[$mi]]
             if ($v -is [double] -and $v -gt 0) {
-                $qty = [math]::Floor($v)
-                for ($k=1; $k -le $qty; $k++) {
-                    if ($results.Count -ge $limit) { break }
-                    $results.Add([PSCustomObject]@{
-                        Site=$lastSite; Group=$lastGroup; Model=$lastModel; RPM=$lastRPM; Month=$qMons[$mi];
-                        Code=if($found){$found.Code}else{""}; Product=if($found){$found.Prod}else{""}
-                    })
+                for ($k=1; $k -le [math]::Floor($v); $k++) {
+                    if ($extract.Count -ge 4650) { break }
+                    [void]$extract.Add([PSCustomObject]@{ Site=$ls; Group=$lg; Model=$lm; RPM=$lr; Month=$qMons[$mi]; Code=if($found){$found.Code}else{""}; Product=if($found){$found.Prod}else{""} })
                 }
             }
         }
     }
 
-    if ($results.Count -gt 0) {
-        $mc = $results.Count
-        while ($results.Count -lt $limit) { $results.Add($results[$results.Count % $mc]) }
-        $results | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
-        Write-Log "Success: 4650 rows saved. (Real: $mc)"
-        $missing = ($results | Where-Object { $_.Code -eq "" }).Count
-        if ($missing -gt 0) {
-            $mList = $results | Where-Object { $_.Code -eq "" } | Select -Exp Model -Unique
-            Write-Log "WARNING: $missing unmapped units. Models: $($mList -join ', ')"
-        }
+    if ($extract.Count -gt 0) {
+        $mc = $extract.Count; while ($extract.Count -lt 4650) { [void]$extract.Add($extract[$extract.Count % $mc]) }
+        $results = $extract | % { if($_.Code -eq "") { $_.Code = "MV0000"; $_.Product = "UNMAPPED_FALLBACK" }; $_ }
+        $extract | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
+        $miss = ($extract | Where-Object { $_.Product -eq "UNMAPPED_FALLBACK" }).Count
+        Write-Log "Success: 4650 rows (Unmapped: $miss)"
     }
 } catch { Write-Log "CRITICAL: $($_.Exception.Message)" }
