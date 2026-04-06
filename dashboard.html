@@ -511,6 +511,7 @@
 
             try {
                 // Call local backend server to run PowerShell script
+                const command = `powershell -ExecutionPolicy Bypass -File Extract_MPS_Final.ps1`;
                 const response = await fetch('/api/extract', {
                     method: 'POST'
                 });
@@ -686,6 +687,9 @@
                 tableBody.appendChild(tr);
             }
         }
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCSVFromServer('_FinalList_4650.csv');
+        });
     </script>
 </body>
 
