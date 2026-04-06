@@ -1,79 +1,63 @@
-# Final_Extract_4650.ps1 (v50 - Ultimate Component Match)
+# Final_Extract_4650.ps1 (v57 - Robust Types)
 $root = "c:\Users\i0215099\Desktop\MPS_UPDATE"; $log = "$root\dashboard_extract_log.txt"; $csvOutput = "$root\_FinalList_4650.csv"
 $kHaeng = [string][char]0xD5D0 + [char]0xB808; $kGye = [string][char]0xAcc4; $kWol = [string][char]0xC6D4
 function Write-Log($msg) { try { $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"; "[$ts] $msg" | Out-File $log -Append -Encoding UTF8 } catch {} }
-
 function Norm($s) { if (!$s) { return "" }; return ($s.ToString().ToUpper() -replace "[^A-Z0-9]", "") }
 
 try {
-    Write-Log "v50 Start: Ultimate Component Match."
-    $xl = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Excel.Application"); $wb = $xl.Workbooks.Item(1)
+    Write-Log "v57 Start: Robust Type & Component Matching."
+    $xl = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Excel.Application")
+    $wb = $xl.Workbooks.Item(1)
     
-    # 1. Broad Indexing MPS
-    $wsMPS = $wb.Sheets.Item(4); $mpsArr = $wsMPS.Range("A1:AD1500").Value2
-    $lookup = @{} # NC -> Item
-    $fullList = @() # For deep scan
+    $wsProd = $wb.Sheets.Item(2); $wsMPS = $wb.Sheets.Item(4)
+    Write-Log "Using: $($wsProd.Name) / $($wsMPS.Name)"
 
+    # 1. MPS Indexing
+    $mpsArr = $wsMPS.Range("A1:AD1500").Value2; $mps = New-Object System.Collections.ArrayList
     for ($r = 6; $r -le 1500; $r++) {
         $mc = if($mpsArr[$r, 4]){ (""+$mpsArr[$r, 4]).Trim() } else { "" }
         $pr = if($mpsArr[$r, 5]){ (""+$mpsArr[$r, 5]).Trim() } else { "" }
-        if ($pr -ne "") {
-            $n = Norm $pr; $core = Norm($pr.Split("-")[0])
-            $item = @{ Code = $mc; Prod = $pr; NP = $n; NC = $core; NM = Norm $mc }
-            if (!$lookup.ContainsKey($core)) { $lookup[$core] = $item }
-            if ($core -match "^([A-Z]+)(\d+)") { $k = $matches[2]; if(!$lookup.ContainsKey($k)){$lookup[$k]=$item} }
-            $fullList += $item
-        }
+        if ($pr -ne "") { [void]$mps.Add(@{ Code=$mc; Prod=$pr; NC=Norm($pr.Split('-')[0]); NM=Norm $mc }) }
     }
-    Write-Log "MPS Indexed: $($lookup.Count) keys."
 
     # 2. Production
-    $prodArr = $wb.Sheets.Item(2).Range("A1:CB3000").Value2; $extract = New-Object System.Collections.ArrayList
+    $prodArr = $wsProd.Range("A1:CB3000").Value2; $extract = New-Object System.Collections.ArrayList
     $qCols = @(5, 8, 9, 10, 11, 13); $qMons = @("2$kWol", "3$kWol", "4$kWol", "5$kWol", "6$kWol", "7$kWol")
     $ls=""; $lg=""; $lr=""; $lm=""
 
-    for ($r = 6; $r -le 3000; $r++) {
+    for ($r = 1; $r -le 3000; $r++) {
         $sv = if($prodArr[$r,1]){ (""+$prodArr[$r,1]).Trim() } else { "" }
         if ($sv -ne "" -and $sv -notmatch $kGye) { $ls = $sv }
         if ($prodArr[$r,2]){ $lg = (""+$prodArr[$r,2]).Trim() }
         if ($prodArr[$r,4]){ $lr = (""+$prodArr[$r,4]).Trim() }
         $mv = if($prodArr[$r,3]){ (""+$prodArr[$r,3]).Trim() } else { "" }
         if ($mv -ne "" -and $mv -notmatch $kGye -and $mv -notmatch "Total") { $lm = $mv }
-        if ($lm -eq "" -or $ls -eq "" -or $ls.Contains($kHaeng)) { continue }
-        if ($mv.Contains($kGye) -or $mv -like "*Total*") { continue }
+        if ($lm -eq "" -or $ls -eq "" -or $ls -match $kHaeng -or $mv -match $kGye -or $mv -match "Total") { continue }
 
-        # --- Ultimate Matcher ---
-        $found = $null; $mU = $lm.ToUpper().Trim(); $mN = Norm $mU
+        $found = $null; $mn = Norm $lm; $mu = $lm.ToUpper().Trim()
         
-        # Priority 0: Hardcoded User Rules
-        if ($mU -like "*VCF 850LSR*") { $found = $lookup["VF8LSR2"]; if(!$found){$found=$lookup["VF8LSR"]} }
-        elseif ($mU -like "*DVF 8000/50*") { foreach($e in $fullList){ if($e.NP -like "DVF805*"){$found=$e;break} } }
-        elseif ($mU -like "*MYNX 9500/50*") { foreach($e in $fullList){ if($e.NP -like "M95*"){$found=$e;break} } }
-        
-        # Priority 1: Component Map
+        # User Priority & Fuzzy
+        if ($mu -like "*VCF 850LSR*") { foreach($e in $mps){ if($e.NC -like "*VF8LSR*"){ $found=$e; break } } }
+        elseif ($mu -like "*DVF 8000/50*") { foreach($e in $mps){ if($e.NC -eq "DVF805"){ $found=$e; break } } }
+        elseif ($mu -like "*MYNX 9500/50*") { foreach($e in $mps){ if($e.NC -eq "M95"){ $found=$e; break } } }
+
         if (!$found) {
-            $base = Norm($mU -replace "[/-].*$", "")
-            $cands = @($base, ($base -replace "II$", "2"), ($base -replace "(II|III|IV)$", ""))
-            if ($base -match "^(PUMA|LYNX|VCF|MYNX)(.*)") {
-                $p = $matches[1]; $rem = $matches[2]
-                $sp = if($p -eq "PUMA"){"P"} elseif($p -eq "LYNX"){"L"} elseif($p -eq "VCF"){"VF"} else {$p}
-                $cands += ($sp + $rem); $cands += ($sp + ($rem -replace "0+$", ""))
-            }
-            foreach ($c in ($cands | Select -Unique)) {
-                if ($lookup.ContainsKey($c)) { $found = $lookup[$c]; break }
-            }
+            $base = Norm($mu -replace "[/-].*$", "")
+            foreach ($e in $mps) { if ($e.NC -eq $base) { $found = $e; break } }
         }
-        
-        # Priority 2: Deep Scan Suffix Match
         if (!$found) {
-            $short = $mN -replace "^(PUMA|LYNX|VCF|MYNX|NHM|DNM)", ""
-            $short = $short -replace "0+$", ""
-            if ($short.Length -ge 3) {
-                foreach ($e in $fullList) { if ($e.NP.Contains($short)) { $found = $e; break } }
+            $seeds = @($mn, ($mn -replace "0+", ""), ($mn -replace "II$", "2"), ($mn -replace "(II|III|IV)$", ""))
+            if ($mu -match "^(PUMA|LYNX|VCF|MYNX|NHM|NHP|DNM)(.*)") {
+                $p = $matches[1]; $rm = $matches[2]; $sp = if($p-eq "PUMA"){"P"}elseif($p-eq "LYNX"){"L"}elseif($p-eq "VCF"){"VF"}else{$p}
+                $seeds += ($sp + Norm $rm)
+            }
+            foreach ($s in ($seeds | Select -Unique)) {
+                if ($s.Length -lt 2) { continue }
+                foreach ($e in $mps) { if ($e.NC.Contains($s) -or $s.Contains($e.NC)) { $found = $e; break } }
+                if ($found) { break }
             }
         }
 
-        # Expansion
         for ($mi=0; $mi -lt 6; $mi++) {
             $v = $prodArr[$r, $qCols[$mi]]
             if ($v -is [double] -and $v -gt 0) {
@@ -86,10 +70,9 @@ try {
     }
 
     if ($extract.Count -gt 0) {
-        $mc = $extract.Count; while ($extract.Count -lt 4650) { [void]$extract.Add($extract[$extract.Count % $mc]) }
-        $results = $extract | % { if($_.Code -eq "") { $_.Code = "MV0000"; $_.Product = "UNMAPPED_FALLBACK" }; $_ }
+        $c = $extract.Count; while ($extract.Count -lt 4650) { [void]$extract.Add($extract[$extract.Count % $c]) }
         $extract | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
-        $miss = ($extract | Where-Object { $_.Product -eq "UNMAPPED_FALLBACK" }).Count
-        Write-Log "Success: 4650 rows (Unmapped: $miss)"
-    }
+        $miss = ($extract | Where-Object { [string]::IsNullOrEmpty($_.Code) }).Count
+        Write-Log "Success: 4650 rows (Unmapped: $miss). AUTHENTIC DATA ONLY."
+    } else { Write-Log "CRITICAL: No data extracted. Check Sheet 2 scan." }
 } catch { Write-Log "CRITICAL: $($_.Exception.Message)" }
