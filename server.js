@@ -1,161 +1,170 @@
 const express = require('express');
 const XLSX = require('xlsx');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 const cors = require('cors');
 
 const app = express();
-const PORT = 8888;
+const PORT = 8890;
+const FILE_PATH = path.join(__dirname, 'MPS2603-1.xlsx');
 
 app.use(cors());
-app.use(express.static(path.join(__dirname)));
-app.use(express.json());
+app.use(express.static(__dirname));
 
-app.get('/', (req, res) => {
-    res.redirect('/dashboard.html');
-});
+const normCache = new Map();
+function norm(s) {
+    if (!s) return "";
+    const raw = s.toString().toUpperCase().trim();
+    if (normCache.has(raw)) return normCache.get(raw);
+    let res = raw;
+    res = res.replace(/ III/g, '3').replace(/ II/g, '2').replace(/ I/g, '1');
+    res = res.replace(/III/g, '3').replace(/II/g, '2');
+    if (res.startsWith('DCM')) res = 'DC' + res.substring(3);
+    if (res.startsWith('PUMA')) res = 'P' + res.substring(4);
+    if (res.startsWith('LYNX')) res = res.substring(4);
+    const final = res.replace(/[^A-Z0-9]/g, '');
+    normCache.set(raw, final);
+    return final;
+}
 
-function performExtraction() {
-    console.log('JS Extraction Started (생산요약 Direct Mode)...');
+function getBase(prod) {
+    if (!prod) return "";
+    return norm(prod.split('-')[0]);
+}
 
-    const pathName = path.join(__dirname, '일반비_MPS2603-1(생산배포용).xlsx');
-    const buffer = fs.readFileSync(pathName);
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-
-    // ── 생산요약 sheet (2번째 시트): A=생산처, B=기종분류, C=기종, D=RPM
-    //    월 수량: E(4), H(7), I(8), J(9), K(10), M(12)
-    const prodSheetName = workbook.SheetNames[1]; // 생산요약
-    const prodData = XLSX.utils.sheet_to_json(workbook.Sheets[prodSheetName], { header: 1 });
-
-    // 데이터 시작 행 탐색 (A,C 둘 다 텍스트이고 헤더가 아닌 첫 행)
-    let dataStart = 0;
-    for (let r = 0; r < prodData.length; r++) {
-        const row = prodData[r] || [];
-        const a = (row[0] || '').toString().trim();
-        const c = (row[2] || '').toString().trim();
-        if (a && c && a !== '생산처' && c !== '기종' && c !== 'Model') {
-            dataStart = r;
-            break;
-        }
+function isSub(sub, main) {
+    if (!sub || !main) return false;
+    let s = 0;
+    for (let i = 0; i < main.length && s < sub.length; i++) {
+        if (main[i] === sub[s]) s++;
     }
+    return s === sub.length;
+}
 
-    // 월 라벨: 데이터 행 바로 위 행에서 읽기
-    const monthColIdxs = [4, 7, 8, 9, 10, 12]; // E,H,I,J,K,M
-    const fallbackMonths = ['2월', '3월', '4월', '5월', '6월', '7월'];
-    const monthLabels = {};
-    const headerRow = dataStart > 0 ? (prodData[dataStart - 1] || []) : [];
-    monthColIdxs.forEach((idx, i) => {
-        const label = (headerRow[idx] || '').toString().trim();
-        monthLabels[idx] = label || fallbackMonths[i];
-    });
-    console.log(`생산요약 dataStart=${dataStart}, months=${JSON.stringify(monthLabels)}`);
+function runExtraction() {
+    console.log(`Extraction Start: ${new Date().toISOString()}`);
+    const tempWB = XLSX.readFile(FILE_PATH, { bookSheets: true });
+    const mpsName = tempWB.SheetNames.find(n => n.toUpperCase().includes('MPS'));
+    const prodName = tempWB.SheetNames.find(n => n.includes('배포'));
+    const workbook = XLSX.readFile(FILE_PATH, { sheets: [mpsName, prodName] });
 
-    // ── MPS sheet (1번째 시트): D(3)=Model, E(4)=Product → Code/Product 조회용
-    const mpsData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-    const codeMap = {}; // model name → { code, product }
-    for (let r = 4; r < mpsData.length; r++) {
-        const row = mpsData[r] || [];
-        const model   = (row[3] || '').toString().trim(); // D
-        const product = (row[4] || '').toString().trim(); // E
-        if (model && !codeMap[model]) {
-            codeMap[model] = { code: model, product };
-        }
-    }
+    const mpsRaw = XLSX.utils.sheet_to_json(workbook.Sheets[mpsName], { header: 1 });
+    const prodRaw = XLSX.utils.sheet_to_json(workbook.Sheets[prodName], { header: 1 });
+    
+    const monthNames = ["2월", "3월", "4월", "5월", "6월", "7월"];
+    const mpsMonthIdxs = [8, 12, 17, 22, 28, 34];
+    const mpsPool = {};
+    const mpsFlatPool = {};
+    monthNames.forEach(m => { mpsPool[m] = {}; mpsFlatPool[m] = []; });
 
-    // ── 4,650행 생성
-    const output = [['Site', 'Group', 'Model', 'RPM', 'Month', 'Code', 'Product']];
-    let totalRows = 0;
-
-    for (let r = dataStart; r < prodData.length; r++) {
-        if (totalRows >= 4650) break;
-        const row = prodData[r] || [];
-
-        const site  = (row[0] || '').toString().trim(); // A
-        const group = (row[1] || '').toString().trim(); // B
-        const model = (row[2] || '').toString().trim(); // C
-        const rpm   = (row[3] || '').toString().trim(); // D
-
-        if (!site && !model) continue;
-
-        const mapped = codeMap[model] || { code: model, product: model };
-
-        for (const colIdx of monthColIdxs) {
-            if (totalRows >= 4650) break;
-            const qty = row[colIdx];
-            if (typeof qty === 'number' && qty > 0) {
-                const n = Math.floor(qty);
-                const month = monthLabels[colIdx];
-                for (let i = 0; i < n; i++) {
-                    if (totalRows >= 4650) break;
-                    output.push([site, group, model, rpm, month, mapped.code, mapped.product]);
-                    totalRows++;
+    for (let r = 5; r < mpsRaw.length; r++) {
+        const row = mpsRaw[r] || [];
+        const code = (row[3] || '').toString().trim();
+        const prod = (row[4] || '').toString().trim();
+        if (!code || !prod || code.toUpperCase().includes('TOTAL')) continue;
+        const base = getBase(prod);
+        
+        mpsMonthIdxs.forEach((colIdx, i) => {
+            const m = monthNames[i];
+            const q = parseInt(row[colIdx]) || 0;
+            if (q > 0) {
+                if (!mpsPool[m][base]) mpsPool[m][base] = [];
+                for (let k = 0; k < q; k++) {
+                    const item = { code, product: prod, base };
+                    mpsPool[m][base].push(item);
+                    mpsFlatPool[m].push(item);
                 }
             }
-        }
+        });
     }
 
-    // 4,650 패딩
-    while (output.length - 1 < 4650 && output.length > 1) {
-        output.push([...output[output.length - 1]]);
-    }
+    const prodMonthIdxs = [4, 7, 8, 9, 10, 12];
+    const finalResults = [];
+    const stats = { exact: 0, fuzzy: 0, fallback: 0, failed: 0 };
 
-    const csvContent = "\ufeff" + output.map(r =>
-        r.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-    const fileName = '_FinalList_4650.csv';
-    fs.writeFileSync(path.join(__dirname, fileName), csvContent);
-    totalRows = output.length - 1;
-    console.log(`Extraction done: ${totalRows} rows (dataStart=${dataStart})`);
-    return { success: true, file: fileName, total: totalRows };
-}
-
-const { exec } = require('child_process');
-
-app.post('/api/extract', (req, res) => {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Extract requested...`);
-
-    const extractCmd = `powershell -ExecutionPolicy Bypass -File Final_Extract_4650.ps1`;
-    exec(extractCmd, { cwd: __dirname, timeout: 120000 }, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`[${timestamp}] PowerShell failed: ${error.message}`);
-            fs.appendFileSync(path.join(__dirname, 'server_debug.log'),
-                `[${timestamp}] PS FAIL: ${error}\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n`);
-                /*
-                const jsResult = performExtraction();
-                if (jsResult.success) {
-                    console.log(`[${timestamp}] JS Fallback Success: ${jsResult.total} rows`);
-                    return res.json({ success: true, file: jsResult.file, note: 'JS fallback used' });
-                }
-                */
-                console.error(`[${timestamp}] JS Fallback disabled due to encryption.`);
-                return res.status(500).json({ error: error.message });
-
+    monthNames.forEach((month, mIdx) => {
+        const colIdx = prodMonthIdxs[mIdx];
+        const monthNeeds = [];
+        let lastSite = "", lastGroup = "";
+        
+        // 1. Collect all needs for the month
+        for (let r = 6; r < prodRaw.length; r++) {
+            const row = prodRaw[r] || [];
+            if (row[0]) lastSite = row[0].toString().trim();
+            if (row[1]) lastGroup = row[1].toString().trim();
+            const model = (row[2] || '').toString().trim();
+            if (!model || lastSite.includes('총합계') || model === 'Model' || model === '합계') continue;
+            
+            const q = parseInt(row[colIdx]) || 0;
+            const rpm = (row[3] || '').toString();
+            for (let k = 0; k < q; k++) {
+                monthNeeds.push({ site: lastSite, group: lastGroup, model, rpm, month, myBase: norm(model), match: null });
+            }
         }
 
-        const fileName = '_FinalList_4650.csv';
-        const fullPath = path.join(__dirname, fileName);
-        if (fs.existsSync(fullPath)) {
-            console.log(`[${timestamp}] PS Success`);
-            res.json({ success: true, file: fileName });
-        } else {
-            console.error(`[${timestamp}] PS finished but CSV missing`);
-            res.status(404).json({ error: 'CSV not found after extraction' });
-        }
+        // 2. Pass 1: Exact Match (PRIORITY)
+        monthNeeds.forEach(need => {
+            if (mpsPool[month][need.myBase] && mpsPool[month][need.myBase].length > 0) {
+                need.match = mpsPool[month][need.myBase].shift();
+                // Sync with Flat Pool
+                const fIdx = mpsFlatPool[month].findIndex(e => e.product === need.match.product);
+                if (fIdx !== -1) mpsFlatPool[month].splice(fIdx, 1);
+                stats.exact++;
+            } else if (mpsPool[month]['L' + need.myBase] && mpsPool[month]['L' + need.myBase].length > 0) {
+                need.match = mpsPool[month]['L' + need.myBase].shift();
+                const fIdx = mpsFlatPool[month].findIndex(e => e.product === need.match.product);
+                if (fIdx !== -1) mpsFlatPool[month].splice(fIdx, 1);
+                stats.exact++;
+            }
+        });
+
+        // 3. Pass 2: Fuzzy Match
+        monthNeeds.forEach(need => {
+            if (need.match) return;
+            const fIdx = mpsFlatPool[month].findIndex(e => isSub(need.myBase, e.base) || isSub(e.base, need.myBase));
+            if (fIdx !== -1) {
+                need.match = mpsFlatPool[month].splice(fIdx, 1)[0];
+                // Sync with Pool
+                const pList = mpsPool[month][need.match.base];
+                if (pList) pList.pop();
+                stats.fuzzy++;
+            }
+        });
+
+        // 4. Pass 3: Fallback (Random/First available)
+        monthNeeds.forEach(need => {
+            if (need.match) return;
+            if (mpsFlatPool[month].length > 0) {
+                need.match = mpsFlatPool[month].shift();
+                const pList = mpsPool[month][need.match.base];
+                if (pList) pList.pop();
+                stats.fallback++;
+            } else {
+                stats.failed++;
+            }
+        });
+
+        finalResults.push(...monthNeeds);
     });
-});
 
+    const outputRows = [['Site', 'Group', 'Model', 'RPM', 'Month', 'Code', 'Product']];
+    finalResults.forEach(r => {
+        outputRows.push([
+            r.site, r.group, r.model, r.rpm === "0" ? "" : r.rpm, r.month, 
+            r.match ? r.match.code : "", 
+            r.match ? r.match.product : "UNMAPPED"
+        ]);
+    });
+
+    fs.writeFileSync('_MPS_Final_Data_v3.csv', "\ufeff" + outputRows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g, '""')}"`).join(',')).join('\n'));
+    fs.writeFileSync('server_startup.log', `Final Result: Total ${finalResults.length}, Exact: ${stats.exact}, Fuzzy: ${stats.fuzzy}, Fallback: ${stats.fallback}, Failed: ${stats.failed}\n`);
+    console.log('Extraction Done.');
+}
 
 try {
-    // performExtraction();
-} catch (e) {
-    console.error('Initial extraction failed:', e);
-}
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`====================================================`);
-    console.log(`🚀 MPS Dashboard Server on port ${PORT}`);
-    console.log(`🌐 Dashboard: http://localhost:${PORT}`);
-    console.log(`====================================================`);
-});
-
+    runExtraction();
+    app.post('/api/extract', (req, res) => {
+        try { runExtraction(); res.json({ success: true }); } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    app.listen(PORT, () => console.log(`Server LIVE Port ${PORT}`));
+} catch (e) { fs.writeFileSync('extraction_error.log', e.stack); }

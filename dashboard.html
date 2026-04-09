@@ -633,9 +633,8 @@
                 'Model': '기종',
                 'RPM': 'RPM',
                 'Month': '월',
-                'SerialNo': 'Serial No',
-                'ModelCode': '모델코드',
-                'ProductName': '품명'
+                'Code': '모델코드',
+                'Product': '품명'
             };
 
             headers.forEach(h => {
@@ -657,14 +656,14 @@
                     const td = document.createElement('td');
 
                     // Specific styling for important columns
-                    if (h === 'Model' || h === 'ModelCode') {
+                    if (h === 'Model' || h === 'Code') {
                         td.style.fontWeight = '600';
                         td.style.color = 'var(--accent-color)';
                     }
                     if (h === 'Month') {
                         td.style.color = 'var(--success)';
                     }
-                    if (h === 'ProductName') {
+                    if (h === 'Product') {
                         td.style.color = 'var(--text-secondary)';
                         td.style.fontSize = '0.85rem';
                     }
@@ -688,7 +687,7 @@
             }
         }
         window.addEventListener('DOMContentLoaded', () => {
-            loadCSVFromServer('_FinalList_4650.csv');
+            loadCSVFromServer('_MPS_Final_Data_v3.csv');
         });
     </script>
 </body>
