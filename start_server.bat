@@ -1,28 +1,22 @@
 @echo off
+chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-echo [1/2] MPS 대시보드 서버를 백그라운드에서 시작합니다...
+echo [1/2] MPS 대시보드를 준비 중입니다...
 
-:: 기존 서버가 있다면 종료 시도 (포트 8888 점유 중인 프로세스 종료)
-powershell -Command "$p = Get-NetTCPConnection -LocalPort 8888 -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $p.OwningProcess -Force }" 2>NUL
+:: 기존 노드 프로세스 정리 (8890 포트 점유 방지)
+taskkill /F /IM node.exe /T 2>NUL
 
-:: 실시간 로그 및 에러 초기화
-if exist "server_start.log" del "server_start.log"
+echo [2/2] 서버가 8890 포트에서 백그라운드 가공을 시작합니다.
+echo.
+start /b node server.js
 
-:: VBScript를 통해 서버를 투명하게 실행 (터미널 닫아도 유지됨)
-if exist "run_dashboard_silent.vbs" (
-    cscript //nologo "run_dashboard_silent.vbs"
-    echo [2/2] 서버 기동 명령을 전달했습니다.
-    echo.
-    echo 대시보드 접속: http://localhost:8888
-    echo.
-    echo 이 창은 5초 후 자동으로 닫힙니다. (또는 아무 키나 누르세요)
-    timeout /t 5 >nul
-) else (
-    echo [Error] run_dashboard_silent.vbs 파일을 찾을 수 없습니다.
-    node server.js
-)
+echo 대시보드 주소: http://localhost:8890/dashboard.html
+echo.
+echo 이 창은 3초 후 자동으로 종료됩니다.
+ping 127.0.0.1 -n 4 >nul
+exit
 exit
 
 

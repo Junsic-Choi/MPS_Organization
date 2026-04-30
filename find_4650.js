@@ -1,0 +1,24 @@
+const XLSX = require('xlsx');
+const wb = XLSX.readFile('c:/Users/i0215099/Desktop/MPS_UPDATE/MPS2603-1.xlsx');
+const ws = wb.Sheets['생산배포용'];
+const raw = XLSX.utils.sheet_to_json(ws, {header:1});
+
+const colSums = {};
+for (let c = 4; c < 50; c++) {
+    let sum = 0;
+    for (let r = 6; r < raw.length; r++) {
+        const row = raw[r] || [];
+        const model = (row[2] || '').toString().trim();
+        if (!model || model === '총합계') continue;
+        sum += parseInt(row[c]) || 0;
+    }
+    if (sum > 0) colSums[c] = sum;
+}
+
+console.log('Column Sums:', colSums);
+
+// Try to find a combination that sums to 4650
+const target = 4650;
+const entries = Object.entries(colSums).map(([c, s]) => ({ col: parseInt(c), sum: s }));
+
+console.log('Available columns with sums:', entries);
