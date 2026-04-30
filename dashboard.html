@@ -100,6 +100,50 @@
             transform: translateY(-2px);
         }
 
+        /* Tab System */
+        .tab-system {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: var(--surface-color);
+            padding: 0.4rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            width: fit-content;
+        }
+
+        .tab-btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: var(--surface-hover);
+        }
+
+        .tab-btn.active {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
         .upload-icon {
             font-size: 3rem;
             margin-bottom: 0.5rem;
@@ -153,7 +197,70 @@
             align-items: center;
             gap: 0.75rem;
         }
+        .stats { display: flex; gap: 20px; align-items: center; background: rgba(59, 130, 246, 0.05); padding: 20px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.1); margin-bottom: 25px; }
 
+        /* Site Master Modal Overhaul */
+        .master-editor-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .master-editor {
+            background: var(--surface-color);
+            padding: 2.5rem;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            display: block; /* Shown only when overlay is active */
+        }
+        .master-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+        .master-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+        .master-close-btn { font-size: 2rem; cursor: pointer; color: var(--text-secondary); transition: all 0.2s; }
+        .master-close-btn:hover { color: var(--danger); transform: scale(1.1); }
+        .master-label { display: block; margin-bottom: 0.75rem; font-weight: 600; color: var(--accent-color); font-size: 1rem; }
+        .master-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+        .master-grid > div { display: flex; flex-direction: column; }
+        .master-editor textarea {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            min-height: 300px;
+            resize: vertical;
+            outline: none;
+            transition: all 0.2s;
+            line-height: 1.6;
+        }
+        .master-editor textarea:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .master-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
         .extract-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
@@ -220,6 +327,11 @@
         .select-custom:focus {
             border-color: var(--accent-color);
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        /* [User Feedback]: datalist 기본 화살표 숨기기 (이중 겹침 방지) */
+        input::-webkit-calendar-picker-indicator {
+            display: none !important;
         }
 
         /* Stats */
@@ -392,22 +504,46 @@
     </header>
 
     <main>
-        <!-- Action Area -->
-        <div class="action-area" id="action-area">
-            <div>
-                <h2 style="font-weight: 600; margin-bottom: 0.5rem;">새 데이터 동기화</h2>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">폴더에 있는 최신 MPS 엑셀 파일을 읽어와 대시보드 데이터를 업데이트합니다.
-                    (약 10~30초 소요)</p>
+        <!-- Extraction Area (Landing Page) -->
+        <div class="action-area" id="action-area" style="margin-top: 5rem; padding: 4rem;">
+            <div style="margin-bottom: 1rem;">
+                <div class="badge" style="background: var(--accent-color); margin-bottom: 1rem;">준비 완료 (READY)</div>
+                <h1 style="font-weight: 700; font-size: 2.5rem; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">MPS 데이터 실시간 추출</h1>
+                <p style="color: var(--text-secondary); font-size: 1.1rem; line-height: 1.6; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">
+                    MPS 엑셀 파일을 선택하면 브라우저에서 바로 분석합니다. <br>
+                    <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 형식 지원 · 서버 불필요)</span>
+                </p>
+
+                <!-- File picker area -->
+                <div id="drop-zone"
+                    onclick="document.getElementById('file-input').click()"
+                    style="cursor:pointer; border: 2px dashed var(--accent-color); border-radius: 12px; padding: 2.5rem 2rem; max-width: 480px; margin: 0 auto 2rem; background: rgba(59,130,246,0.05); transition: background 0.2s;"
+                    ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)';"
+                    ondragleave="this.style.background='rgba(59,130,246,0.05)';"
+                    ondrop="handleDrop(event)">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.4rem;">엑셀 파일 선택 또는 드래그</div>
+                    <div id="file-name-display" style="font-size: 0.9rem; color: var(--accent-color); margin-top: 0.5rem;">클릭하여 .xlsx 파일을 선택하세요</div>
+                </div>
+
+                <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this.files[0])">
             </div>
-            <button class="extract-btn" id="extract-btn" onclick="startExtraction()">
-                <span>⚡ 데이터 추출 및 갱신 시작</span>
+
+            <button class="extract-btn" id="extract-btn" onclick="startExtraction()" style="padding: 1.5rem 4rem; font-size: 1.25rem;">
+                <span>🚀 선택된 파일 분석 시작</span>
             </button>
-            <p id="status-msg" style="color: var(--success); font-size: 0.9rem; display: none; margin-top: 1rem;">✅ 데이터
-                갱신 완료!</p>
-            <div id="processing-text"
-                style="color: var(--accent-color); font-size: 0.95rem; font-weight: 500; display: none; margin-top: 0.5rem; animation: pulse 1.5s infinite;">
-                서버가 DRM 보안을 해제하고 엑셀 데이터를 전개 중입니다... 잠시만 기다려주세요!
+            <div style="margin-top: 1rem; text-align: center;">
+                <button class="btn" onclick="if(confirm('브라우저가 학습한 모든 수동 매핑 메모리를 영구 삭제하시겠습니까? (이전 수동 매칭 내역이 초기화됩니다)')) { localStorage.removeItem('mpsAutoModelMap'); alert('메모리가 완전히 초기화되었습니다. 파일을 다시 올려 분석해주세요!'); }" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 500; padding: 0.6rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
+                    🧠 학습 메모리 강제 초기화
+                </button>
             </div>
+
+            <div id="processing-text"
+                style="color: var(--accent-color); font-size: 1rem; font-weight: 500; display: none; margin-top: 1rem; animation: pulse 1.5s infinite;">
+                📡 시스템이 분석 중입니다...
+            </div>
+
+            <p id="status-msg" style="color: var(--success); font-size: 1rem; display: none; margin-top: 1rem; font-weight: 600;">✨ 최신 데이터 동기화 완료!</p>
         </div>
 
         <style>
@@ -438,9 +574,8 @@
             </div>
             <div class="filter-group">
                 <label for="filter-group">기종분류 (Group)</label>
-                <select class="select-custom" id="filter-group">
-                    <option value="">전체보기</option>
-                </select>
+                <input type="text" class="select-custom" id="filter-group" list="group-list" placeholder="전체보기 (검색 가능)" autocomplete="off">
+                <datalist id="group-list"></datalist>
             </div>
             <div class="filter-group">
                 <label for="filter-month">월 (Month)</label>
@@ -449,9 +584,61 @@
                 </select>
             </div>
             <div class="filter-group">
-                <label for="search-model">기종 검색 (Search Model)</label>
-                <input type="text" class="select-custom" id="search-model" placeholder="기종명을 입력하세요..."
+                <label for="search-model">품명 검색 (Search Product)</label>
+                <input type="text" class="select-custom" id="search-model" placeholder="품명을 입력하세요..."
                     style="background-image: none; padding-right: 1rem;">
+            </div>
+            <div class="filter-group" style="flex-direction: row; align-items: center; gap: 0.5rem; padding-top: 1.5rem;">
+                <input type="checkbox" id="check-unmapped" style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="check-unmapped" style="cursor: pointer; color: var(--danger); font-weight: 600;">미매칭(Unmapped)만 보기</label>
+            </div>
+        </div>
+
+        <!-- Site Master Modal -->
+        <div id="master-editor-overlay" class="master-editor-overlay" onclick="if(event.target === this) toggleMasterEditor()">
+            <div id="master-editor" class="master-editor" onclick="event.stopPropagation()">
+                <div class="master-header">
+                    <div class="master-title">⚙️ 사이트 매핑 규칙 관리 (Site Master)</div>
+                    <span class="master-close-btn" onclick="toggleMasterEditor()">×</span>
+                </div>
+                
+                <div class="master-editor-desc" style="background: rgba(59, 130, 246, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-color); font-size: 0.9rem; color: var(--text-secondary);">
+                    🛡️ <b>데이터 보존 원칙</b>: 입력하신 규칙은 매핑 정확도를 높이는 데만 사용되며, <b>엑셀 원본 데이터는 일절 수정되지 않습니다.</b>
+                </div>
+
+                <div class="master-grid">
+                    <div>
+                        <label class="master-label">📍 사이트 매핑 (버전 코드 : 생산처)</label>
+                        <textarea id="site-master-text" placeholder="예) 9AHT: 07. 휴텍&#10;1840: 01. 남산"></textarea>
+                    </div>
+                    <div>
+                        <label class="master-label">📝 매핑 참고 규칙 (자유 기록용)</label>
+                        <textarea id="rule-master-text" placeholder="예) NHP6300 II 규칙: 뒷부분 버전에 로마자가 포함된 경우 우선 순위 부여..."></textarea>
+                    </div>
+                </div>
+
+                <div class="master-footer">
+                    <button class="btn btn-danger" onclick="resetSiteMaster()" style="padding: 0.75rem 1.5rem; background: var(--danger);">♻️ 모든 매핑 초기화</button>
+                    <button class="btn" onclick="saveSiteMaster()" style="padding: 0.75rem 2rem; background: var(--accent-color); color: white;">💾 모든 규칙 저장 및 적용</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-system" id="tab-system" style="display: none;">
+                <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
+                <button class="tab-btn" id="tab-unused">⚠️ 미사용 MPS 데이터 풀</button>
+                <button class="tab-btn" id="tab-master" style="background:var(--accent-color); color:white;">⚙️ 사이트 마스터</button>
+            </div>
+
+        <!-- Proposer Panel -->
+        <div id="proposer-panel" style="display: none; background: rgba(59, 130, 246, 0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--accent-color); margin-bottom: 1.5rem; animation: slideUp 0.3s ease;">
+            <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 0.5rem; font-size: 1.2rem;">
+                ✨ 지능형 실적 자동 분배
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                동일한 기종/월별로 취합된 미매칭 실적들을 바탕으로, 엑셀 <b>마스터 시트의 계획 수량(RPM 배분)</b>에 맞춰 클릭 한 번에 자동 변환 및 할당합니다.
+            </p>
+            <div id="proposer-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 480px; overflow-y: auto;">
             </div>
         </div>
 
@@ -495,101 +682,396 @@
         const filterMonth = document.getElementById('filter-month');
         const searchModel = document.getElementById('search-model');
 
+        const tabSystem = document.getElementById('tab-system');
+        const actionArea = document.getElementById('action-area');
+        const checkUnmapped = document.getElementById('check-unmapped');
+        const tabMain = document.getElementById('tab-main');
+        const tabUnused = document.getElementById('tab-unused');
+
         let rawData = [];
+        let unusedData = [];
         let filteredData = [];
         let headers = [];
+        let currentTab = 'main';
+        window.masterPlan = null;
+        window.masterModels = null;
+
+        const DEFAULT_SITE_MASTER = `0AM1: MC1직_조립_1840
+0AM2: MC2직_조립_1840
+0AM3: MC3직_조립_1840
+0AM4: MC4직_조립_1840
+0AM5: MC5직_조립_1840
+0AMA: MC1직_조립_1840 (대영코어텍)
+0AMB: MC1직_조립_1840 (삼익테크)
+0AMC: MC3직_조립_1840 (BASE 선후)
+0AMD: MC4직_조립_1840 (BASE 선후)
+0AME: MC5직_조립_1840 (Base대청정밀)
+0ARD: 남산 시제작실_PM
+0ASY: 세양_공정외주_1840
+0AT1: TC1직_조립_1840
+0AT2: TC2직_조립_1840
+0AT3: TC3직_조립_1840
+0AT4: TC4직_조립_1840
+0AT5: TC5직_조립_1840
+0AT6: TC6직_조립_1840
+0ATA: TC1직_조립_1840(1Base)
+0ATB: TC2직_조립_1840(1Base)
+0ATC: TC3직_조립_1840(1Base)
+0ATD: TC4직_조립_1840(1Base)
+0ATE: TC5직_조립_1840(1Base)
+0ATF: TC6직_조립_1840(1Base)
+0ATH: TC1직_조립_1840(2Base)
+0ATI: TC2직_조립_1840(2Base)
+0ATJ: TC3직_조립_1840(2Base)
+0ATK: TC4직_조립_1840(2Base)
+0ATL: TC5직_조립_1840(2Base)
+0ATM: TC6직_조립_1840(2Base)
+0ATS: TC5직_조립_1840(3Base)
+0ATU: TC6직_조립_1840(1Base)
+0AYA: 연암_공정외주_1840
+9ACE: 씨이에스테크_OEM_1840
+9ACT: 쎈텍_OEM_1840
+9ADG: 대건테크_OEM_1840
+9ADS: 동서_OEM_1840
+9ADY: 11. 대영
+9AHK: 한국공작기계_OEM_1840
+9AHN: 20. 헤넥스
+9AHT: 21. 휴텍
+9AJL: 05. 정일
+9AKB: 금동BOR_OEM_1840
+9AKH: 기흥기계_OEM_1840
+9AKM: 금동MC_OEM_1840
+9AKT: 금동TC_OEM_1840
+9ANS: 21. 남선
+9ASJ: 09. 서진
+9ASK: 07. 삼광
+9ASN: 15. 신우
+9AST: 05. 세양
+9ASW: 04. 성우
+9ASY: 05. 세양
+9ATS: 17. 텍슨
+9AUI: 유지인트_OEM_1840
+9AWJ: 06. 원진
+9AYA: 연암FA_OEM_1840
+PHAN: DLX 450D
+DST: 22. 지티테크`;
+
+        // 사이트 마스터 수동 맵
+        let manualSiteMap = {};
+        const siteMasterText = document.getElementById('site-master-text');
+        const ruleMasterText = document.getElementById('rule-master-text');
+
+        const DEFAULT_RULES = `[NHP6300 II 규칙]
+- 로마자 II가 기종명에 포함된 경우, 품명의 첫 번째 '-' 앞에 자동으로 II를 고려하여 매칭합니다. (데이터 원본은 유지)`;
+
+        // 사이트 마스터 로드
+        function loadSiteMaster() {
+            let savedSite = localStorage.getItem('mps_site_master');
+            let savedRule = localStorage.getItem('mps_rule_master');
+            
+            if (!savedSite) savedSite = DEFAULT_SITE_MASTER;
+            if (!savedRule) savedRule = DEFAULT_RULES;
+
+            siteMasterText.value = savedSite;
+            ruleMasterText.value = savedRule;
+            parseSiteMaster();
+        }
+
+        function parseSiteMaster() {
+            const lines = siteMasterText.value.split('\n');
+            const newMap = {};
+            lines.forEach(line => {
+                const parts = line.split(':');
+                if (parts.length >= 2) {
+                    const ver = parts[0].trim();
+                    const site = parts.slice(1).join(':').trim();
+                    if (ver && site) newMap[ver] = site;
+                }
+            });
+            manualSiteMap = newMap;
+            console.log('Manual Site Map loaded:', manualSiteMap);
+        }
+
+        function saveSiteMaster() {
+            localStorage.setItem('mps_site_master', siteMasterText.value);
+            localStorage.setItem('mps_rule_master', ruleMasterText.value);
+            parseSiteMaster();
+            alert('사이트 마스터 및 매핑 규칙이 저장되었습니다. 페이지를 새로고침하여 데이터에 반영합니다.');
+            location.reload();
+        }
+
+        function resetSiteMaster() {
+            if (confirm('⚠️ 모든 수동 매핑 규칙(사이트 마스터)을 초기화하시겠습니까?\n브라우저에 저장된 이전의 커스텀 명칭들이 모두 삭제되고 원본 엑셀 기준(Sheet 0)으로 복구됩니다.')) {
+                localStorage.removeItem('mps_site_master');
+                localStorage.removeItem('mps_rule_master');
+                alert('모든 규칙이 초기화되었습니다. 페이지를 새로고침합니다.');
+                location.reload();
+            }
+        }
+
+        // ========== Client-side Excel processing (SheetJS) ==========
+        let selectedXlsxFile = null;
+
+        function handleDrop(event) {
+            event.preventDefault();
+            document.getElementById('drop-zone').style.background = 'rgba(59,130,246,0.05)';
+            const file = event.dataTransfer.files[0];
+            if (file) handleFileSelect(file);
+        }
+
+        function handleFileSelect(file) {
+            if (!file || !file.name.match(/\.xlsx?$/i)) {
+                alert('.xlsx 또는 .xls 파일만 선택해 주세요.');
+                return;
+            }
+            selectedXlsxFile = file;
+            document.getElementById('file-name-display').textContent = `✅ ${file.name} (${(file.size/1024/1024).toFixed(1)}MB)`;
+            extractBtn.disabled = false;
+            extractBtn.style.opacity = '1';
+        }
+
+        function getMatchKey(s) {
+            if (!s) return '';
+            let k = s.toString().toUpperCase().trim();
+            
+            // 1. 접두사 특수 매칭 (사용자 피드백 반영: VF8 -> VCF850)
+            if (k.startsWith('VF8')) {
+                k = 'VCF850' + k.substring(3);
+            }
+
+            // 2. 접두사 정규화 (M65402 -> MYNX65402)
+            if (k.startsWith('M') && !k.startsWith('MYNX')) {
+                k = 'MYNX' + k.substring(1);
+            }
+
+            // 3. 로마자 -> 숫자 변환
+            k = k.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
+            k = k.replace(/III/g, '3').replace(/II/g, '2');
+            
+            k = k.split('-')[0];
+            k = k.replace(/PUMA|LYNX/g, '').replace(/^P|^L/, '');
+
+            // 4. 패턴 정규화: 0과 특수문자를 제거하여 뼈대만 남김
+            return k.replace(/[^A-Z1-9]/g, '');
+        }
+
+        // 기종명 키워드를 분석하여 그룹을 유추하는 지능형 분류 함수
+        function getPatternGroup(p) {
+            const up = (p || '').toString().toUpperCase();
+            if (up.includes('VCF') || up.includes('VF8')) return '17. VCF 850 Series';
+            if (up.includes('VTR')) return '33. VTR Series';
+            if (up.includes('VT') || up.includes('VTL')) return '30. PV/VT Series';
+            if (up.includes('MYNX') || up.includes('M65') || up.includes('M75')) return '12. MYNX Series';
+            if (up.includes('DEM')) return '13-3. DEM4000';
+            if (up.includes('DNM') && up.includes('5AX')) return '10. DNM 5AX Series';
+            if (up.includes('DNM')) return '13. DNM Series';
+            if (up.includes('DVF')) return '11. DVF Series';
+            if (up.includes('SMX')) return '21. SMX Series';
+            if (up.includes('DC325') || up.startsWith('DC')) return '35. DC Series';
+            // 확장된 PUMA & LYNX 분류
+            if (up.includes('P410')) return '25. P4100 Series';
+            if (up.includes('P510')) return '25. P5100 Series';
+            if (up.includes('PUMA')) return 'PUMA Series';
+            if (up.includes('L210') || up.includes('LYNX')) return '20. LYNX Series';
+            // 추가 소형/복합기 라인업
+            if (up.includes('ST')) return '19. ST Series';
+            if (up.includes('DST')) return '18. DST Series';
+            if (up.includes('XG')) return 'XG Series';
+            return '';
+        }
+
+        // 품명(Full Name)에서 핵심 기종명만 추출하는 함수
+        function getCleanModel(p) {
+            if (!p) return '';
+            let s = p.toString().split('-')[0].trim();
+            // 괄호 및 옵션 제거
+            s = s.replace(/\(.*\)/g, '').split(' ')[0];
+            return s;
+        }
+
+        // MPS 시트 원시 코드 → 정식 명칭 변환 (보조 수단)
+        const mpsSiteMap = {
+            "1840":"01. 남산", "1841":"01. 남산", "1":"01. 남산", "10":"01. 남산(보조)",
+            "1842":"02. 성주", "2":"02. 성주",
+            "1848":"03. 창원", "3":"03. 창원",
+            "4":"04. 성우", "5":"05. 세양", "6":"06. 원진",
+            "7":"07. 휴텍", "07":"07. 휴텍", "08":"08. 서진", "09":"09. 서진", "11":"11. 대영"
+        };
+        const mpsGroupMap = {};
+        let realSiteLookup = {}; // 보조 매핑 데이터용
 
         async function startExtraction() {
-            // UI Update for loading
+            if (!selectedXlsxFile) {
+                document.getElementById('file-input').click();
+                return;
+            }
+
             extractBtn.disabled = true;
-            statusMsg.style.display = 'none';
             processingText.style.display = 'block';
             loader.style.display = 'block';
-            tableContainer.classList.remove('active');
-            stats.classList.remove('active');
-            controls.classList.remove('active');
 
             try {
-                // Call local backend server to run PowerShell script
-                const command = `powershell -ExecutionPolicy Bypass -File Extract_MPS_Final.ps1`;
-                const response = await fetch('/api/extract', {
-                    method: 'POST'
+                processingText.innerHTML = '🚀 서버에서 데이터 분석 중... (메모리 보호 모드)';
+                
+                const formData = new FormData();
+                formData.append('file', selectedXlsxFile);
+                
+                // 수동 매핑 규칙 전달
+                const rules = {
+                    siteMaster: manualSiteMap,
+                    realSiteLookup: realSiteLookup
+                };
+                formData.append('rules', JSON.stringify(rules));
+
+                const response = await fetch('/api/extract-live', {
+                    method: 'POST',
+                    body: formData
                 });
 
                 const result = await response.json();
-
-                if (result.success && result.file) {
-                    // Script executed successfully, now load the generated CSV from the server
-                    loadCSVFromServer(result.file);
-                } else {
-                    throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
+                if (!response.ok) {
+                    if (result.error) {
+                        alert('분석 중 오류 발생: ' + result.error);
+                        return;
+                    } else {
+                        alert('분석 중 서버 오류 발생');
+                        return;
+                    }
                 }
-            } catch (error) {
-                alert("서버 오류: " + error.message + "\nNode.js 서버가 켜져 있는지 확인해주세요.");
+                
+                rawData = result.finalResults || [];
+                unusedData = result.unusedData || [];
+                window.masterPlan = result.masterPlan || null; 
+                window.masterModels = result.masterModelsByGroup || null;
+                headers = ['Site', 'Group', 'Model', 'RPM', 'Month', 'Code', 'Product'];
+
+                // ========================================================
+                // 🚀 새로 탑재된 클라이언트 영구 메모리 로직 (Auto-apply)
+                // ========================================================
+                let customModelMap = {};
+                try {
+                    customModelMap = JSON.parse(localStorage.getItem('mpsAutoModelMap')) || {};
+                } catch(e){}
+
+                // 아이템 그룹화 (배열을 위해)
+                const memoryGroups = {};
+                for (let i = unusedData.length - 1; i >= 0; i--) {
+                    const item = unusedData[i];
+                    const mapKey1 = (item.Group || '') + '|==|' + item.ProductName;
+                    const mapKey2 = '|==|' + item.ProductName;
+                    const savedTarget = customModelMap[mapKey1] || customModelMap[mapKey2];
+                    
+                    if (savedTarget) {
+                        const trackKey = mapKey1 + '|==|' + item.Month + '|==|' + item.Site;
+                        if (!memoryGroups[trackKey]) memoryGroups[trackKey] = { items: [], targetModel: savedTarget, group: item.Group||'', month: item.Month, product: item.ProductName };
+                        memoryGroups[trackKey].items.push({ item, originalIdx: i });
+                    }
+                }
+
+                Object.values(memoryGroups).forEach(mg => {
+                    let plan = null;
+                    if (window.masterPlan && window.masterPlan[mg.group] && window.masterPlan[mg.group][mg.targetModel]) {
+                        plan = window.masterPlan[mg.group][mg.targetModel][mg.month];
+                    }
+                    if ((!plan || plan.length === 0) && window.masterPlan) {
+                        // 전역 스캔 (그룹 불일치 대비)
+                        for (const g in window.masterPlan) {
+                            if (window.masterPlan[g][mg.targetModel]) {
+                                plan = window.masterPlan[g][mg.targetModel][mg.month];
+                                if (plan && plan.length > 0) break;
+                            }
+                        }
+                    }
+
+                    const assignments = getRpmAssignments(mg.items.length, plan, mg.product);
+                    
+                    mg.items.forEach((obj, idx) => {
+                        rawData.push({
+                            Site: obj.item.Site,
+                            Group: mg.group || '미분류(자동학습)',
+                            Model: mg.targetModel,
+                            RPM: assignments[idx],
+                            Month: mg.month,
+                            Code: obj.item.ModelCode,
+                            Product: obj.item.ProductName + ' (★메모리)'
+                        });
+                    });
+                });
+                
+                // unusedData에서 할당된 아이템 깔끔하게 지우기
+                const assignedIndices = new Set();
+                Object.values(memoryGroups).forEach(mg => mg.items.forEach(obj => assignedIndices.add(obj.originalIdx)));
+                unusedData = unusedData.filter((_, idx) => !assignedIndices.has(idx));
+                // ========================================================
+
+                actionArea.style.marginTop = '0';
+                actionArea.style.padding = '1.5rem';
+                tabSystem.style.display = 'flex';
+                controls.classList.add('active');
+                stats.classList.add('active');
+                tableContainer.classList.add('active');
+                
+                populateFilters();
+                applyFilters();
+
+            } catch (err) {
+                alert('서버 분석 오류: ' + err.message);
+                console.error(err);
                 extractBtn.disabled = false;
+            } finally {
                 processingText.style.display = 'none';
                 loader.style.display = 'none';
             }
         }
 
-        function loadCSVFromServer(filename) {
-            // Fetch the generated CSV file via HTTP GET with cache buster
-            const freshUrl = '/' + filename + '?t=' + new Date().getTime();
-            Papa.parse('/' + filename + '?t=' + new Date().getTime(), {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function (results) {
-                    rawData = results.data;
-                    headers = results.meta.fields;
+        window.addEventListener('DOMContentLoaded', () => {
+            extractBtn.disabled = true;
+        });
 
-                    // Restore UI
-                    extractBtn.disabled = false;
-                    processingText.style.display = 'none';
-                    loader.style.display = 'none';
-                    statusMsg.style.display = 'block';
-                    setTimeout(() => { statusMsg.style.display = 'none'; }, 5000);
 
-                    controls.classList.add('active');
-                    stats.classList.add('active');
-                    tableContainer.classList.add('active');
-
-                    populateFilters();
-                    applyFilters();
-                },
-                error: function (error) {
-                    loader.style.display = 'none';
-                    processingText.style.display = 'none';
-                    extractBtn.disabled = false;
-                    alert('추출은 완료되었으나, CSV 파일을 화면에 불러오는 중 오류가 발생했습니다: ' + error.message);
-                }
-            });
-        }
-
-        function populateFilters() {
+        function populateFilters(filteredDataForGroup = null) {
             const sites = new Set();
             const groups = new Set();
             const months = new Set();
+            
+            const activeData = currentTab === 'main' ? rawData : unusedData;
 
-            rawData.forEach(row => {
+            // 만약 특정 사이트 선택에 따른 기종분류만 뽑고 싶다면 해당 데이터 사용
+            const sourceForGroups = filteredDataForGroup || activeData;
+
+            // 사이트와 달(Month) 목록은 메인과 미분류 모두 동일하게 공유할 수 있게 전체 데이터를 훑습니다 (기본적으로).
+            // 하지만 현재 활성 탭의 데이터만 보는 것이 혼동이 적습니다.
+            activeData.forEach(row => {
                 if (row['Site']) sites.add(row['Site']);
-                if (row['Group']) groups.add(row['Group']);
                 if (row['Month']) months.add(row['Month']);
             });
 
-            const sortMonths = (a, b) => {
-                const numA = parseInt(a) || 0;
-                const numB = parseInt(b) || 0;
-                return numA - numB;
-            };
+            sourceForGroups.forEach(row => {
+                if (row['Group']) groups.add(row['Group']);
+            });
 
-            fillSelect(filterSite, Array.from(sites).sort());
-            fillSelect(filterGroup, Array.from(groups).sort());
+            const sortMonths = (a, b) => (parseInt(a) || 0) - (parseInt(b) || 0);
+
+            // 사이트 목록은 항상 전체 유지 (필요 시 변경 가능)
+            if (!filteredDataForGroup) {
+                fillSelect(filterSite, Array.from(sites).sort());
+            }
+            
+            fillDatalist('group-list', Array.from(groups).sort());
             fillSelect(filterMonth, Array.from(months).sort(sortMonths));
         }
 
+        function fillDatalist(listId, items) {
+            const dl = document.getElementById(listId);
+            dl.innerHTML = '';
+            items.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item;
+                dl.appendChild(opt);
+            });
+        }
+
         function fillSelect(selectElement, items) {
-            // Keep the first default option
             selectElement.innerHTML = '<option value="">전체보기</option>';
             items.forEach(item => {
                 const opt = document.createElement('option');
@@ -599,97 +1081,465 @@
             });
         }
 
-        [filterSite, filterGroup, filterMonth].forEach(select => {
-            select.addEventListener('change', applyFilters);
+        filterSite.addEventListener('change', () => {
+            const siteVal = filterSite.value;
+            if (siteVal) {
+                const activeData = currentTab === 'main' ? rawData : unusedData;
+                const subData = activeData.filter(r => r['Site'] === siteVal);
+                populateFilters(subData);
+            } else {
+                populateFilters();
+            }
+            // re-select siteVal since populateFilters clears it
+            filterSite.value = siteVal;
+            applyFilters();
         });
+
+        filterMonth.addEventListener('change', applyFilters);
+        filterGroup.addEventListener('input', applyFilters);
+
+        // [User Feedback]: 화살표 클릭 시 기존 텍스트를 지우고 전체 리스트 표시
+        filterGroup.addEventListener('mousedown', function(e) {
+            if (e.offsetX > this.offsetWidth - 40) {
+                this.value = '';
+                applyFilters();
+                setTimeout(() => this.focus(), 10);
+            }
+        });
+
         searchModel.addEventListener('input', applyFilters);
+        checkUnmapped.addEventListener('change', applyFilters);
+
+        tabMain.addEventListener('click', () => {
+            currentTab = 'main';
+            tabMain.classList.add('active');
+            tabUnused.classList.remove('active');
+            populateFilters(); // 탭을 바꾸면 필터 목록 갱신
+            applyFilters();
+        });
+
+        tabUnused.addEventListener('click', () => {
+            currentTab = 'unused';
+            tabUnused.classList.add('active');
+            tabMain.classList.remove('active');
+            tabMaster.classList.remove('active');
+            tableContainer.style.display = 'block';
+            document.getElementById('master-editor').style.display = 'none';
+            populateFilters(); // 탭을 바꾸면 필터 목록 갱신
+            applyFilters();
+        });
+
+        const tabMaster = document.getElementById('tab-master');
+        tabMaster.addEventListener('click', () => {
+            toggleMasterEditor();
+        });
+
+        function renderProposerPanel() {
+            const panel = document.getElementById('proposer-panel');
+            const pList = document.getElementById('proposer-list');
+            
+            const isUnmappedMode = currentTab === 'unused' || (currentTab === 'main' && document.getElementById('check-unmapped').checked);
+            
+            if (!isUnmappedMode || unusedData.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            pList.innerHTML = '';
+            
+            // 그룹 단위: Site + Group + ProductName + Month
+            const groups = {};
+            unusedData.forEach(row => {
+                const k = row.Group + '|==|' + row.ProductName + '|==|' + row.Month + '|==|' + row.Site;
+                if (!groups[k]) groups[k] = { Group: row.Group, ProductName: row.ProductName, Month: row.Month, Site: row.Site, Qty: 0 };
+                groups[k].Qty += 1;
+            });
+
+            const entries = Object.values(groups);
+            if (entries.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            entries.sort((a,b) => b.Qty - a.Qty).forEach((grp, idx) => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
+                
+                let selectHtml = `<option value="">(기종 선택)</option>`;
+                let candidates = window.masterModels ? window.masterModels[grp.Group] : null;
+                
+                if (!candidates || candidates.length === 0) {
+                    if (window.masterModels) {
+                        candidates = [];
+                        Object.values(window.masterModels).forEach(arr => {
+                            if (arr && arr.length) candidates.push(...arr);
+                        });
+                        candidates = [...new Set(candidates)];
+                    }
+                }
+                
+                let bestMatch = '';
+                if (candidates && candidates.length) {
+                    // 영문 접두사 추출 (예: NHP6302 -> NHP)
+                    const rawProd = (grp.ProductName || '').split('-')[0].replace(/[^A-Za-z0-9]/g, '');
+                    const prefixMatch = rawProd.match(/^([A-Z]+)/);
+                    const prodPrefix = prefixMatch ? prefixMatch[1] : '';
+
+                    // 1. 접두사가 같은 기종을 맨 위로 2. 그 외는 알파벳순 정렬
+                    candidates.sort((a,b) => {
+                        const aPref = (a.match(/^([A-Z]+)/) || ['',''])[1];
+                        const bPref = (b.match(/^([A-Z]+)/) || ['',''])[1];
+                        
+                        if (prodPrefix) {
+                            if (aPref === prodPrefix && bPref !== prodPrefix) return -1;
+                            if (bPref === prodPrefix && aPref !== prodPrefix) return 1;
+                        }
+                        return a.localeCompare(b);
+                    });
+
+                    candidates.forEach(m => {
+                        const shortM = m.split('-')[0].replace(/[^A-Za-z0-9]/g, '');
+                        let selected = '';
+                        
+                        // 완벽하게 포함되는 경우 (예: DVF5002 <-> DVF5002)
+                        if (shortM && rawProd && (shortM.includes(rawProd) || rawProd.includes(shortM))) {
+                            selected = 'selected';
+                            if(!bestMatch) bestMatch = m;
+                        } else if (!bestMatch && prodPrefix && m.startsWith(prodPrefix)) {
+                            // 완벽히 포함되지 않지만 접두어(NHP)가 일치하는 최상위 첫번째 항목을 기본 선택
+                            selected = 'selected';
+                            bestMatch = m;
+                        }
+
+                        selectHtml += `<option value="${m}" ${selected}>${m}</option>`;
+                    });
+                }
+                
+                card.innerHTML = `
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;"><span style="color:var(--text-secondary);font-size:0.9rem">[${grp.Site}] ${grp.Group || '미분류'}</span> <br> <span id="prop-product-${idx}" style="color:var(--danger)">${grp.ProductName}</span></div>
+                        <div style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 0.4rem;">📅 ${grp.Month} | 미매칭 확보 수량: <strong style="color: var(--text-primary); font-size: 1.1rem;">${grp.Qty}</strong>대</div>
+                        <div id="prop-preview-${idx}" style="margin-top: 0.6rem; font-size: 0.9rem; color: var(--accent-color); background: rgba(59,130,246,0.05); padding: 0.5rem; border-radius: 4px; display: inline-block;">(기종을 선택하면 분할 비율이 미리보기 됩니다)</div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <select id="prop-select-${idx}" class="select-custom" style="padding: 0.6rem; font-size: 0.95rem; min-width:200px;" onchange="updatePropPreview(${idx}, '${grp.Group || ''}', '${grp.Month}', ${grp.Qty})">
+                            ${selectHtml}
+                        </select>
+                        <button class="btn" style="padding: 0.6rem 1.2rem; background: var(--success); color: white; border: none; font-weight: bold; border-radius: 6px; box-shadow: 0 2px 4px rgba(16,185,129,0.2);" 
+                            onclick="window.approveProposal(${idx}, '${grp.Group || ''}', '${grp.Month}', '${grp.ProductName}', '${grp.Site}')">✓ 매핑 및 일괄 할당</button>
+                    </div>
+                `;
+                pList.appendChild(card);
+                
+                setTimeout(() => updatePropPreview(idx, grp.Group || '', grp.Month, grp.Qty), 5);
+            });
+        }
+
+        function updatePropPreview(idx, group, month, totalQty) {
+            const selectEl = document.getElementById(`prop-select-${idx}`);
+            const previewEl = document.getElementById(`prop-preview-${idx}`);
+            if (!selectEl || !previewEl) return;
+            
+            const targetModel = selectEl.value;
+            if (!targetModel) {
+                previewEl.innerHTML = `⚠️ 변환할 마스터 기종을 우측에서 골라주세요.`;
+                return;
+            }
+            const productName = document.getElementById(`prop-product-${idx}`) ? document.getElementById(`prop-product-${idx}`).innerText : '';
+            
+            let plan = null;
+            if (window.masterPlan && window.masterPlan[group] && window.masterPlan[group][targetModel]) {
+                plan = window.masterPlan[group][targetModel][month];
+            }
+            if ((!plan || plan.length === 0) && window.masterPlan) {
+                for (const g in window.masterPlan) {
+                    if (window.masterPlan[g][targetModel]) {
+                        plan = window.masterPlan[g][targetModel][month];
+                        if (plan && plan.length > 0) break;
+                    }
+                }
+            }
+            if (!plan || plan.length === 0) {
+                const pName = productName.toUpperCase();
+                let textDesc = '화낙 사양으로 전체 화낙 수량 중 잔량';
+                if (pName.includes('H')) textDesc = '하이덴 사양으로 전체 하이덴 수량 중 잔량';
+                else if (pName.includes('S')) textDesc = '지멘스 사양으로 전체 지멘스 수량 중 잔량';
+
+                previewEl.innerHTML = `✅ <b>예상:</b> <b>${targetModel}</b> 로 ${totalQty}대 모두 변환 <br><span style="color:var(--text-secondary);font-size:0.85rem">(원본 시트 목표량과 관계없이, ${textDesc} <b>${totalQty}대</b> 배정됨)</span>`;
+                return;
+            }
+            
+            let remaining = totalQty;
+            const allocationObj = {};
+            plan.forEach(p => {
+                let alloc = Math.min(p.qty, remaining);
+                if (alloc > 0) {
+                    allocationObj[p.rpm] = alloc;
+                    remaining -= alloc;
+                }
+            });
+            
+            if (remaining > 0) {
+                const firstRpm = plan[0].rpm;
+                allocationObj[firstRpm] = (allocationObj[firstRpm] || 0) + remaining;
+            }
+            
+            const allocStrs = Object.entries(allocationObj).map(([r, q]) => `<b>${r}</b>(${q}대)`);
+            previewEl.innerHTML = `🚀 <b>[${targetModel}]</b> 마스터 비율대로 할당 ➔ ` + allocStrs.join(' + ');
+        }
+
+        function getRpmAssignments(totalQty, plan, productName) {
+            let assignments = [];
+            const parts = (productName||'').split('-');
+            
+            let targetKeyword = '';
+            if (parts.length > 1) {
+                const subCode = parts[1].toUpperCase();
+                if (subCode.includes('H')) targetKeyword = 'H';
+                else if (subCode.includes('S')) targetKeyword = 'S';
+            }
+            if (!targetKeyword) targetKeyword = 'F'; // Default to Fanuc
+
+            // 마스터 계획이 전혀 없을 경우 기본값 부여
+            if (!plan || plan.length === 0) {
+                let fallback = '기본';
+                if (targetKeyword === 'H') fallback = '12K(H/H)';
+                else if (targetKeyword === 'S') fallback = '12K(지멘스)';
+                else if (targetKeyword === 'F') fallback = '12K';
+                
+                for(let i=0; i<totalQty; i++) assignments.push(fallback);
+                return assignments;
+            }
+            
+            // 안전복사
+            let localPlan = plan.map(p => ({rpm: p.rpm, qty: p.qty}));
+            let remaining = totalQty;
+            
+            // 1. 타겟 키워드(H/S/F)에 따른 마스터 내 우선 배정 대상을 찾는다
+            const findTargetPlan = () => {
+                if (targetKeyword === 'H') {
+                    return localPlan.find(p => p.rpm.toUpperCase().includes('H/H'));
+                } else if (targetKeyword === 'S') {
+                    return localPlan.find(p => {
+                        const up = p.rpm.toUpperCase();
+                        return up.includes('SONE') || up.includes('SIEMENS') || up.includes('지멘스');
+                    });
+                } else if (targetKeyword === 'F') {
+                    return localPlan.find(p => {
+                        const up = p.rpm.toUpperCase();
+                        // H/H나 SONE, 지멘스가 아닌 일반 기종(Fanuc 등)을 F로 취급
+                        return !up.includes('H/H') && !up.includes('SONE') && !up.includes('SIEMENS') && !up.includes('지멘스');
+                    });
+                }
+            };
+
+            const targetPlan = findTargetPlan();
+
+            // 2. 우선 배정 대상(targetPlan)이 발견되었다면 수량 소진
+            if (targetPlan && targetPlan.qty > 0) {
+                let alloc = Math.min(targetPlan.qty, remaining);
+                for(let k=0; k<alloc; k++) assignments.push(targetPlan.rpm);
+                targetPlan.qty -= alloc;
+                remaining -= alloc;
+            } else {
+                // 마스터에 해당 목표가 없거나 다 소진되었지만 여전히 할당해야 한다면 강제화
+                // [User Feedback]: 원본 파일을 보고 RPM이 적혀있으면 수량만큼 매칭! (만약 타겟 쿼터가 모자라면 억지로라도 타겟으로 명시)
+                let forcedRpm = localPlan[0].rpm;
+                
+                if (targetKeyword === 'H' && !forcedRpm.includes('H/H')) {
+                    forcedRpm = forcedRpm.includes('(') ? forcedRpm.replace(/\(.*\)/, '(H/H)') : forcedRpm + '(H/H)';
+                } else if (targetKeyword === 'S' && !forcedRpm.toUpperCase().includes('SONE') && !forcedRpm.includes('지멘스')) {
+                    forcedRpm = forcedRpm.includes('(') ? forcedRpm.replace(/\(.*\)/, '(SONE)') : forcedRpm + '(SONE)';
+                }
+                
+                // 만약 targetPlan을 애초에 못찾았다면 (master sheet에 그 옵션이 없다면) 강제 배정 후 종류 유지
+                // => 무조건 해당 타겟으로 다 밀어버릴까? 아니면 남은 건 넘길까?
+                // => 만약 못 찾았을 때는 해당 속성이 강력하므로 전량 강제 할당
+                if (!targetPlan) {
+                    let alloc = remaining; 
+                    for(let k=0; k<alloc; k++) assignments.push(forcedRpm);
+                    remaining -= alloc;
+                }
+            }
+            
+            // 3. 만약 우선 배정 대상을 다 소거하고도 수량이 남았다면 일반 분배 (남은 쿼터 순서대로)
+            localPlan.forEach(p => {
+                if (remaining > 0 && p.qty > 0) {
+                    let alloc = Math.min(p.qty, remaining);
+                    for(let k=0; k<alloc; k++) assignments.push(p.rpm);
+                    p.qty -= alloc;
+                    remaining -= alloc;
+                }
+            });
+            
+            // 4. 그래도 남았다면 첫번째 RPM으로 몰아넣기
+            while(remaining > 0) {
+                assignments.push(localPlan[0].rpm);
+                remaining--;
+            }
+            return assignments;
+        }
+
+        window.approveProposal = function(idx, group, month, productName, site) {
+            if(!confirm('해당 항목을 제안된 비율대로 분할하여 정상 매치 항목으로 편입하시겠습니까? (이 결정은 영구적으로 기억됩니다)')) return;
+            const selectEl = document.getElementById(`prop-select-${idx}`);
+            const targetModel = selectEl.value;
+            if (!targetModel) {
+                alert('매핑할 마스터 기종을 먼저 선택해주세요!');
+                return;
+            }
+
+            // 💾 메모리 저장 로직
+            try {
+                let customModelMap = JSON.parse(localStorage.getItem('mpsAutoModelMap')) || {};
+                customModelMap[(group || '') + '|==|' + productName] = targetModel;
+                localStorage.setItem('mpsAutoModelMap', JSON.stringify(customModelMap));
+            } catch(e) {
+                console.warn('로컬 저장 실패', e);
+            }
+
+            let plan = null;
+            if (window.masterPlan && window.masterPlan[group] && window.masterPlan[group][targetModel]) {
+                plan = window.masterPlan[group][targetModel][month];
+            }
+            if ((!plan || plan.length === 0) && window.masterPlan) {
+                for (const g in window.masterPlan) {
+                    if (window.masterPlan[g][targetModel]) {
+                        plan = window.masterPlan[g][targetModel][month];
+                        if (plan && plan.length > 0) break;
+                    }
+                }
+            }
+            
+            const itemsToMove = unusedData.filter(r => (r.Group || '') === group && r.Month === month && r.ProductName === productName && r.Site === site);
+            const totalQty = itemsToMove.length;
+            
+            const assignments = getRpmAssignments(totalQty, plan, productName);
+
+            itemsToMove.forEach((item, i) => {
+                rawData.push({
+                    Site: item.Site,
+                    Group: group || '미분류(제안변환)',
+                    Model: targetModel,
+                    RPM: assignments[i],
+                    Month: month,
+                    Code: item.ModelCode,
+                    Product: item.ProductName + ' (★)'
+                });
+            });
+
+            unusedData = unusedData.filter(r => !((r.Group || '') === group && r.Month === month && r.ProductName === productName && r.Site === site));
+            applyFilters();
+        };
+
+        function toggleMasterEditor() {
+            const overlay = document.getElementById('master-editor-overlay');
+            const isVisible = overlay.style.display === 'flex';
+            
+            if (isVisible) {
+                overlay.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            } else {
+                overlay.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                loadSiteMaster();
+            }
+        }
 
         function applyFilters() {
-            const siteVal = filterSite.value;
-            const groupVal = filterGroup.value;
-            const monthVal = filterMonth.value;
-            const searchVal = searchModel.value.toLowerCase();
+            if (currentTab === 'main') {
+                const siteVal = filterSite.value;
+                const groupVal = filterGroup.value;
+                const monthVal = filterMonth.value;
+                const searchVal = searchModel.value.toLowerCase();
+                const unmappedOnly = checkUnmapped.checked;
 
-            filteredData = rawData.filter(row => {
-                const matchSite = !siteVal || row['Site'] === siteVal;
-                const matchGroup = !groupVal || row['Group'] === groupVal;
-                const matchMonth = !monthVal || row['Month'] === monthVal;
-                const matchSearch = !searchVal || (row['Model'] && row['Model'].toLowerCase().includes(searchVal));
-                return matchSite && matchGroup && matchMonth && matchSearch;
-            });
+                filteredData = rawData.filter(row => {
+                    const matchSite = !siteVal || row['Site'] === siteVal;
+                    const matchGroup = !groupVal || row['Group'] === groupVal;
+                    const matchMonth = !monthVal || row['Month'] === monthVal;
+                    const matchSearch = !searchVal || 
+                                       (row['Model'] && row['Model'].toLowerCase().includes(searchVal)) ||
+                                       (row['Product'] && row['Product'].toLowerCase().includes(searchVal)) ||
+                                       (row['Code'] && row['Code'].toLowerCase().includes(searchVal));
+                    const matchUnmapped = !unmappedOnly || (row['Site'].match(/^\d+$/) || row['Site'].includes('184'));
+                    return matchSite && matchGroup && matchMonth && matchSearch && matchUnmapped;
+                });
+            } else {
+                const siteVal = filterSite.value;
+                const groupVal = filterGroup.value;
+                const monthVal = filterMonth.value;
+                const searchVal = searchModel.value.toLowerCase();
+                
+                filteredData = unusedData.filter(row => {
+                    const matchSite = !siteVal || row['Site'] === siteVal;
+                    const matchGroup = !groupVal || row['Group'] === groupVal;
+                    const matchMonth = !monthVal || row['Month'] === monthVal;
+                    const matchSearch = !searchVal || 
+                                       (row['ModelCode'] && row['ModelCode'].toLowerCase().includes(searchVal)) ||
+                                       (row['ProductName'] && row['ProductName'].toLowerCase().includes(searchVal));
+                    return matchSite && matchGroup && matchMonth && matchSearch;
+                });
+            }
 
             totalRowsSpan.textContent = filteredData.length.toLocaleString();
             renderTable();
+            
+            const isUnmappedMode = currentTab === 'unused' || (currentTab === 'main' && checkUnmapped.checked);
+            if (isUnmappedMode) {
+                renderProposerPanel();
+            } else {
+                const panel = document.getElementById('proposer-panel');
+                if(panel) panel.style.display = 'none';
+            }
         }
 
         function renderTable() {
-            // Render Headers
             tableHead.innerHTML = '';
-
-            // Define clean labels for headers
             const headerLabels = {
-                'Site': '생산처',
-                'Group': '기종분류',
-                'Model': '기종',
-                'RPM': 'RPM',
-                'Month': '월',
-                'Code': '모델코드',
-                'Product': '품명'
+                'Site': '생산처', 'Group': '기종분류', 'Model': '기종', 'RPM': 'RPM', 'Month': '월', 'Code': '모델코드', 'Product': '품명',
+                'ModelCode': '모델코드', 'ProductName': '품명', 'Category': '부류'
             };
 
-            headers.forEach(h => {
+            const activeHeaders = currentTab === 'main' ? headers : ['Month', 'Site', 'Group', 'ModelCode', 'ProductName', 'Category'];
+            activeHeaders.forEach(h => {
                 const th = document.createElement('th');
                 th.textContent = headerLabels[h] || h;
                 tableHead.appendChild(th);
             });
 
-            // Render Body
             tableBody.innerHTML = '';
-
-            // Limit to 500 rows for performance
             const limit = Math.min(filteredData.length, 500);
 
             for (let i = 0; i < limit; i++) {
                 const row = filteredData[i];
                 const tr = document.createElement('tr');
-                headers.forEach(h => {
+                activeHeaders.forEach(h => {
                     const td = document.createElement('td');
-
-                    // Specific styling for important columns
-                    if (h === 'Model' || h === 'Code') {
+                    if (h === 'Model' || h === 'Code' || h === 'ModelCode') {
                         td.style.fontWeight = '600';
                         td.style.color = 'var(--accent-color)';
                     }
-                    if (h === 'Month') {
-                        td.style.color = 'var(--success)';
-                    }
-                    if (h === 'Product') {
-                        td.style.color = 'var(--text-secondary)';
-                        td.style.fontSize = '0.85rem';
-                    }
-
                     td.textContent = row[h] || '';
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);
             }
-
             if (filteredData.length > 500) {
                 const tr = document.createElement('tr');
                 const td = document.createElement('td');
-                td.colSpan = headers.length;
-                td.textContent = `... (외 ${filteredData.length - 500}개의 데이터가 더 있습니다. 필터를 사용하여 범위를 좁혀주세요.)`;
+                td.colSpan = activeHeaders.length;
+                td.textContent = `... (외 ${filteredData.length - 500}개 더 있음)`;
                 td.style.textAlign = 'center';
-                td.style.color = 'var(--text-secondary)';
-                td.style.fontStyle = 'italic';
                 tr.appendChild(td);
                 tableBody.appendChild(tr);
             }
         }
         window.addEventListener('DOMContentLoaded', () => {
-            loadCSVFromServer('_MPS_Final_Data_v3.csv');
+            extractBtn.disabled = true;
+            loadSiteMaster();
         });
     </script>
 </body>
-
 </html>
