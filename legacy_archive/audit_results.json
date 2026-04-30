@@ -1,0 +1,53 @@
+{
+  "LYNX": {
+    "total": 1961,
+    "matched": 285,
+    "unmapped": 1676,
+    "stolenByOther": 0
+  },
+  "PUMA": {
+    "total": 432,
+    "matched": 356,
+    "unmapped": 76
+  },
+  "DVF": {
+    "total": 93,
+    "matched": 83,
+    "unmapped": 10
+  },
+  "DNM/DNX": {
+    "total": 437,
+    "matched": 399,
+    "unmapped": 38
+  },
+  "VCF": {
+    "total": 9,
+    "matched": 8,
+    "unmapped": 1
+  },
+  "HORIZ": {
+    "total": 64,
+    "matched": 58,
+    "unmapped": 6
+  },
+  "OTHERS": {
+    "total": 77,
+    "matched": 53,
+    "unmapped": 24
+  },
+  "T-LATHE": {
+    "total": 84,
+    "matched": 34,
+    "unmapped": 50
+  },
+  "PUMA-GT": {
+    "total": 61,
+    "matched": 40,
+    "unmapped": 21
+  },
+  "V-LATHE": {
+    "total": 10,
+    "matched": 10,
+    "unmapped": 0
+  }
+}
