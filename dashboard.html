@@ -197,6 +197,61 @@
             align-items: center;
             gap: 0.75rem;
         }
+        
+        /* Dual Panel Styles */
+        .dual-container {
+            display: flex;
+            gap: 0;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            height: 65vh;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            margin-top: 1rem;
+        }
+        .panel-left {
+            flex: 1.3;
+            overflow-x: auto;
+            overflow-y: auto;
+            border-right: 3px solid var(--accent-color);
+            background: rgba(59, 130, 246, 0.03);
+        }
+        .panel-right {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: auto;
+            background: rgba(245, 158, 11, 0.03);
+        }
+        .dual-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .dual-table th {
+            position: sticky;
+            top: 0;
+            background: var(--surface-color);
+            z-index: 10;
+            padding: 1rem;
+            text-align: left;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .dual-table td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+        .dual-table tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
         .stats { display: flex; gap: 20px; align-items: center; background: rgba(59, 130, 246, 0.05); padding: 20px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.1); margin-bottom: 25px; }
 
         /* Site Master Modal Overhaul */
@@ -496,10 +551,15 @@
 
 <body>
 
-    <header>
-        <div class="logo">MPS 생산계획 대시보드 ✨</div>
-        <div class="user-info" style="color: var(--text-secondary); font-size: 0.9rem;">
-            생산계획 데이터 뷰어
+    <header style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; padding: 0 2rem;">
+        <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V2.9 - 사이트 매핑 동기화 완료</span></div>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button class="btn" id="header-reset-btn" onclick="if(confirm('학습된 메모리를 삭제하시겠습니까?')) { localStorage.removeItem('mpsAutoModelMap'); alert('학습 메모리가 완전히 초기화되었습니다.'); location.reload(); }" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">
+                🧠 학습 메모리 초기화
+            </button>
+            <div class="user-info" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">
+                실시간 엔진 업데이트 완료
+            </div>
         </div>
     </header>
 
@@ -532,11 +592,7 @@
             <button class="extract-btn" id="extract-btn" onclick="startExtraction()" style="padding: 1.5rem 4rem; font-size: 1.25rem;">
                 <span>🚀 선택된 파일 분석 시작</span>
             </button>
-            <div style="margin-top: 1rem; text-align: center;">
-                <button class="btn" onclick="if(confirm('브라우저가 학습한 모든 수동 매핑 메모리를 영구 삭제하시겠습니까? (이전 수동 매칭 내역이 초기화됩니다)')) { localStorage.removeItem('mpsAutoModelMap'); alert('메모리가 완전히 초기화되었습니다. 파일을 다시 올려 분석해주세요!'); }" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 500; padding: 0.6rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
-                    🧠 학습 메모리 강제 초기화
-                </button>
-            </div>
+
 
             <div id="processing-text"
                 style="color: var(--accent-color); font-size: 1rem; font-weight: 500; display: none; margin-top: 1rem; animation: pulse 1.5s infinite;">
@@ -627,20 +683,8 @@
         <div class="tab-system" id="tab-system" style="display: none;">
                 <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
                 <button class="tab-btn" id="tab-unused">⚠️ 미사용 MPS 데이터 풀</button>
-                <button class="tab-btn" id="tab-master" style="background:var(--accent-color); color:white;">⚙️ 사이트 마스터</button>
+                <button class="tab-btn" id="tab-master">⚙️ 사이트 마스터</button>
             </div>
-
-        <!-- Proposer Panel -->
-        <div id="proposer-panel" style="display: none; background: rgba(59, 130, 246, 0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--accent-color); margin-bottom: 1.5rem; animation: slideUp 0.3s ease;">
-            <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 0.5rem; font-size: 1.2rem;">
-                ✨ 지능형 실적 자동 분배
-            </h3>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                동일한 기종/월별로 취합된 미매칭 실적들을 바탕으로, 엑셀 <b>마스터 시트의 계획 수량(RPM 배분)</b>에 맞춰 클릭 한 번에 자동 변환 및 할당합니다.
-            </p>
-            <div id="proposer-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 480px; overflow-y: auto;">
-            </div>
-        </div>
 
         <!-- Stats -->
         <div class="stats" id="stats">
@@ -650,18 +694,24 @@
             </div>
         </div>
 
-        <!-- Data Grid -->
+        <!-- Standard Data Grid (Main Tab) -->
         <div class="table-container" id="table-container">
             <table id="data-table">
                 <thead>
-                    <tr id="table-head">
-                        <!-- Filled dynamically -->
-                    </tr>
+                    <tr id="table-head"></tr>
                 </thead>
-                <tbody id="table-body">
-                    <!-- Filled dynamically -->
-                </tbody>
+                <tbody id="table-body"></tbody>
             </table>
+        </div>
+
+        <!-- Dual Panel Data Grid (Unused Pool Tab) -->
+        <div class="dual-container" id="dual-container" style="display: none;">
+            <div class="panel-left" id="panel-left" style="flex: 1; border-right: none; background: transparent;">
+                <table class="dual-table" id="table-left">
+                    <thead id="head-left"></thead>
+                    <tbody id="body-left"></tbody>
+                </table>
+            </div>
         </div>
     </main>
 
@@ -696,7 +746,13 @@
         window.masterPlan = null;
         window.masterModels = null;
 
-        const DEFAULT_SITE_MASTER = `0AM1: MC1직_조립_1840
+        const DEFAULT_SITE_MASTER = `I0215116: 07. 삼광
+I0205716: 09. 서진
+I0206873: 성주
+I0206954: 성주
+I0215001: 세양
+I0212077: 성우
+0AM1: MC1직_조립_1840
 0AM2: MC2직_조립_1840
 0AM3: MC3직_조립_1840
 0AM4: MC4직_조립_1840
@@ -812,6 +868,7 @@ DST: 22. 지티테크`;
         // ========== Client-side Excel processing (SheetJS) ==========
         let selectedXlsxFile = null;
 
+
         function handleDrop(event) {
             event.preventDefault();
             document.getElementById('drop-zone').style.background = 'rgba(59,130,246,0.05)';
@@ -832,27 +889,95 @@ DST: 22. 지티테크`;
 
         function getMatchKey(s) {
             if (!s) return '';
-            let k = s.toString().toUpperCase().trim();
+            let n = s.toString().toUpperCase().trim();
             
-            // 1. 접두사 특수 매칭 (사용자 피드백 반영: VF8 -> VCF850)
-            if (k.startsWith('VF8')) {
-                k = 'VCF850' + k.substring(3);
+            // [1. ROMAN TO NUMBER]
+            n = n.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
+            n = n.replace(/III/g, '3').replace(/II/g, '2');
+
+            // [2. SPECIALIZED SERIES RULES]
+            if (n.includes('SMX')) {
+                n = n.replace(/SMX2(?![0-9])/g, 'SMX21');
+                n = n.replace(/2100/g, '21').replace(/3100/g, '31').replace(/5100/g, '51');
+                n = n.replace(/SYYB/g, 'SYY').replace(/STB/g, 'SB');
             }
 
-            // 2. 접두사 정규화 (M65402 -> MYNX65402)
-            if (k.startsWith('M') && !k.startsWith('MYNX')) {
-                k = 'MYNX' + k.substring(1);
+            if (n.startsWith('VCF')) {
+                n = n.replace('VCF', 'VF');
+                n = n.replace(/(\d)\d0/, '$1');
             }
 
-            // 3. 로마자 -> 숫자 변환
-            k = k.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
-            k = k.replace(/III/g, '3').replace(/II/g, '2');
+            if (n.startsWith('MYNX')) {
+                let taperMatch = n.match(/6500\/(\d)0/);
+                if (taperMatch) n = 'M65' + taperMatch[1];
+                else n = 'M' + n.substring(4);
+            }
             
-            k = k.split('-')[0];
-            k = k.replace(/PUMA|LYNX/g, '').replace(/^P|^L/, '');
+            if (n.startsWith('VM')) {
+                if (n.startsWith('VMX')) n = 'M' + n.substring(3);
+                else n = 'V' + n.substring(2);
+            }
 
-            // 4. 패턴 정규화: 0과 특수문자를 제거하여 뼈대만 남김
-            return k.replace(/[^A-Z1-9]/g, '');
+            if (n.includes('DNM')) {
+                n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
+            }
+
+            // [3. GENERIC NORMALIZATION]
+            n = n.replace(/PUMA|LYNX/g, '').replace(/^P|^L/, '').replace(/\s+/g, '').trim();
+
+            if (n.startsWith('VTR')) {
+                let numMatch = n.match(/VTR(\d+)/);
+                if (numMatch) {
+                    let num = numMatch[1];
+                    if (num === '1620' || num === '162') num = '162';
+                    else if (num === '1216' || num === '121') num = '121';
+                    else if (num === '2025' || num === '202') num = '202';
+                    n = 'VTR' + num;
+                }
+            }
+
+
+
+            if (n.startsWith('MYNX')) n = 'M' + n.substring(4);
+            else if (n.startsWith('VMX')) n = 'M' + n.substring(3);
+            else if (n.startsWith('VM') && !n.startsWith('VMX')) n = 'M' + n.substring(2);
+            else if (n.startsWith('MP')) n = 'M' + n.substring(2);
+            else if (n.startsWith('DNM')) n = 'D' + n.substring(3);
+            else if (n.startsWith('DCM')) n = 'DC' + n.substring(3);
+            else if (n.startsWith('DVF')) n = 'V' + n.substring(3);
+            else if (n.startsWith('VCF')) n = 'V' + n.substring(3);
+            else if (n.startsWith('VT') && !n.startsWith('VTR')) n = 'V' + n.substring(2);
+            else if (n.startsWith('TT') && !n.startsWith('TTR')) n = 'T' + n.substring(2);
+            
+            if (n.startsWith('V') && !['VTR', 'VFC', 'VF'].some(p => n.startsWith(p))) {
+                let digits = n.match(/\d{2,3}/);
+                if (digits) n = 'V' + digits[0].substring(0, 2);
+            }
+            if (n.startsWith('TW')) {
+                n = n.replace(/(\d+)(?:MZ|WB|W|B|Z|M)+\d*$/g, '$1');
+                let base = n.match(/TW\d+/);
+                if (base) n = base[0];
+            }
+
+            if (n.startsWith('GT2600')) {
+                n = n.replace('XLMB', 'XLB').replace('XLMA', 'XLA').replace('XMB', 'XB').replace('XMA', 'XA');
+            }
+
+            let key = n.replace(/[^A-Z1-9]/g, '');
+            key = key.replace(/\s+/g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+            key = key.replace(/0/g, '');
+
+            if (key.length >= 5) {
+                key = key.replace(/[2-9]$/, '');
+            }
+
+            key = key.replace(/[A-Z]+$/, '');
+            
+            if (key.startsWith('DC')) {
+                key = key.replace(/[A-Z]$/, '');
+            }
+
+            return key;
         }
 
         // 기종명 키워드를 분석하여 그룹을 유추하는 지능형 분류 함수
@@ -941,9 +1066,10 @@ DST: 22. 지티테크`;
                 
                 rawData = result.finalResults || [];
                 unusedData = result.unusedData || [];
+                window.masterPlanPool = result.masterPlanPool || []; // 전체 계획 데이터
                 window.masterPlan = result.masterPlan || null; 
                 window.masterModels = result.masterModelsByGroup || null;
-                headers = ['Site', 'Group', 'Model', 'RPM', 'Month', 'Code', 'Product'];
+                headers = ['Site', 'Model', 'RPM', 'Month', 'Code', 'Product'];
 
                 // ========================================================
                 // 🚀 새로 탑재된 클라이언트 영구 메모리 로직 (Auto-apply)
@@ -1021,6 +1147,14 @@ DST: 22. 지티테크`;
             } finally {
                 processingText.style.display = 'none';
                 loader.style.display = 'none';
+            }
+        }
+
+        function resetLearningMemory() {
+            if (confirm('브라우저가 학습한 모든 수동 매핑 메모리를 영구 삭제하시겠습니까?')) {
+                localStorage.removeItem('mpsAutoModelMap');
+                alert('학습 메모리가 초기화되었습니다. 페이지를 새로고침합니다.');
+                location.reload();
             }
         }
 
@@ -1110,184 +1244,28 @@ DST: 22. 지티테크`;
         searchModel.addEventListener('input', applyFilters);
         checkUnmapped.addEventListener('change', applyFilters);
 
-        tabMain.addEventListener('click', () => {
-            currentTab = 'main';
-            tabMain.classList.add('active');
-            tabUnused.classList.remove('active');
-            populateFilters(); // 탭을 바꾸면 필터 목록 갱신
-            applyFilters();
-        });
+        function switchTab(tabId) {
+            currentTab = tabId;
+            tabMain.classList.toggle('active', tabId === 'main');
+            tabUnused.classList.toggle('active', tabId === 'unused');
+            
+            // 탭 변경 시 마스터 에디터 닫기
+            const overlay = document.getElementById('master-editor-overlay');
+            if (overlay) overlay.style.display = 'none';
+            document.body.style.overflow = 'auto';
 
-        tabUnused.addEventListener('click', () => {
-            currentTab = 'unused';
-            tabUnused.classList.add('active');
-            tabMain.classList.remove('active');
-            tabMaster.classList.remove('active');
-            tableContainer.style.display = 'block';
-            document.getElementById('master-editor').style.display = 'none';
-            populateFilters(); // 탭을 바꾸면 필터 목록 갱신
+            populateFilters();
             applyFilters();
-        });
+        }
 
-        const tabMaster = document.getElementById('tab-master');
-        tabMaster.addEventListener('click', () => {
+        tabMain.addEventListener('click', () => switchTab('main'));
+        tabUnused.addEventListener('click', () => switchTab('unused'));
+        
+        document.getElementById('tab-master').onclick = function(e) {
+            e.preventDefault();
             toggleMasterEditor();
-        });
+        };
 
-        function renderProposerPanel() {
-            const panel = document.getElementById('proposer-panel');
-            const pList = document.getElementById('proposer-list');
-            
-            const isUnmappedMode = currentTab === 'unused' || (currentTab === 'main' && document.getElementById('check-unmapped').checked);
-            
-            if (!isUnmappedMode || unusedData.length === 0) {
-                panel.style.display = 'none';
-                return;
-            }
-            
-            panel.style.display = 'block';
-            pList.innerHTML = '';
-            
-            // 그룹 단위: Site + Group + ProductName + Month
-            const groups = {};
-            unusedData.forEach(row => {
-                const k = row.Group + '|==|' + row.ProductName + '|==|' + row.Month + '|==|' + row.Site;
-                if (!groups[k]) groups[k] = { Group: row.Group, ProductName: row.ProductName, Month: row.Month, Site: row.Site, Qty: 0 };
-                groups[k].Qty += 1;
-            });
-
-            const entries = Object.values(groups);
-            if (entries.length === 0) {
-                panel.style.display = 'none';
-                return;
-            }
-
-            entries.sort((a,b) => b.Qty - a.Qty).forEach((grp, idx) => {
-                const card = document.createElement('div');
-                card.style.cssText = 'background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
-                
-                let selectHtml = `<option value="">(기종 선택)</option>`;
-                let candidates = window.masterModels ? window.masterModels[grp.Group] : null;
-                
-                if (!candidates || candidates.length === 0) {
-                    if (window.masterModels) {
-                        candidates = [];
-                        Object.values(window.masterModels).forEach(arr => {
-                            if (arr && arr.length) candidates.push(...arr);
-                        });
-                        candidates = [...new Set(candidates)];
-                    }
-                }
-                
-                let bestMatch = '';
-                if (candidates && candidates.length) {
-                    // 영문 접두사 추출 (예: NHP6302 -> NHP)
-                    const rawProd = (grp.ProductName || '').split('-')[0].replace(/[^A-Za-z0-9]/g, '');
-                    const prefixMatch = rawProd.match(/^([A-Z]+)/);
-                    const prodPrefix = prefixMatch ? prefixMatch[1] : '';
-
-                    // 1. 접두사가 같은 기종을 맨 위로 2. 그 외는 알파벳순 정렬
-                    candidates.sort((a,b) => {
-                        const aPref = (a.match(/^([A-Z]+)/) || ['',''])[1];
-                        const bPref = (b.match(/^([A-Z]+)/) || ['',''])[1];
-                        
-                        if (prodPrefix) {
-                            if (aPref === prodPrefix && bPref !== prodPrefix) return -1;
-                            if (bPref === prodPrefix && aPref !== prodPrefix) return 1;
-                        }
-                        return a.localeCompare(b);
-                    });
-
-                    candidates.forEach(m => {
-                        const shortM = m.split('-')[0].replace(/[^A-Za-z0-9]/g, '');
-                        let selected = '';
-                        
-                        // 완벽하게 포함되는 경우 (예: DVF5002 <-> DVF5002)
-                        if (shortM && rawProd && (shortM.includes(rawProd) || rawProd.includes(shortM))) {
-                            selected = 'selected';
-                            if(!bestMatch) bestMatch = m;
-                        } else if (!bestMatch && prodPrefix && m.startsWith(prodPrefix)) {
-                            // 완벽히 포함되지 않지만 접두어(NHP)가 일치하는 최상위 첫번째 항목을 기본 선택
-                            selected = 'selected';
-                            bestMatch = m;
-                        }
-
-                        selectHtml += `<option value="${m}" ${selected}>${m}</option>`;
-                    });
-                }
-                
-                card.innerHTML = `
-                    <div style="flex: 1;">
-                        <div style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;"><span style="color:var(--text-secondary);font-size:0.9rem">[${grp.Site}] ${grp.Group || '미분류'}</span> <br> <span id="prop-product-${idx}" style="color:var(--danger)">${grp.ProductName}</span></div>
-                        <div style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 0.4rem;">📅 ${grp.Month} | 미매칭 확보 수량: <strong style="color: var(--text-primary); font-size: 1.1rem;">${grp.Qty}</strong>대</div>
-                        <div id="prop-preview-${idx}" style="margin-top: 0.6rem; font-size: 0.9rem; color: var(--accent-color); background: rgba(59,130,246,0.05); padding: 0.5rem; border-radius: 4px; display: inline-block;">(기종을 선택하면 분할 비율이 미리보기 됩니다)</div>
-                    </div>
-                    <div style="display: flex; gap: 0.75rem; align-items: center;">
-                        <select id="prop-select-${idx}" class="select-custom" style="padding: 0.6rem; font-size: 0.95rem; min-width:200px;" onchange="updatePropPreview(${idx}, '${grp.Group || ''}', '${grp.Month}', ${grp.Qty})">
-                            ${selectHtml}
-                        </select>
-                        <button class="btn" style="padding: 0.6rem 1.2rem; background: var(--success); color: white; border: none; font-weight: bold; border-radius: 6px; box-shadow: 0 2px 4px rgba(16,185,129,0.2);" 
-                            onclick="window.approveProposal(${idx}, '${grp.Group || ''}', '${grp.Month}', '${grp.ProductName}', '${grp.Site}')">✓ 매핑 및 일괄 할당</button>
-                    </div>
-                `;
-                pList.appendChild(card);
-                
-                setTimeout(() => updatePropPreview(idx, grp.Group || '', grp.Month, grp.Qty), 5);
-            });
-        }
-
-        function updatePropPreview(idx, group, month, totalQty) {
-            const selectEl = document.getElementById(`prop-select-${idx}`);
-            const previewEl = document.getElementById(`prop-preview-${idx}`);
-            if (!selectEl || !previewEl) return;
-            
-            const targetModel = selectEl.value;
-            if (!targetModel) {
-                previewEl.innerHTML = `⚠️ 변환할 마스터 기종을 우측에서 골라주세요.`;
-                return;
-            }
-            const productName = document.getElementById(`prop-product-${idx}`) ? document.getElementById(`prop-product-${idx}`).innerText : '';
-            
-            let plan = null;
-            if (window.masterPlan && window.masterPlan[group] && window.masterPlan[group][targetModel]) {
-                plan = window.masterPlan[group][targetModel][month];
-            }
-            if ((!plan || plan.length === 0) && window.masterPlan) {
-                for (const g in window.masterPlan) {
-                    if (window.masterPlan[g][targetModel]) {
-                        plan = window.masterPlan[g][targetModel][month];
-                        if (plan && plan.length > 0) break;
-                    }
-                }
-            }
-            if (!plan || plan.length === 0) {
-                const pName = productName.toUpperCase();
-                let textDesc = '화낙 사양으로 전체 화낙 수량 중 잔량';
-                if (pName.includes('H')) textDesc = '하이덴 사양으로 전체 하이덴 수량 중 잔량';
-                else if (pName.includes('S')) textDesc = '지멘스 사양으로 전체 지멘스 수량 중 잔량';
-
-                previewEl.innerHTML = `✅ <b>예상:</b> <b>${targetModel}</b> 로 ${totalQty}대 모두 변환 <br><span style="color:var(--text-secondary);font-size:0.85rem">(원본 시트 목표량과 관계없이, ${textDesc} <b>${totalQty}대</b> 배정됨)</span>`;
-                return;
-            }
-            
-            let remaining = totalQty;
-            const allocationObj = {};
-            plan.forEach(p => {
-                let alloc = Math.min(p.qty, remaining);
-                if (alloc > 0) {
-                    allocationObj[p.rpm] = alloc;
-                    remaining -= alloc;
-                }
-            });
-            
-            if (remaining > 0) {
-                const firstRpm = plan[0].rpm;
-                allocationObj[firstRpm] = (allocationObj[firstRpm] || 0) + remaining;
-            }
-            
-            const allocStrs = Object.entries(allocationObj).map(([r, q]) => `<b>${r}</b>(${q}대)`);
-            previewEl.innerHTML = `🚀 <b>[${targetModel}]</b> 마스터 비율대로 할당 ➔ ` + allocStrs.join(' + ');
-        }
 
         function getRpmAssignments(totalQty, plan, productName) {
             let assignments = [];
@@ -1381,8 +1359,8 @@ DST: 22. 지티테크`;
             return assignments;
         }
 
-        window.approveProposal = function(idx, group, month, productName, site) {
-            if(!confirm('해당 항목을 제안된 비율대로 분할하여 정상 매치 항목으로 편입하시겠습니까? (이 결정은 영구적으로 기억됩니다)')) return;
+        window.approveProposal = function(idx, group, month, productName) {
+            if(!confirm('해당 항목을 제안된 비율대로 분할하여 모든 생산처에 일괄 할당하시겠습니까? (이 결정은 영구적으로 기억됩니다)')) return;
             const selectEl = document.getElementById(`prop-select-${idx}`);
             const targetModel = selectEl.value;
             if (!targetModel) {
@@ -1412,7 +1390,7 @@ DST: 22. 지티테크`;
                 }
             }
             
-            const itemsToMove = unusedData.filter(r => (r.Group || '') === group && r.Month === month && r.ProductName === productName && r.Site === site);
+            const itemsToMove = unusedData.filter(r => (r.Group || '') === group && r.Month === month && (r.UnmappedModel === productName || r.ProductName === productName));
             const totalQty = itemsToMove.length;
             
             const assignments = getRpmAssignments(totalQty, plan, productName);
@@ -1425,25 +1403,32 @@ DST: 22. 지티테크`;
                     RPM: assignments[i],
                     Month: month,
                     Code: item.ModelCode,
-                    Product: item.ProductName + ' (★)'
+                    Product: targetModel + ' (★)'
                 });
             });
 
-            unusedData = unusedData.filter(r => !((r.Group || '') === group && r.Month === month && r.ProductName === productName && r.Site === site));
+            unusedData = unusedData.filter(r => !((r.Group || '') === group && r.Month === month && (r.UnmappedModel === productName || r.ProductName === productName)));
             applyFilters();
         };
 
         function toggleMasterEditor() {
-            const overlay = document.getElementById('master-editor-overlay');
-            const isVisible = overlay.style.display === 'flex';
-            
-            if (isVisible) {
-                overlay.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            } else {
-                overlay.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                loadSiteMaster();
+            try {
+                const overlay = document.getElementById('master-editor-overlay');
+                if (!overlay) return;
+                
+                const isVisible = overlay.style.display === 'flex';
+                
+                if (isVisible) {
+                    overlay.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                } else {
+                    overlay.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    loadSiteMaster();
+                }
+            } catch (err) {
+                console.error('Failed to toggle master editor:', err);
+                alert('사이트 마스터를 열 수 없습니다: ' + err.message);
             }
         }
 
@@ -1472,70 +1457,104 @@ DST: 22. 지티테크`;
                 const monthVal = filterMonth.value;
                 const searchVal = searchModel.value.toLowerCase();
                 
+                // 왼쪽: 미매칭 생산 데이터 (Field)
                 filteredData = unusedData.filter(row => {
                     const matchSite = !siteVal || row['Site'] === siteVal;
                     const matchGroup = !groupVal || row['Group'] === groupVal;
                     const matchMonth = !monthVal || row['Month'] === monthVal;
                     const matchSearch = !searchVal || 
-                                       (row['ModelCode'] && row['ModelCode'].toLowerCase().includes(searchVal)) ||
+                                       (row['Model'] && row['Model'].toLowerCase().includes(searchVal)) ||
                                        (row['ProductName'] && row['ProductName'].toLowerCase().includes(searchVal));
                     return matchSite && matchGroup && matchMonth && matchSearch;
                 });
+
+                // 오른쪽 로직 삭제 (사용자 요청)
+                window.filteredMasterPlan = [];
             }
 
-            totalRowsSpan.textContent = filteredData.length.toLocaleString();
+            const totalQtySum = filteredData.reduce((acc, row) => acc + (parseInt(row.Qty) || 0), 0);
+            totalRowsSpan.textContent = totalQtySum.toLocaleString();
             renderTable();
             
-            const isUnmappedMode = currentTab === 'unused' || (currentTab === 'main' && checkUnmapped.checked);
-            if (isUnmappedMode) {
-                renderProposerPanel();
-            } else {
-                const panel = document.getElementById('proposer-panel');
-                if(panel) panel.style.display = 'none';
-            }
+            // 지능형 제안 패널 기능 제거됨
         }
 
         function renderTable() {
-            tableHead.innerHTML = '';
-            const headerLabels = {
-                'Site': '생산처', 'Group': '기종분류', 'Model': '기종', 'RPM': 'RPM', 'Month': '월', 'Code': '모델코드', 'Product': '품명',
-                'ModelCode': '모델코드', 'ProductName': '품명', 'Category': '부류'
-            };
+            const tableContainer = document.getElementById('table-container');
+            const dualContainer = document.getElementById('dual-container');
+            
+            if (currentTab === 'main') {
+                // [통합 테이블 모드]
+                tableContainer.style.display = 'block';
+                dualContainer.style.display = 'none';
+                
+                const tableHead = document.getElementById('table-head');
+                const tableBody = document.getElementById('table-body');
+                tableHead.innerHTML = ''; tableBody.innerHTML = '';
 
-            const activeHeaders = currentTab === 'main' ? headers : ['Month', 'Site', 'Group', 'ModelCode', 'ProductName', 'Category'];
-            activeHeaders.forEach(h => {
-                const th = document.createElement('th');
-                th.textContent = headerLabels[h] || h;
-                tableHead.appendChild(th);
-            });
+                const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty'];
+                const labels = {'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 'Product':'품명', 'Qty':'수량'};
 
-            tableBody.innerHTML = '';
-            const limit = Math.min(filteredData.length, 500);
-
-            for (let i = 0; i < limit; i++) {
-                const row = filteredData[i];
-                const tr = document.createElement('tr');
                 activeHeaders.forEach(h => {
-                    const td = document.createElement('td');
-                    if (h === 'Model' || h === 'Code' || h === 'ModelCode') {
-                        td.style.fontWeight = '600';
-                        td.style.color = 'var(--accent-color)';
-                    }
-                    td.textContent = row[h] || '';
-                    tr.appendChild(td);
+                    const th = document.createElement('th');
+                    th.textContent = labels[h] || h;
+                    tableHead.appendChild(th);
                 });
-                tableBody.appendChild(tr);
-            }
-            if (filteredData.length > 500) {
-                const tr = document.createElement('tr');
-                const td = document.createElement('td');
-                td.colSpan = activeHeaders.length;
-                td.textContent = `... (외 ${filteredData.length - 500}개 더 있음)`;
-                td.style.textAlign = 'center';
-                tr.appendChild(td);
-                tableBody.appendChild(tr);
+
+                const limit = Math.min(filteredData.length, 500);
+                for (let i = 0; i < limit; i++) {
+                    const row = filteredData[i];
+                    const tr = document.createElement('tr');
+                    activeHeaders.forEach(h => {
+                        const td = document.createElement('td');
+                        td.textContent = row[h] || '-';
+                        if (h === 'Qty') td.style.fontWeight = 'bold';
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+                }
+            } else {
+                // [단일 리스트 모드] - 미매칭 생산(L)만 표시
+                tableContainer.style.display = 'none';
+                dualContainer.style.display = 'flex';
+
+                const headLeft = document.getElementById('head-left');
+                const bodyLeft = document.getElementById('body-left');
+                
+                headLeft.innerHTML = ''; bodyLeft.innerHTML = '';
+
+                // 헤더: 생산 현황 (Field Data)
+                const leftHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Qty'];
+                const labelsL = {
+                    'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Qty':'수량'
+                };
+
+                const trL = document.createElement('tr');
+                leftHeaders.forEach(h => { 
+                    const th = document.createElement('th'); 
+                    th.textContent = labelsL[h] || h; 
+                    trL.appendChild(th); 
+                });
+                headLeft.appendChild(trL);
+
+                // Body Left (Unmatched Production)
+                filteredData.forEach((row, i) => {
+                    const tr = document.createElement('tr');
+                    leftHeaders.forEach(h => {
+                        const td = document.createElement('td');
+                        td.textContent = row[h] || '-';
+                        if (h === 'Model') td.style.color = 'var(--danger)';
+                        tr.appendChild(td);
+                    });
+                    bodyLeft.appendChild(tr);
+                });
+
+                // 독립 스크롤 유지
+                const pLeft = document.getElementById('panel-left');
+                pLeft.style.overflowY = 'auto';
             }
         }
+
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
             loadSiteMaster();
