@@ -39,8 +39,20 @@ app.get('/api/list-files', (req, res) => {
 // [Live] 서버 사이드 실시간 추출 API (브라우저 메모리 부족 해결용)
 app.post('/api/extract-live', upload.single('file'), async (req, res) => {
     try {
-        if (!req.file) throw new Error('파일이 업로드되지 않았습니다.');
-        const rules = JSON.parse(req.body.rules || '{}');
+        console.log(`[api] Received extract request: ${req.file ? req.file.originalname : 'No file'}`);
+        
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: '파일이 업로드되지 않았습니다. (Multipart field name: file)' });
+        }
+
+        let rules = {};
+        if (req.body.rules) {
+            try {
+                rules = JSON.parse(req.body.rules);
+            } catch (e) {
+                console.error('[api] Failed to parse rules:', e.message);
+            }
+        }
         
         console.log(`[api] Live extract started: ${req.file.originalname} (${req.file.size} bytes)`);
         
@@ -50,8 +62,22 @@ app.post('/api/extract-live', upload.single('file'), async (req, res) => {
         res.json({ success: true, ...result });
     } catch (err) {
         console.error(`[api] Live extract failed:`, err);
-        res.status(500).json({ success: false, error: err.message });
+        res.status(500).json({ 
+            success: false, 
+            error: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+        });
     }
+});
+
+// Multer & General Error Handler
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        console.error('[Multer Error]', err);
+        return res.status(400).json({ success: false, error: `파일 업로드 오류: ${err.message} (${err.code})` });
+    }
+    console.error('[Global Error]', err);
+    res.status(500).json({ success: false, error: `서버 내부 오류: ${err.message}` });
 });
 
 let logClients = [];

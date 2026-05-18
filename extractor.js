@@ -4,113 +4,91 @@ function getMatchKey(s) {
     if (!s) return '';
     let n = s.toString().toUpperCase().trim();
     
-    // [1. ROMAN TO NUMBER - 가장 먼저 표준화]
+    // [1. CLEANUP & BRAND PROTECTION]
+    n = n.replace(/PUMA|LYNX/g, '').replace(/\s+/g, '').trim();
+    // Only remove leading P/L if it's NOT LEO
+    if (n.startsWith('P') || (n.startsWith('L') && !n.startsWith('LEO'))) {
+        n = n.substring(1);
+    }
+
+    // [2. ROMAN TO NUMBER]
     n = n.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
     n = n.replace(/III/g, '3').replace(/II/g, '2');
 
-    // [2. SPECIALIZED SERIES RULES]
-    
-    // [SMX]: SMX2100STB -> SMX21SB, SMX2STB -> SMX21SB
+    // [3. SMX SPECIAL]
     if (n.includes('SMX')) {
         n = n.replace(/SMX2(?![0-9])/g, 'SMX21');
         n = n.replace(/2100/g, '21').replace(/3100/g, '31').replace(/5100/g, '51');
         n = n.replace(/SYYB/g, 'SYY').replace(/STB/g, 'SB');
     }
 
-    // [VCF]: VCF850LSR -> VF8LSR
-    if (n.startsWith('VCF')) {
-        n = n.replace('VCF', 'VF');
-        n = n.replace(/(\d)\d0/, '$1');
-    }
-
-    // [MYNX]: MYNX6500/40 -> M654
-    if (n.startsWith('MYNX')) {
-        let taperMatch = n.match(/6500\/(\d)0/);
-        if (taperMatch) n = 'M65' + taperMatch[1];
-        else n = 'M' + n.substring(4);
-    }
+    // [4. PINPOINT MAPPING - SHARED FOR BOTH SIDES]
+    if (n.includes('DNM750L/50') || n === 'DNM755L') return 'D755L';
+    if (n.includes('DNM750/50') || n === 'DNM7550' || n === 'DNM755') return 'D755';
+    if (n.includes('ST38GS')) return 'ST38GS2'; 
+    if (n.includes('ST10GS')) return 'ST1GS2';
+    if (n.includes('DST20')) return 'DST20';
+    if (n.includes('LEO16')) return 'LEO16';
     
-    // [VM]: VM6500 -> VM65
-    if (n.startsWith('VM')) {
-        if (n.startsWith('VMX')) n = 'M' + n.substring(3);
-        else n = 'V' + n.substring(2);
-    }
-
-    // [DNM / SHORTHAND]: DNM750/50 -> DNM7550
-    if (n.includes('DNM')) {
-        n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
-    }
-
-    // [3. GENERIC NORMALIZATION]
-    n = n.replace(/PUMA|LYNX/g, '').replace(/^P|^L/, '').replace(/\s+/g, '').trim();
-
-    // [VTR]: VTR1620 -> VTR162
+    // VTR/VF Grouping
     if (n.startsWith('VTR')) {
-        let numMatch = n.match(/VTR(\d+)/);
-        if (numMatch) {
-            let num = numMatch[1];
-            if (num === '1620' || num === '162') num = '162';
-            else if (num === '1216' || num === '121') num = '121';
-            else if (num === '2025' || num === '202') num = '202';
-            n = 'VTR' + num;
-        }
+        let m = n.match(/VTR(\d{2})/);
+        if (m) return 'VTR' + m[1];
+    }
+    if (n.startsWith('VCF') || n.startsWith('VF') || n.startsWith('DVF')) {
+        let m = n.match(/(?:VCF|VF|DVF)(\d)/);
+        if (m) return 'VF' + m[1];
     }
 
+    // [5. LEGACY STABLE RULES]
+    n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
     if (n.startsWith('MYNX')) n = 'M' + n.substring(4);
     else if (n.startsWith('VMX')) n = 'M' + n.substring(3);
-    else if (n.startsWith('VM') && !n.startsWith('VMX')) n = 'M' + n.substring(2);
+    else if (n.startsWith('VM')) n = 'V' + n.substring(2);
     else if (n.startsWith('MP')) n = 'M' + n.substring(2);
     else if (n.startsWith('DNM')) n = 'D' + n.substring(3);
+    else if (n.startsWith('DBC')) n = 'DB' + n.substring(3);
     else if (n.startsWith('DCM')) n = 'DC' + n.substring(3);
     else if (n.startsWith('DVF')) n = 'V' + n.substring(3);
-    else if (n.startsWith('VCF')) n = 'V' + n.substring(3);
     else if (n.startsWith('VT') && !n.startsWith('VTR')) n = 'V' + n.substring(2);
     else if (n.startsWith('TT') && !n.startsWith('TTR')) n = 'T' + n.substring(2);
-    
-    if (n.startsWith('V') && !['VTR', 'VFC', 'VF'].some(p => n.startsWith(p))) {
-        let digits = n.match(/\d{2,3}/);
-        if (digits) n = 'V' + digits[0].substring(0, 2);
-    }
-    if (n.startsWith('TW')) {
-        n = n.replace(/(\d+)(?:MZ|WB|W|B|Z|M)+\d*$/g, '$1');
-        let base = n.match(/TW\d+/);
-        if (base) n = base[0];
-    }
 
-    if (n.startsWith('GT2600')) {
-        n = n.replace('XLMB', 'XLB').replace('XLMA', 'XLA').replace('XMB', 'XB').replace('XMA', 'XA');
-    }
-
+    // [6. FINAL NORMALIZATION]
     let key = n.replace(/[^A-Z1-9]/g, '');
-    key = key.replace(/\s+/g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
-    key = key.replace(/0/g, '');
+    
+    if (key === 'DST2') key = 'DST20';
 
-    if (key.length >= 5) {
-        key = key.replace(/[2-9]$/, '');
+    key = key.replace(/0/g, '');
+    
+    // Protect L for series like D755L
+    if (key === 'D755' && n.includes('L')) {
+        return 'D755L';
     }
 
     key = key.replace(/[A-Z]+$/, '');
+    if (key.startsWith('DC')) key = key.replace(/[A-Z]$/, '');
     
-    if (key.startsWith('DC')) {
-        key = key.replace(/[A-Z]$/, '');
-    }
-
     return key;
 }
 
 function extractMonth(s) {
     if (!s) return null;
+    if (s instanceof Date) return s.getMonth() + 1;
+    
     const str = s.toString().trim();
-    const yearMatch = str.match(/26\.(\d+)/);
-    if (yearMatch) {
-        const n = parseInt(yearMatch[1]);
+    // 2026.05 or 26.05
+    const dotMatch = str.match(/(?:20)?26\.(\d+)/);
+    if (dotMatch) {
+        const n = parseInt(dotMatch[1]);
         if (n >= 1 && n <= 12) return n;
     }
-    const monthWordMatch = str.match(/(?:^|\s)(\d+)\s*월/);
+    // 5월
+    const monthWordMatch = str.match(/(\d+)\s*월/);
     if (monthWordMatch) {
         const n = parseInt(monthWordMatch[1]);
         if (n >= 1 && n <= 12) return n;
     }
+    // Just a number 1-12
     if (/^\d+$/.test(str)) {
         const n = parseInt(str);
         if (n >= 1 && n <= 12) return n;
@@ -128,11 +106,17 @@ function processMpsFile(input, rules = {}) {
         wb = XLSX.readFile(input);
     }
 
-    const prodWsName = '생산배포용';
-    const masterWsName = 'MPS';
+    const findSheet = (keywords) => {
+        return wb.SheetNames.find(name => keywords.some(k => name.includes(k)));
+    };
+
+    const prodWsName = findSheet(['생산배포', '배포용', 'Production']) || wb.SheetNames[0];
+    const masterWsName = findSheet(['MPS', 'Master', '마스터']) || wb.SheetNames[1] || wb.SheetNames[0];
     
-    const prodWs = wb.Sheets[prodWsName] || wb.Sheets[wb.SheetNames[0]];
-    const masterWs = wb.Sheets[masterWsName] || wb.Sheets[wb.SheetNames[1]] || wb.Sheets[wb.SheetNames[0]];
+    console.log(`[Engine] Sheets selected: Prod="${prodWsName}", Master="${masterWsName}"`);
+
+    const prodWs = wb.Sheets[prodWsName];
+    const masterWs = wb.Sheets[masterWsName];
     
     const prodRaw = XLSX.utils.sheet_to_json(prodWs, { header: 1 });
     const masterRaw = XLSX.utils.sheet_to_json(masterWs, { header: 1 });
@@ -144,8 +128,72 @@ function processMpsFile(input, rules = {}) {
     const masterPlan = {};
     const masterModelsByGroup = { "전체기종": new Set() };
 
+    // --- Dynamic Column Detection Helper ---
+    const findCols = (raw, keywordsMap, maxRows = 20) => {
+        const result = {};
+        for (let r = 0; r < Math.min(maxRows, raw.length); r++) {
+            const row = raw[r] || [];
+            row.forEach((cell, idx) => {
+                const val = String(cell || '').trim();
+                for (const [key, keywords] of Object.entries(keywordsMap)) {
+                    if (keywords.some(k => val.includes(k)) && result[key] === undefined) {
+                        result[key] = idx;
+                    }
+                }
+            });
+            if (result.Model !== undefined && (result.Site !== undefined || result.Group !== undefined)) {
+                result.headerRowIdx = r;
+                break;
+            }
+        }
+        return result;
+    };
+
     // [MASTER PLAN ANALYSIS]
-    let masterHeaderIdx = -1;
+    const masterKeywords = {
+        Model: ['기종', 'Model'],
+        Group: ['그룹', 'Group', 'Series'],
+        Site: ['사업장', '공장', 'Site'],
+        PL: ['PL', '제품군'],
+        Ver: ['Ver', '버전'],
+        Pjt: ['PJT', '프로젝트', 'Product Name']
+    };
+    const mCols = findCols(masterRaw, masterKeywords, 50);
+    
+    // [PHASE 1: Metadata Mapping from Production (배포용) Sheet]
+    const prodKeywords = {
+        Model: ['기종', 'Model'],
+        Group: ['시리즈', 'Series', '그룹'],
+        Site: ['공장', '사업장', 'Site'],
+        RPM: ['RPM', '주축', 'Spindle']
+    };
+    const pCols = findCols(prodRaw, prodKeywords, 50);
+    const prodHeaderIdx = pCols.headerRowIdx !== undefined ? pCols.headerRowIdx : -1;
+
+    // Legacy V3.2 logic: Use "배포용" as a lookup for Site, Group, and RPM
+    const metaMap = {};
+    let lastMetaSite = '', lastMetaGroup = '';
+    
+    prodRaw.forEach((row, idx) => {
+        if (idx <= prodHeaderIdx) return;
+        const s = (row[pCols.Site] || '').toString().trim();
+        const g = (row[pCols.Group] || '').toString().trim();
+        const m = (row[pCols.Model] || '').toString().trim();
+        const rpm = (row[pCols.RPM] || '').toString().trim();
+        
+        if (s) lastMetaSite = s;
+        if (g) lastMetaGroup = g;
+        
+        if (m) {
+            const mKey = getMatchKey(m);
+            if (!metaMap[mKey]) {
+                metaMap[mKey] = { site: lastMetaSite, group: lastMetaGroup, model: m, rpm: rpm };
+            }
+        }
+    });
+    console.log(`[Engine] Meta Map built: ${Object.keys(metaMap).length} models found in Production sheet`);
+
+    let masterHeaderIdx = mCols.headerRowIdx !== undefined ? mCols.headerRowIdx : -1;
     const masterMonthCols = [];
 
     // Find Month Row and Type Row
@@ -154,7 +202,7 @@ function processMpsFile(input, rules = {}) {
 
     for (let r = 0; r < Math.min(50, masterRaw.length); r++) {
         const rowStr = (masterRaw[r] || []).join('|');
-        if (rowStr.includes('월')) monthRowIdx = r;
+        if (rowStr.includes('월') && monthRowIdx === -1) monthRowIdx = r;
         if (rowStr.includes('생산') && rowStr.includes('판매') && r > monthRowIdx) {
             typeRowIdx = r;
             break;
@@ -172,7 +220,6 @@ function processMpsFile(input, rules = {}) {
                     const mNum = extractMonth(monthRow[c]);
                     if (mNum !== null) {
                         masterMonthCols.push({ name: mNum + '월', col: idx });
-                        console.log(`[Engine] Found Master Column: ${mNum}월 생산 at Col ${idx}`);
                         break;
                     }
                 }
@@ -182,24 +229,71 @@ function processMpsFile(input, rules = {}) {
     }
 
     if (masterMonthCols.length === 0) {
+        console.warn('[Engine] No month columns found in Master, using defaults');
         masterHeaderIdx = 2;
         masterMonthCols.push({ name: '3월', col: 8 }, { name: '4월', col: 14 }, { name: '5월', col: 20 }, { name: '6월', col: 26 }, { name: '7월', col: 32 }, { name: '8월', col: 38 });
     }
 
+    // [PHASE 2: Master Plan (MPS) Processing]
     masterRaw.forEach((row, idx) => {
         if (idx <= masterHeaderIdx) return;
         
-        const mGroup = (row[2] || row[1] || '').toString().trim();
-        const mCode = (row[3] || row[1] || '').toString().trim();
-        const pName = (row[4] || row[2] || '').toString().trim();
+        const mModelIdx = mCols.Model !== undefined ? mCols.Model : 1;
+        const mGroupIdx = mCols.Group !== undefined ? mCols.Group : 2;
+        const mPlIdx = mCols.PL !== undefined ? mCols.PL : 1;
+        const mVerIdx = mCols.Ver !== undefined ? mCols.Ver : 7;
+        const mSiteIdx = mCols.Site !== undefined ? mCols.Site : 6;
+        const mPjtIdx = mCols.Pjt !== undefined ? mCols.Pjt : 4;
+
+        const pName = (row[mPjtIdx] || row[mModelIdx] || '').toString().trim();
+        const plCode = (row[mPlIdx] || '').toString().trim();
+        const verCode = (row[mVerIdx] || '').toString().trim();
+        let mModel = (row[mModelIdx] || '').toString().trim();
         
-        let finalSite = (row[6] || '').toString().trim();
-        if (finalSite === '1842' || finalSite === 1842) finalSite = '성주';
-        else if (finalSite === '1840' || finalSite === 1840) finalSite = '남산';
+        // Match logic following V3.2: Use Product Name prefix or Model
+        const pNamePrefix = pName.split('-')[0].trim();
+        const mKey = getMatchKey(pNamePrefix || mModel);
+
+        let finalSite = (row[mSiteIdx] || '').toString().trim();
+        let mGroup = (row[mGroupIdx] || row[mPlIdx] || '').toString().trim();
+        let mRPM = '';
+
+        // Enrichment from Meta Map (Legacy V3.2 style)
+        // Try exact match first, then partial match like V3.2
+        let foundMeta = metaMap[mKey];
+        if (!foundMeta) {
+            const possibleKeys = Object.keys(metaMap);
+            const bestMatch = possibleKeys.find(k => k.includes(mKey) || mKey.includes(k));
+            if (bestMatch) foundMeta = metaMap[bestMatch];
+        }
+
+        if (foundMeta) {
+            // Prioritize Production sheet (Meta Map) values
+            finalSite = foundMeta.site;
+            mGroup = foundMeta.group;
+            mRPM = foundMeta.rpm;
+            // Use canonical model name from Production sheet
+            if (foundMeta.model) mModel = foundMeta.model;
+        }
+
+        // Standardize Site
+        if (siteMaster[verCode]) finalSite = siteMaster[verCode];
+        else if (siteMaster[plCode]) finalSite = siteMaster[plCode];
+        else if (siteMaster[finalSite]) finalSite = siteMaster[finalSite];
         
-        if (pName || mCode) {
-            const modelPart = (pName || mCode).split('-')[0].trim();
-            const key = getMatchKey(modelPart);
+        if (plCode === 'I0215001') finalSite = 'LEO';
+        if (plCode === 'I0169394' || verCode === '9ACE') finalSite = '지티테크';
+        
+        if (finalSite === '1842' || finalSite === 1842 || finalSite.includes('성주')) finalSite = '성주';
+        else if (finalSite === '1840' || finalSite === 1840 || finalSite.includes('남산')) finalSite = '남산';
+
+        finalSite = finalSite.replace(/^\d+\.\s*/, '').trim();
+        if (finalSite.includes('LEO')) finalSite = 'LEO';
+        if (finalSite.includes('지티')) finalSite = '지티테크';
+        
+        if (pName || mModel) {
+            const modelPart = (pName || mModel).split('-')[0].trim();
+            const mCode = verCode || plCode;
             
             masterModelsByGroup["전체기종"].add(modelPart);
             if (mGroup) {
@@ -208,112 +302,33 @@ function processMpsFile(input, rules = {}) {
             }
 
             masterMonthCols.forEach(mCol => {
+                const mMatch = mCol.name.match(/(\d{1,2})/);
+                if (mMatch && parseInt(mMatch[1]) >= 10) return; // User requested to exclude October (10월)
+
                 const q = parseInt(row[mCol.col]) || 0;
                 if (q > 0) {
-                    masterPlanPool.push({
-                        Month: mCol.name, Group: mGroup, Model: modelPart,
-                        Product: pName, Qty: q, Code: mCode
+                    // Create main results directly from MPS (This makes it look like V3.2)
+                    finalResults.push({
+                        Site: finalSite || '기타', 
+                        Group: mGroup || '기타', 
+                        Model: modelPart,
+                        RPM: mRPM, 
+                        Month: mCol.name, 
+                        Code: mCode,
+                        Product: pName, 
+                        Qty: q
                     });
 
-                    const mNum = parseInt(mCol.name);
-                    if (!quotaPool[finalSite]) quotaPool[finalSite] = {};
-                    if (!quotaPool[finalSite][key]) quotaPool[finalSite][key] = {};
-                    if (!quotaPool[finalSite][key][mNum]) quotaPool[finalSite][key][mNum] = [];
-                    quotaPool[finalSite][key][mNum].push({
-                        Qty: q, Product: pName, Code: mCode
+                    masterPlanPool.push({
+                        Month: mCol.name, Group: mGroup, Model: modelPart,
+                        Product: pName, Qty: q, Code: mCode, Site: finalSite
                     });
                 }
             });
         }
     });
 
-    // [PRODUCTION DATA ANALYSIS]
-    let prodHeaderIdx = -1;
-    const prodMonthCols = [];
-
-    for (let r = 0; r < Math.min(50, prodRaw.length); r++) {
-        const row = prodRaw[r] || [];
-        const currentMonths = [];
-        row.forEach((cell, idx) => {
-            const s = (cell || '').toString().trim();
-            const mNum = extractMonth(s);
-            if (mNum !== null) currentMonths.push({ name: mNum + '월', col: idx });
-        });
-
-        if (currentMonths.length >= 2) {
-            prodMonthCols.push(...currentMonths);
-            prodHeaderIdx = r;
-            break;
-        }
-    }
-
-    let runningSite = '', runningGroup = '', runningModel = '';
-    for (let r = prodHeaderIdx + 1; r < prodRaw.length; r++) {
-        const row = prodRaw[r];
-        if (!row || row.length < 3) continue;
-
-        const site = (row[0] || '').toString().trim();
-        const group = (row[1] || '').toString().trim();
-        const model = (row[2] || '').toString().trim();
-        const rpm = (row[3] || '').toString().trim();
-
-        if (site) runningSite = site;
-        if (group) runningGroup = group;
-        if (model) runningModel = model;
-
-        if (runningSite === '총합계') continue;
-
-        const key = getMatchKey(runningModel);
-        
-        let finalSite = runningSite;
-        if (finalSite === '1840' || finalSite === 1840) finalSite = '남산';
-        if (finalSite === '1842' || finalSite === 1842) finalSite = '성주';
-        if (siteMaster[runningSite]) finalSite = siteMaster[runningSite];
-        finalSite = finalSite.replace(/^\d+\.\s*/, '').trim();
-
-        prodMonthCols.forEach(mObj => {
-            let remaining = parseInt(row[mObj.col]) || 0;
-            if (remaining > 0) {
-                const mNum = parseInt(mObj.name);
-                const candidates = (quotaPool[key] && quotaPool[key][mNum]) || [];
-                
-                candidates.sort((a, b) => {
-                    const aM = a.Model.toUpperCase();
-                    const bM = b.Model.toUpperCase();
-                    const rM = runningModel.toUpperCase();
-                    const aScore = (aM === rM) ? 100 : (aM.includes(rM) || rM.includes(aM) ? 10 : 0);
-                    const bScore = (bM === rM) ? 100 : (bM.includes(rM) || rM.includes(bM) ? 10 : 0);
-                    return bScore - aScore;
-                });
-
-                for (const cand of candidates) {
-                    if (remaining <= 0) break;
-                    if (cand.Qty <= 0) continue;
-
-                    const take = Math.min(remaining, cand.Qty);
-                    finalResults.push({
-                        Site: finalSite, Group: runningGroup, Model: runningModel,
-                        RPM: rpm, Month: mObj.name, Code: cand.Code,
-                        Product: cand.Product, Qty: take
-                    });
-                    remaining -= take;
-                    cand.Qty -= take;
-
-                    if (!masterPlan[runningGroup]) masterPlan[runningGroup] = {};
-                    if (!masterPlan[runningGroup][runningModel]) masterPlan[runningGroup][runningModel] = {};
-                    if (!masterPlan[runningGroup][runningModel][mObj.name]) masterPlan[runningGroup][runningModel][mObj.name] = [];
-                    masterPlan[runningGroup][runningModel][mObj.name].push({ rpm: rpm, qty: take });
-                }
-
-                if (remaining > 0) {
-                    unusedData.push({
-                        Site: finalSite, Group: runningGroup, Model: runningModel,
-                        RPM: rpm, Month: mObj.name, Qty: remaining, ModelCode: '', ProductName: '', Category: '미매칭'
-                    });
-                }
-            }
-        });
-    }
+    console.log(`[Engine] Extraction complete: ${finalResults.length} plan entries generated from MPS`);
 
     const finalMasterModels = {};
     for (const g in masterModelsByGroup) {
@@ -321,7 +336,7 @@ function processMpsFile(input, rules = {}) {
     }
 
     return { 
-        finalResults, unusedData, masterPlanPool, masterPlan, masterModelsByGroup: finalMasterModels 
+        finalResults, unusedData: [], masterPlanPool, masterPlan, masterModelsByGroup: finalMasterModels 
     };
 }
 

@@ -1,51 +1,34 @@
 const XLSX = require('xlsx');
+const { processMpsFile } = require('../extractor');
+const fs = require('fs');
 
-function getMatchKey(s) {
-    if (!s) return '';
-    let n = s.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    n = n.replace(/PUMA|LYNX|MYNX/g, '');
-    n = n.replace(/^[MPL]/, ''); 
-    return n.replace(/0/g, ''); 
+async function diagnoseMatching() {
+    const buffer = fs.readFileSync('MPS2605-1.xlsx');
+    const rules = {
+        siteMaster: {
+            "I0215116": "07. 삼광", "I0205716": "09. 서진", "I0206873": "성주", "I0206954": "성주",
+            "I0215001": "LEO", "I0212077": "04. 성우", "I0213836": "04. 성우", "I0213835": "06. 원진",
+            "I0206330": "05. 세양", "I0206329": "05. 세양", "I0206328": "05. 세양", "I0205562": "15. 신우",
+            "I0205561": "15. 신우", "I0205560": "15. 신우", "I0206254": "11. 대영", "I0206253": "11. 대영",
+            "9AHT": "21. 휴텍", "1840": "남산", "1842": "성주", "9ASW": "04. 성우",
+            "9ACE": "지티테크", "I0169394": "지티테크"
+        }
+    };
+
+    console.log('--- Diagnosing VTR and DBM Matching ---');
+    const result = await processMpsFile(buffer, rules);
+    
+    const vtrMatches = result.finalResults.filter(r => r.Site === '성주' && r.Month === '6월' && r.Model.includes('VTR'));
+    console.log(`VTR Matches (성주, 6월): ${vtrMatches.length}`);
+    vtrMatches.forEach(m => console.log(`  Match: ${m.Model} -> ${m.Product}`));
+
+    const vtrUnused = result.unusedData.filter(r => r.Site === '성주' && r.Month === '6월' && r.Model.includes('VTR'));
+    console.log(`VTR Unmapped (성주, 6월): ${vtrUnused.length}`);
+    vtrUnused.forEach(u => console.log(`  Unmapped: ${u.UnmappedModel} (Qty: ${u.Qty})`));
+
+    const dbmUnused = result.unusedData.filter(r => r.Site === '성주' && r.Month === '9월' && r.Model.includes('DBM'));
+    console.log(`DBM Unmapped (성주, 9월): ${dbmUnused.length}`);
+    dbmUnused.forEach(u => console.log(`  Unmapped: ${u.UnmappedModel} (Qty: ${u.Qty})`));
 }
 
-const wb = XLSX.readFile('MPS2603-1.xlsx');
-const masterWs = wb.Sheets['MPS'];
-const masterData = XLSX.utils.sheet_to_json(masterWs, { header: 1 });
-
-const codeMap = {};
-masterData.slice(5).forEach(row => {
-    const mCode = (row[3] || '').toString().trim();
-    const pName = (row[4] || '').toString().trim();
-    if (mCode || pName) {
-        // [PROBLEM]: pName is "HM1000-F31P-0-K30". getMatchKey returns a very long string.
-        // But runningModel is just "HM1000".
-        const key = getMatchKey(pName.split('-')[0] || mCode);
-        codeMap[key] = { code: mCode, product: pName };
-    }
-});
-
-const mpsWs = wb.Sheets['생산배포용'];
-const mpsRaw = XLSX.utils.sheet_to_json(mpsWs, { header: 1 });
-
-let matchCount = 0;
-let failCount = 0;
-const samples = [];
-
-mpsRaw.slice(5).forEach(row => {
-    const model = row[2];
-    if (!model) return;
-    const key = getMatchKey(model);
-    const mapped = codeMap[key];
-    if (mapped && mapped.code) {
-        matchCount++;
-    } else {
-        failCount++;
-        if (samples.length < 5) samples.push({ model, key, mapped });
-    }
-});
-
-console.log('--- Diagnosis Result ---');
-console.log('Match Count:', matchCount);
-console.log('Fail Count:', failCount);
-console.log('Samples of failure:');
-samples.forEach(s => console.log(`Model: [${s.model}] -> Key: [${s.key}] (Mapped: ${s.mapped ? 'YES(NoCode)' : 'NO'})`));
+diagnoseMatching();

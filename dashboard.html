@@ -463,6 +463,7 @@
 
         table {
             width: 100%;
+            min-width: 1600px; /* 상세 정보 표시를 위해 충분한 너비 확보 */
             border-collapse: collapse;
             text-align: left;
         }
@@ -490,8 +491,7 @@
             border-bottom: 1px solid var(--border-color);
             color: var(--text-primary);
             font-size: 0.95rem;
-            /* Allow wrapping for long group/model names */
-            white-space: normal;
+            white-space: nowrap; /* 상세 정보 가독성을 위해 줄바꿈 금지 */
             word-break: keep-all;
         }
 
@@ -546,13 +546,18 @@
                 transform: translateY(0);
             }
         }
+
+        /* 상세 테이블 확장 스타일 (V3.2) */
+        #data-table { min-width: 1800px !important; }
+        #data-table th, #data-table td { white-space: nowrap !important; }
+        .sap-upload-box { background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); }
     </style>
 </head>
 
 <body>
 
     <header style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; padding: 0 2rem;">
-        <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V2.9 - 사이트 매핑 동기화 완료</span></div>
+        <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V3.3 - Material/품명 정밀 매칭 엔진 적용</span></div>
         <div style="display: flex; gap: 1rem; align-items: center;">
             <button class="btn" id="header-reset-btn" onclick="if(confirm('학습된 메모리를 삭제하시겠습니까?')) { localStorage.removeItem('mpsAutoModelMap'); alert('학습 메모리가 완전히 초기화되었습니다.'); location.reload(); }" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">
                 🧠 학습 메모리 초기화
@@ -570,8 +575,8 @@
                 <div class="badge" style="background: var(--accent-color); margin-bottom: 1rem;">준비 완료 (READY)</div>
                 <h1 style="font-weight: 700; font-size: 2.5rem; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">MPS 데이터 실시간 추출</h1>
                 <p style="color: var(--text-secondary); font-size: 1.1rem; line-height: 1.6; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">
-                    MPS 엑셀 파일을 선택하면 브라우저에서 바로 분석합니다. <br>
-                    <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 형식 지원 · 서버 불필요)</span>
+                    MPS 엑셀 파일을 선택하면 시스템이 즉시 분석을 시작합니다. <br>
+                    <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 표준 형식 지원)</span>
                 </p>
 
                 <!-- File picker area -->
@@ -681,16 +686,38 @@
         </div>
 
         <div class="tab-system" id="tab-system" style="display: none;">
-                <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
-                <button class="tab-btn" id="tab-unused">⚠️ 미사용 MPS 데이터 풀</button>
-                <button class="tab-btn" id="tab-master">⚙️ 사이트 마스터</button>
-            </div>
+            <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
+            <button class="tab-btn" id="tab-master" style="margin-left: auto;">⚙️ 사이트 마스터</button>
+        </div>
 
         <!-- Stats -->
-        <div class="stats" id="stats">
+        <div id="stats" class="card stats-grid">
             <div class="stat-item">
-                <span class="stat-val" id="total-rows">0</span>
-                <span class="stat-label">총 생산 대수 (행 수)</span>
+                <div class="stat-label">총 매칭 수량</div>
+                <div class="stat-value" style="font-size: 1.75rem; font-weight: 700; color: var(--success);"><span id="total-rows">0</span> <span style="font-size: 1rem; font-weight: normal; color: var(--text-secondary);">대</span></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">SAP 결합 정보</div>
+                <div class="stat-value" style="font-size: 1.75rem; font-weight: 700; color: #60a5fa;"><span id="sap-rows">0</span> <span style="font-size: 1rem; font-weight: normal; color: var(--text-secondary);">대</span></div>
+            </div>
+            <div id="sap-join-section" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">🔗 SAP 상세 정보(S/O) 결합</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 .MHTML 파일을 올려 기종별 상세 정보를 결합합니다. (Sales Doc, 시작일 포함)</div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <div class="sap-upload-box">
+                        <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-bottom:4px;">1842(성주)</label>
+                        <input type="file" id="sap-1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1842')">
+                        <button onclick="document.getElementById('sap-1842').click()" class="btn-small" id="btn-1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                    </div>
+                    <div class="sap-upload-box">
+                        <label for="sap-1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-bottom:4px;">1840(남산+)</label>
+                        <input type="file" id="sap-1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1840')">
+                        <button onclick="document.getElementById('sap-1840').click()" class="btn-small" id="btn-1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                    </div>
+                    <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
+                </div>
             </div>
         </div>
 
@@ -736,7 +763,6 @@
         const actionArea = document.getElementById('action-area');
         const checkUnmapped = document.getElementById('check-unmapped');
         const tabMain = document.getElementById('tab-main');
-        const tabUnused = document.getElementById('tab-unused');
 
         let rawData = [];
         let unusedData = [];
@@ -750,7 +776,7 @@
 I0205716: 09. 서진
 I0206873: 성주
 I0206954: 성주
-I0215001: 세양
+I0215001: LEO
 I0212077: 성우
 0AM1: MC1직_조립_1840
 0AM2: MC2직_조립_1840
@@ -785,7 +811,7 @@ I0212077: 성우
 0ATS: TC5직_조립_1840(3Base)
 0ATU: TC6직_조립_1840(1Base)
 0AYA: 연암_공정외주_1840
-9ACE: 씨이에스테크_OEM_1840
+9ACE: 지티테크
 9ACT: 쎈텍_OEM_1840
 9ADG: 대건테크_OEM_1840
 9ADS: 동서_OEM_1840
@@ -885,98 +911,87 @@ DST: 22. 지티테크`;
             document.getElementById('file-name-display').textContent = `✅ ${file.name} (${(file.size/1024/1024).toFixed(1)}MB)`;
             extractBtn.disabled = false;
             extractBtn.style.opacity = '1';
+            const span = extractBtn.querySelector('span');
+            if (span) span.textContent = '🚀 지금 바로 분석 시작';
         }
 
-        function getMatchKey(s) {
-            if (!s) return '';
-            let n = s.toString().toUpperCase().trim();
+        function getMatchKey(model) {
+            if (!model) return '';
+            let key = model.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            // Boring 기종 특수 보정: DBC130L-II (MPS) <-> DBC13L2 (SAP) 대응
+            if (key.includes('DBC130L')) key = key.replace('DBC130L', 'DBC13L');
+            if (key.endsWith('II')) key = key.replace('II', '2');
             
-            // [1. ROMAN TO NUMBER]
+            let n = key;
+            
+            // [1. CLEANUP & BRAND PROTECTION]
+            n = n.replace(/PUMA|LYNX/g, '').replace(/\s+/g, '').trim();
+            // Only remove leading P/L if it's NOT LEO
+            if (n.startsWith('P') || (n.startsWith('L') && !n.startsWith('LEO'))) {
+                n = n.substring(1);
+            }
+            
+            n = n.replace(/\s+/g, '').trim();
+
+            // [2. ROMAN TO NUMBER]
             n = n.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
             n = n.replace(/III/g, '3').replace(/II/g, '2');
 
-            // [2. SPECIALIZED SERIES RULES]
+            // [3. SPECIFIC MAPPING FOR USER-REQUESTED MODELS]
+            
+            // [3. SMX SPECIAL]
             if (n.includes('SMX')) {
                 n = n.replace(/SMX2(?![0-9])/g, 'SMX21');
                 n = n.replace(/2100/g, '21').replace(/3100/g, '31').replace(/5100/g, '51');
                 n = n.replace(/SYYB/g, 'SYY').replace(/STB/g, 'SB');
             }
 
-            if (n.startsWith('VCF')) {
-                n = n.replace('VCF', 'VF');
-                n = n.replace(/(\d)\d0/, '$1');
-            }
-
-            if (n.startsWith('MYNX')) {
-                let taperMatch = n.match(/6500\/(\d)0/);
-                if (taperMatch) n = 'M65' + taperMatch[1];
-                else n = 'M' + n.substring(4);
-            }
+            // [4. PINPOINT MAPPING - SHARED FOR BOTH SIDES]
+            if (n.includes('DNM750L/50') || n === 'DNM755L') return 'D755L';
+            if (n.includes('DNM750/50') || n === 'DNM7550' || n === 'DNM755') return 'D755';
+            if (n.includes('ST38GS')) return 'ST38GS2'; 
+            if (n.includes('ST10GS')) return 'ST1GS2';
+            if (n.includes('DST20')) return 'DST20';
+            if (n.includes('LEO16')) return 'LEO16';
             
-            if (n.startsWith('VM')) {
-                if (n.startsWith('VMX')) n = 'M' + n.substring(3);
-                else n = 'V' + n.substring(2);
-            }
-
-            if (n.includes('DNM')) {
-                n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
-            }
-
-            // [3. GENERIC NORMALIZATION]
-            n = n.replace(/PUMA|LYNX/g, '').replace(/^P|^L/, '').replace(/\s+/g, '').trim();
-
+            // VTR/VF Grouping
             if (n.startsWith('VTR')) {
-                let numMatch = n.match(/VTR(\d+)/);
-                if (numMatch) {
-                    let num = numMatch[1];
-                    if (num === '1620' || num === '162') num = '162';
-                    else if (num === '1216' || num === '121') num = '121';
-                    else if (num === '2025' || num === '202') num = '202';
-                    n = 'VTR' + num;
-                }
+                let m = n.match(/VTR(\d{2})/);
+                if (m) return 'VTR' + m[1];
+            }
+            if (n.startsWith('VCF') || n.startsWith('VF') || n.startsWith('DVF')) {
+                let m = n.match(/(?:VCF|VF|DVF)(\d)/);
+                if (m) return 'VF' + m[1];
             }
 
-
-
+            // [5. LEGACY STABLE RULES]
+            n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
+            
             if (n.startsWith('MYNX')) n = 'M' + n.substring(4);
             else if (n.startsWith('VMX')) n = 'M' + n.substring(3);
-            else if (n.startsWith('VM') && !n.startsWith('VMX')) n = 'M' + n.substring(2);
+            else if (n.startsWith('VM')) n = 'V' + n.substring(2);
             else if (n.startsWith('MP')) n = 'M' + n.substring(2);
             else if (n.startsWith('DNM')) n = 'D' + n.substring(3);
+            else if (n.startsWith('DBC')) n = 'DB' + n.substring(3);
             else if (n.startsWith('DCM')) n = 'DC' + n.substring(3);
             else if (n.startsWith('DVF')) n = 'V' + n.substring(3);
-            else if (n.startsWith('VCF')) n = 'V' + n.substring(3);
             else if (n.startsWith('VT') && !n.startsWith('VTR')) n = 'V' + n.substring(2);
             else if (n.startsWith('TT') && !n.startsWith('TTR')) n = 'T' + n.substring(2);
+
+            // [6. FINAL NORMALIZATION]
+            key = n.replace(/[^A-Z1-9]/g, '');
             
-            if (n.startsWith('V') && !['VTR', 'VFC', 'VF'].some(p => n.startsWith(p))) {
-                let digits = n.match(/\d{2,3}/);
-                if (digits) n = 'V' + digits[0].substring(0, 2);
-            }
-            if (n.startsWith('TW')) {
-                n = n.replace(/(\d+)(?:MZ|WB|W|B|Z|M)+\d*$/g, '$1');
-                let base = n.match(/TW\d+/);
-                if (base) n = base[0];
-            }
+            if (key === 'DST2') key = 'DST20';
 
-            if (n.startsWith('GT2600')) {
-                n = n.replace('XLMB', 'XLB').replace('XLMA', 'XLA').replace('XMB', 'XB').replace('XMA', 'XA');
-            }
-
-            let key = n.replace(/[^A-Z1-9]/g, '');
-            key = key.replace(/\s+/g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
             key = key.replace(/0/g, '');
-
-            if (key.length >= 5) {
-                key = key.replace(/[2-9]$/, '');
-            }
-
-            key = key.replace(/[A-Z]+$/, '');
             
-            if (key.startsWith('DC')) {
-                key = key.replace(/[A-Z]$/, '');
+            // Protect L for series like D755L
+            if (key === 'D755' && n.includes('L')) {
+                return 'D755L';
             }
-
+            key = key.replace(/[A-Z]+$/, '');
+            if (key.startsWith('DC')) key = key.replace(/[A-Z]$/, '');
+            
             return key;
         }
 
@@ -1032,6 +1047,8 @@ DST: 22. 지티테크`;
             }
 
             extractBtn.disabled = true;
+            const span = extractBtn.querySelector('span');
+            if (span) span.textContent = '📡 분석 중...';
             processingText.style.display = 'block';
             loader.style.display = 'block';
 
@@ -1048,24 +1065,29 @@ DST: 22. 지티테크`;
                 };
                 formData.append('rules', JSON.stringify(rules));
 
+                console.log('[Upload] Sending file to server...', selectedXlsxFile.name);
                 const response = await fetch('/api/extract-live', {
                     method: 'POST',
                     body: formData
                 });
 
-                const result = await response.json();
                 if (!response.ok) {
-                    if (result.error) {
-                        alert('분석 중 오류 발생: ' + result.error);
-                        return;
-                    } else {
-                        alert('분석 중 서버 오류 발생');
-                        return;
+                    const errorText = await response.text();
+                    let errorMsg = `서버 오류 (${response.status})`;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMsg = errorJson.error || errorMsg;
+                    } catch (e) {
+                        errorMsg = errorText || errorMsg;
                     }
+                    throw new Error(errorMsg);
                 }
+
+                const result = await response.json();
+                console.log('[Upload] Response received:', result);
                 
                 rawData = result.finalResults || [];
-                unusedData = result.unusedData || [];
+                unusedData = (result.unusedData || []).map(row => ({ ...row, isUnmapped: true }));
                 window.masterPlanPool = result.masterPlanPool || []; // 전체 계획 데이터
                 window.masterPlan = result.masterPlan || null; 
                 window.masterModels = result.masterModelsByGroup || null;
@@ -1139,11 +1161,21 @@ DST: 22. 지티테크`;
                 
                 populateFilters();
                 applyFilters();
+                
+                // SAP 결합 수량 업데이트 (S/O 시리얼이 있는 항목)
+                const sapCount = rawData.filter(r => r.Serial || r.SalesDoc || (r.Product && r.Product.includes('결합'))).length;
+                const sapEl = document.getElementById('sap-rows');
+                if (sapEl) sapEl.textContent = sapCount;
+
+                // SAP 결합 섹션 표시
+                document.getElementById('sap-join-section').style.display = 'flex';
 
             } catch (err) {
                 alert('서버 분석 오류: ' + err.message);
                 console.error(err);
                 extractBtn.disabled = false;
+                const span = extractBtn.querySelector('span');
+                if (span) span.textContent = '🚀 다시 분석 시도';
             } finally {
                 processingText.style.display = 'none';
                 loader.style.display = 'none';
@@ -1167,8 +1199,9 @@ DST: 22. 지티테크`;
             const sites = new Set();
             const groups = new Set();
             const months = new Set();
-            
-            const activeData = currentTab === 'main' ? rawData : unusedData;
+
+            // 필터 목록은 전체 데이터(매칭+미매칭)를 기준으로 구성
+            const activeData = [...rawData, ...unusedData];
 
             // 만약 특정 사이트 선택에 따른 기종분류만 뽑고 싶다면 해당 데이터 사용
             const sourceForGroups = filteredDataForGroup || activeData;
@@ -1218,13 +1251,12 @@ DST: 22. 지티테크`;
         filterSite.addEventListener('change', () => {
             const siteVal = filterSite.value;
             if (siteVal) {
-                const activeData = currentTab === 'main' ? rawData : unusedData;
+                const activeData = [...rawData, ...unusedData];
                 const subData = activeData.filter(r => r['Site'] === siteVal);
                 populateFilters(subData);
             } else {
                 populateFilters();
             }
-            // re-select siteVal since populateFilters clears it
             filterSite.value = siteVal;
             applyFilters();
         });
@@ -1247,7 +1279,6 @@ DST: 22. 지티테크`;
         function switchTab(tabId) {
             currentTab = tabId;
             tabMain.classList.toggle('active', tabId === 'main');
-            tabUnused.classList.toggle('active', tabId === 'unused');
             
             // 탭 변경 시 마스터 에디터 닫기
             const overlay = document.getElementById('master-editor-overlay');
@@ -1259,7 +1290,6 @@ DST: 22. 지티테크`;
         }
 
         tabMain.addEventListener('click', () => switchTab('main'));
-        tabUnused.addEventListener('click', () => switchTab('unused'));
         
         document.getElementById('tab-master').onclick = function(e) {
             e.preventDefault();
@@ -1401,7 +1431,7 @@ DST: 22. 지티테크`;
                     Group: group || '미분류(제안변환)',
                     Model: targetModel,
                     RPM: assignments[i],
-                    Month: month,
+                    Month: item.Month,
                     Code: item.ModelCode,
                     Product: targetModel + ' (★)'
                 });
@@ -1433,132 +1463,366 @@ DST: 22. 지티테크`;
         }
 
         function applyFilters() {
-            if (currentTab === 'main') {
-                const siteVal = filterSite.value;
-                const groupVal = filterGroup.value;
-                const monthVal = filterMonth.value;
-                const searchVal = searchModel.value.toLowerCase();
-                const unmappedOnly = checkUnmapped.checked;
+            const siteVal = filterSite.value;
+            const groupVal = filterGroup.value;
+            const monthVal = filterMonth.value;
+            const searchVal = searchModel.value.toLowerCase();
+            const unmappedOnly = checkUnmapped.checked;
 
-                filteredData = rawData.filter(row => {
-                    const matchSite = !siteVal || row['Site'] === siteVal;
-                    const matchGroup = !groupVal || row['Group'] === groupVal;
-                    const matchMonth = !monthVal || row['Month'] === monthVal;
-                    const matchSearch = !searchVal || 
-                                       (row['Model'] && row['Model'].toLowerCase().includes(searchVal)) ||
-                                       (row['Product'] && row['Product'].toLowerCase().includes(searchVal)) ||
-                                       (row['Code'] && row['Code'].toLowerCase().includes(searchVal));
-                    const matchUnmapped = !unmappedOnly || (row['Site'].match(/^\d+$/) || row['Site'].includes('184'));
-                    return matchSite && matchGroup && matchMonth && matchSearch && matchUnmapped;
-                });
-            } else {
-                const siteVal = filterSite.value;
-                const groupVal = filterGroup.value;
-                const monthVal = filterMonth.value;
-                const searchVal = searchModel.value.toLowerCase();
+            // 전체 데이터 (매칭 + 미매칭) 통합
+            const combinedData = [...rawData, ...unusedData];
+
+            filteredData = combinedData.filter(row => {
+                // '미매칭만 보기' 체크 시 필터링
+                if (unmappedOnly && !row.isUnmapped) return false;
+
+                const matchSite = !siteVal || row['Site'] === siteVal;
+                const matchGroup = !groupVal || row['Group'] === groupVal;
+                const matchMonth = !monthVal || row['Month'] === monthVal;
                 
-                // 왼쪽: 미매칭 생산 데이터 (Field)
-                filteredData = unusedData.filter(row => {
-                    const matchSite = !siteVal || row['Site'] === siteVal;
-                    const matchGroup = !groupVal || row['Group'] === groupVal;
-                    const matchMonth = !monthVal || row['Month'] === monthVal;
-                    const matchSearch = !searchVal || 
-                                       (row['Model'] && row['Model'].toLowerCase().includes(searchVal)) ||
-                                       (row['ProductName'] && row['ProductName'].toLowerCase().includes(searchVal));
-                    return matchSite && matchGroup && matchMonth && matchSearch;
-                });
+                // 검색 대상 컬럼 통합 (미매칭 데이터는 필드명이 다름)
+                const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
+                const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
+                const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
 
-                // 오른쪽 로직 삭제 (사용자 요청)
-                window.filteredMasterPlan = [];
-            }
+                const matchSearch = !searchVal || 
+                                   model.includes(searchVal) ||
+                                   product.includes(searchVal) ||
+                                   code.includes(searchVal);
+                
+                return matchSite && matchGroup && matchMonth && matchSearch;
+            });
 
             const totalQtySum = filteredData.reduce((acc, row) => acc + (parseInt(row.Qty) || 0), 0);
             totalRowsSpan.textContent = totalQtySum.toLocaleString();
             renderTable();
-            
-            // 지능형 제안 패널 기능 제거됨
         }
 
         function renderTable() {
             const tableContainer = document.getElementById('table-container');
             const dualContainer = document.getElementById('dual-container');
             
-            if (currentTab === 'main') {
-                // [통합 테이블 모드]
-                tableContainer.style.display = 'block';
-                dualContainer.style.display = 'none';
-                
-                const tableHead = document.getElementById('table-head');
-                const tableBody = document.getElementById('table-body');
-                tableHead.innerHTML = ''; tableBody.innerHTML = '';
+            tableContainer.style.display = 'block';
+            dualContainer.style.display = 'none';
+            
+            const tableHead = document.getElementById('table-head');
+            const tableBody = document.getElementById('table-body');
+            tableHead.innerHTML = ''; tableBody.innerHTML = '';
 
-                const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty'];
-                const labels = {'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 'Product':'품명', 'Qty':'수량'};
+            const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
+            const labels = {
+                'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 
+                'Product':'품명', 'Qty':'수량', 'Serial':'S/O 시리얼', 'OrderNum':'주문번호', 
+                'SalesDoc':'Sales Doc', 'StartDate':'시작일', 'Customer':'고객명'
+            };
+
+            activeHeaders.forEach(h => {
+                const th = document.createElement('th');
+                th.textContent = labels[h] || h;
+                tableHead.appendChild(th);
+            });
+
+            const limit = Math.min(filteredData.length, 1000);
+            for (let i = 0; i < limit; i++) {
+                const row = filteredData[i];
+                const tr = document.createElement('tr');
+                
+                // 미매칭 항목은 배경색으로 구분
+                if (row.isUnmapped) {
+                    tr.style.background = 'rgba(239, 68, 68, 0.05)';
+                }
 
                 activeHeaders.forEach(h => {
-                    const th = document.createElement('th');
-                    th.textContent = labels[h] || h;
-                    tableHead.appendChild(th);
+                    const td = document.createElement('td');
+                    let val = row[h] || '-';
+                    
+                    // 미매칭 데이터의 경우 필드명이 다를 수 있음
+                    if (row.isUnmapped) {
+                        if (h === 'Model') {
+                            val = row['UnmappedModel'] || row['Model'] || '-';
+                            td.style.color = 'var(--danger)';
+                            td.style.fontWeight = '600';
+                        }
+                        if (h === 'Product') val = row['ProductName'] || '-';
+                        if (h === 'Code') val = row['ModelCode'] || '-';
+                    }
+
+                    td.textContent = val;
+                    if (h === 'Qty') td.style.fontWeight = 'bold';
+                    tr.appendChild(td);
                 });
-
-                const limit = Math.min(filteredData.length, 500);
-                for (let i = 0; i < limit; i++) {
-                    const row = filteredData[i];
-                    const tr = document.createElement('tr');
-                    activeHeaders.forEach(h => {
-                        const td = document.createElement('td');
-                        td.textContent = row[h] || '-';
-                        if (h === 'Qty') td.style.fontWeight = 'bold';
-                        tr.appendChild(td);
-                    });
-                    tableBody.appendChild(tr);
-                }
-            } else {
-                // [단일 리스트 모드] - 미매칭 생산(L)만 표시
-                tableContainer.style.display = 'none';
-                dualContainer.style.display = 'flex';
-
-                const headLeft = document.getElementById('head-left');
-                const bodyLeft = document.getElementById('body-left');
-                
-                headLeft.innerHTML = ''; bodyLeft.innerHTML = '';
-
-                // 헤더: 생산 현황 (Field Data)
-                const leftHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Qty'];
-                const labelsL = {
-                    'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Qty':'수량'
-                };
-
-                const trL = document.createElement('tr');
-                leftHeaders.forEach(h => { 
-                    const th = document.createElement('th'); 
-                    th.textContent = labelsL[h] || h; 
-                    trL.appendChild(th); 
-                });
-                headLeft.appendChild(trL);
-
-                // Body Left (Unmatched Production)
-                filteredData.forEach((row, i) => {
-                    const tr = document.createElement('tr');
-                    leftHeaders.forEach(h => {
-                        const td = document.createElement('td');
-                        td.textContent = row[h] || '-';
-                        if (h === 'Model') td.style.color = 'var(--danger)';
-                        tr.appendChild(td);
-                    });
-                    bodyLeft.appendChild(tr);
-                });
-
-                // 독립 스크롤 유지
-                const pLeft = document.getElementById('panel-left');
-                pLeft.style.overflowY = 'auto';
+                tableBody.appendChild(tr);
             }
         }
+
+        // ========== SAP MHTML Detail Join Logic ==========
+        let sapData = { '1842': [], '1840': [] };
+
+        function handleSapFile(input, type) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const parsed = parseSapMhtml(content);
+                sapData[type] = parsed;
+                document.getElementById(`btn-${type}`).textContent = `✅ ${file.name.substring(0, 10)}...`;
+                document.getElementById(`btn-${type}`).style.background = 'var(--success)';
+                document.getElementById(`btn-${type}`).style.color = 'white';
+                
+                checkJoinReady();
+            };
+            reader.readAsText(file);
+        }
+
+        function checkJoinReady() {
+            const hasData = sapData['1842'].length > 0 || sapData['1840'].length > 0;
+            document.getElementById('join-btn').disabled = !hasData;
+        }
+
+        function parseSapMhtml(mhtml) {
+            // 1. HTML 부분만 정교하게 추출 (태그 기준)
+            let html = mhtml;
+            const lowerMhtml = mhtml.toLowerCase();
+            const htmlStart = lowerMhtml.indexOf('<html');
+            const htmlEnd = lowerMhtml.lastIndexOf('</html>');
+            
+            if (htmlStart !== -1 && htmlEnd !== -1) {
+                html = mhtml.substring(htmlStart, htmlEnd + 7);
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const table = doc.querySelector('table');
+            
+            if (!table) {
+                // 테이블을 못 찾은 경우 시트형 데이터 스캔
+                const allTables = doc.querySelectorAll('table');
+                if (allTables.length > 0) {
+                    // 데이터가 가장 많을 것 같은 테이블 선택
+                    let maxRows = 0;
+                    let targetTable = allTables[0];
+                    allTables.forEach(t => {
+                        if (t.rows.length > maxRows) {
+                            maxRows = t.rows.length;
+                            targetTable = t;
+                        }
+                    });
+                    return extractFromTable(targetTable);
+                }
+                return [];
+            }
+            return extractFromTable(table);
+        }
+
+        function extractFromTable(table) {
+            const rows = Array.from(table.querySelectorAll('tr'));
+            if (rows.length < 2) return [];
+
+            // 헤더 찾기 (첫 번째 행 또는 <td>가 많은 행)
+            let headerRow = rows[0];
+            let headerCells = Array.from(headerRow.querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+            
+            // 만약 첫 행이 헤더가 아니라면 검색
+            if (!headerCells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                for(let i=1; i<Math.min(5, rows.length); i++) {
+                    const cells = Array.from(rows[i].querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+                    if (cells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                        headerRow = rows[i];
+                        headerCells = cells;
+                        break;
+                    }
+                }
+            }
+
+            const findIdx = (keywords) => {
+                return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+            };
+
+            const mapping = {
+                mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+                model: findIdx(['MATERIAL DESCRIPTION', 'MODEL', '기종']),
+                material: findIdx(['MATERIAL', '품명', '자재코드']), // Material 코드 전용 매핑
+                customer: findIdx(['CUSTOMER NAME', 'CUSTOMER', '고객']),
+                serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼']),
+                order: findIdx(['ORDER', '오더', '주문']),
+                salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
+                startDate: findIdx(['START DATE', '시작일', 'STARTDATE']),
+                ver: findIdx(['VER.', 'VERSION', '버전'])
+            };
+
+            const data = [];
+            const startIndex = rows.indexOf(headerRow) + 1;
+            
+            for (let i = startIndex; i < rows.length; i++) {
+                const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
+                if (cells.length < 5) continue;
+
+                const monVal = cells[mapping.mon] || ''; 
+                let mNum = null;
+                
+                // 날짜 추출 개선: 202608, 2026.08, 08 등 대응
+                const dateDigits = monVal.replace(/[^0-9]/g, '');
+                if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));
+                else if (dateDigits.length >= 1) mNum = parseInt(dateDigits);
+
+                if (!mNum || mNum > 12) continue;
+                
+                data.push({
+                    Month: mNum + '월',
+                    ModelRaw: cells[mapping.model],
+                    ModelKey: getMatchKey(cells[mapping.model]),
+                    Material: cells[mapping.material] || '', // Material 코드 저장
+                    Customer: cells[mapping.customer],
+                    Serial: cells[mapping.serial],
+                    Order: cells[mapping.order],
+                    SalesDoc: cells[mapping.salesDoc],
+                    StartDate: cells[mapping.startDate],
+                    Ver: cells[mapping.ver] || '',
+                    Used: false
+                });
+            }
+            
+            if (data.length > 0) {
+                alert(`✅ SAP 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다.`);
+            } else {
+                alert(`⚠️ 데이터를 찾지 못했습니다. 컬럼 헤더(Prod.Mon, Material Description 등)가 포함되어 있는지 확인해주세요.`);
+            }
+            return data;
+        }
+
+        function joinSapDetails() {
+            if (!confirm('현재 분석 결과에 SAP 상세 정보를 결합하시겠습니까?\n모든 데이터가 수량 단위에서 시리얼 단위(1:1)로 전환됩니다.')) return;
+
+            const newRawData = [];
+            const newUnusedData = [];
+
+            // 1. Matched Data 처리 (rawData)
+            rawData.forEach(row => {
+                const qty = parseInt(row.Qty) || 0;
+                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
+                
+                for (let i = 0; i < qty; i++) {
+                    const mpsProduct = (row.Product || '').trim();
+                    const mpsModelKey = getMatchKey(row.Model);
+                    
+                    // 정밀 매칭 (1순위: Material(SAP) === 품명(MPS), 2순위: 기종명 매칭)
+                    const sapMatch = sourceSap.find(s => {
+                        if (s.Used || s.Month !== row.Month) return false;
+                        
+                        const isMaterialMatch = s.Material && s.Material === mpsProduct;
+                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(row.Model));
+                        
+                        return isMaterialMatch || isModelMatch;
+                    });
+                    
+                    const newRow = { ...row, Qty: 1 };
+                    if (sapMatch) {
+                        sapMatch.Used = true;
+                        newRow.Customer = sapMatch.Customer;
+                        newRow.Serial = sapMatch.Serial;
+                        newRow.OrderNum = sapMatch.Order;
+                        newRow.SalesDoc = sapMatch.SalesDoc;
+                        newRow.StartDate = sapMatch.StartDate;
+                        newRow.Product = (newRow.Product || '') + ' (🔗결합)';
+                        
+                        // 1840 규칙: 기존 Site 규칙에 없는 Ver은 '남산'으로 처리
+                        if (row.Site !== '성주' && sapMatch.Ver) {
+                            let foundSite = null;
+                            for (const [siteName, prefixes] of Object.entries(siteMaster)) {
+                                if (prefixes.some(p => sapMatch.Ver.startsWith(p))) {
+                                    foundSite = siteName;
+                                    break;
+                                }
+                            }
+                            if (!foundSite) newRow.Site = '남산'; // 미정의 Ver은 남산
+                        }
+                    }
+                    newRawData.push(newRow);
+                }
+            });
+
+            // 2. Unmapped Data 처리 (unusedData)
+            unusedData.forEach(row => {
+                const qty = parseInt(row.Qty) || 0;
+                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
+                
+                for (let i = 0; i < qty; i++) {
+                    const mpsProduct = (row.ProductName || '').trim();
+                    const mpsModelKey = getMatchKey(row.UnmappedModel);
+                    
+                    const sapMatch = sourceSap.find(s => {
+                        if (s.Used || s.Month !== row.Month) return false;
+                        const isMaterialMatch = s.Material && s.Material === mpsProduct;
+                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(row.UnmappedModel) || row.UnmappedModel.includes(s.ModelRaw)));
+                        return isMaterialMatch || isModelMatch;
+                    });
+                    
+                    const newRow = { ...row, Qty: 1 };
+                    if (sapMatch) {
+                        sapMatch.Used = true;
+                        newRow.Customer = sapMatch.Customer;
+                        newRow.Serial = sapMatch.Serial;
+                        newRow.OrderNum = sapMatch.Order;
+                        newRow.SalesDoc = sapMatch.SalesDoc;
+                        newRow.StartDate = sapMatch.StartDate;
+                        
+                        // 1840 규칙 적용
+                        if (row.Site !== '성주' && sapMatch.Ver) {
+                            let foundSite = null;
+                            for (const [siteName, prefixes] of Object.entries(siteMaster)) {
+                                if (prefixes.some(p => sapMatch.Ver.startsWith(p))) {
+                                    foundSite = siteName;
+                                    break;
+                                }
+                            }
+                            if (!foundSite) newRow.Site = '남산';
+                        }
+                    }
+                    newUnusedData.push(newRow);
+                }
+            });
+
+            rawData = newRawData;
+            unusedData = newUnusedData;
+            
+            // 헤더 업데이트를 위해 테이블 다시 그리기
+            alert('결합이 완료되었습니다. 테이블 컬럼이 확장되었습니다.');
+            applyFilters();
+        }
+
 
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
             loadSiteMaster();
         });
     </script>
+    <style>
+        .sap-upload-box {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            align-items: center;
+        }
+        .sap-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .btn-small {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-small:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+    </style>
 </body>
 </html>
