@@ -1,0 +1,112 @@
+const XLSX = require('xlsx');
+
+const wb = XLSX.readFile('MPS2605-1.xlsx');
+const ws = wb.Sheets['생산배포용'];
+const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+function getMatchKey(s) {
+    if (!s) return '';
+    let n = s.toString().toUpperCase().trim();
+    n = n.replace(/PUMA|LYNX/g, '').replace(/\s+/g, '').trim();
+    if (n.startsWith('P') || (n.startsWith('L') && !n.startsWith('LEO'))) {
+        n = n.substring(1);
+    }
+    n = n.replace(/VIII/g, '8').replace(/VII/g, '7').replace(/VI/g, '6').replace(/IV/g, '4').replace(/IX/g, '9');
+    n = n.replace(/III/g, '3').replace(/II/g, '2');
+    if (n.includes('SMX')) {
+        n = n.replace(/SMX2(?![0-9])/g, 'SMX21');
+        n = n.replace(/2100/g, '21').replace(/3100/g, '31').replace(/5100/g, '51');
+        n = n.replace(/SYYB/g, 'SYY').replace(/STB/g, 'SB');
+    }
+    if (n.includes('DNM750L/50') || n === 'DNM755L') return 'D755L';
+    if (n.includes('DNM750/50') || n === 'DNM7550' || n === 'DNM755') return 'D755';
+    if (n.includes('ST38GS')) return 'ST38GS2'; 
+    if (n.includes('ST10GS')) return 'ST1GS2';
+    if (n.includes('DST20')) return 'DST20';
+    if (n.includes('LEO16')) return 'LEO16';
+    if (n.startsWith('VTR')) {
+        let m = n.match(/VTR(\d{2})/);
+        if (m) return 'VTR' + m[1];
+    }
+    if (n.startsWith('VCF') || n.startsWith('VF') || n.startsWith('DVF')) {
+        let m = n.match(/(?:VCF|VF|DVF)(\d)/);
+        if (m) return 'VF' + m[1];
+    }
+    n = n.replace(/DNM(\d+)0\/(\d+)/, 'DNM$1$2');
+    if (n.startsWith('MYNX')) n = 'M' + n.substring(4);
+    else if (n.startsWith('VMX')) n = 'M' + n.substring(3);
+    else if (n.startsWith('VM')) n = 'V' + n.substring(2);
+    else if (n.startsWith('MP')) n = 'M' + n.substring(2);
+    else if (n.startsWith('DNM')) n = 'D' + n.substring(3);
+    else if (n.startsWith('DBC')) n = 'DB' + n.substring(3);
+    else if (n.startsWith('DCM')) n = 'DC' + n.substring(3);
+    else if (n.startsWith('DVF')) n = 'V' + n.substring(3);
+    else if (n.startsWith('VT') && !n.startsWith('VTR')) n = 'V' + n.substring(2);
+    else if (n.startsWith('TT') && !n.startsWith('TTR')) n = 'T' + n.substring(2);
+    let key = n.replace(/[^A-Z1-9]/g, '');
+    if (key === 'DST2') key = 'DST20';
+    key = key.replace(/0/g, '');
+    if (key === 'D755' && n.includes('L')) return 'D755L';
+    key = key.replace(/[A-Z]+$/, '');
+    if (key.startsWith('DC')) key = key.replace(/[A-Z]$/, '');
+    return key;
+}
+
+const findCols = (raw, keywordsMap, maxRows = 20) => {
+    for (let r = 0; r < Math.min(maxRows, raw.length); r++) {
+        const row = raw[r] || [];
+        const rowResult = {};
+        row.forEach((cell, idx) => {
+            const val = String(cell || '').trim().toUpperCase();
+            for (const [key, keywords] of Object.entries(keywordsMap)) {
+                if (rowResult[key] === undefined) {
+                    const hasExact = keywords.some(k => val === k.toUpperCase());
+                    if (hasExact) rowResult[key] = idx;
+                }
+            }
+        });
+        row.forEach((cell, idx) => {
+            const val = String(cell || '').trim().toUpperCase();
+            for (const [key, keywords] of Object.entries(keywordsMap)) {
+                if (rowResult[key] === undefined) {
+                    const hasPartial = keywords.some(k => val.includes(k.toUpperCase()));
+                    if (hasPartial) rowResult[key] = idx;
+                }
+            }
+        });
+        if (rowResult.Model !== undefined && (rowResult.Site !== undefined || rowResult.Group !== undefined)) {
+            rowResult.headerRowIdx = r;
+            return rowResult;
+        }
+    }
+    return {};
+};
+
+const pCols = findCols(raw, {
+    Model: ['기종', 'Model'],
+    Group: ['기종분류', '시리즈', 'Series', '그룹'],
+    Site: ['생산처', '공장', '사업장', 'Site'],
+    RPM: ['RPM', '주축', 'Spindle']
+}, 50);
+
+const keySites = {};
+let lastSite = '';
+raw.forEach((row, idx) => {
+    if (idx <= pCols.headerRowIdx) return;
+    const s = (row[pCols.Site] || '').toString().trim();
+    const m = (row[pCols.Model] || '').toString().trim();
+    if (s) lastSite = s;
+
+    if (m) {
+        const mKey = getMatchKey(m);
+        if (!keySites[mKey]) keySites[mKey] = new Set();
+        keySites[mKey].add(lastSite.replace(/^\d+\.\s*/, '').trim());
+    }
+});
+
+console.log('Match keys with multiple sites in 생산배포용:');
+for (const [key, sites] of Object.entries(keySites)) {
+    if (sites.size > 1) {
+        console.log(`Key: "${key}" -> Sites:`, Array.from(sites));
+    }
+}

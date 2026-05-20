@@ -130,23 +130,43 @@ function processMpsFile(input, rules = {}) {
 
     // --- Dynamic Column Detection Helper ---
     const findCols = (raw, keywordsMap, maxRows = 20) => {
-        const result = {};
         for (let r = 0; r < Math.min(maxRows, raw.length); r++) {
             const row = raw[r] || [];
+            const rowResult = {};
+
+            // 1. Exact match pass for this row
             row.forEach((cell, idx) => {
-                const val = String(cell || '').trim();
+                const val = String(cell || '').trim().toUpperCase();
                 for (const [key, keywords] of Object.entries(keywordsMap)) {
-                    if (keywords.some(k => val.includes(k)) && result[key] === undefined) {
-                        result[key] = idx;
+                    if (rowResult[key] === undefined) {
+                        const hasExact = keywords.some(k => val === k.toUpperCase());
+                        if (hasExact) {
+                            rowResult[key] = idx;
+                        }
                     }
                 }
             });
-            if (result.Model !== undefined && (result.Site !== undefined || result.Group !== undefined)) {
-                result.headerRowIdx = r;
-                break;
+
+            // 2. Partial match pass for this row (only for keys not yet matched)
+            row.forEach((cell, idx) => {
+                const val = String(cell || '').trim().toUpperCase();
+                for (const [key, keywords] of Object.entries(keywordsMap)) {
+                    if (rowResult[key] === undefined) {
+                        const hasPartial = keywords.some(k => val.includes(k.toUpperCase()));
+                        if (hasPartial) {
+                            rowResult[key] = idx;
+                        }
+                    }
+                }
+            });
+
+            // Check if this row is the header row
+            if (rowResult.Model !== undefined && (rowResult.Site !== undefined || rowResult.Group !== undefined)) {
+                rowResult.headerRowIdx = r;
+                return rowResult;
             }
         }
-        return result;
+        return {};
     };
 
     // [MASTER PLAN ANALYSIS]
@@ -156,15 +176,15 @@ function processMpsFile(input, rules = {}) {
         Site: ['사업장', '공장', 'Site'],
         PL: ['PL', '제품군'],
         Ver: ['Ver', '버전'],
-        Pjt: ['PJT', '프로젝트', 'Product Name']
+        Pjt: ['PJT', '프로젝트', 'Product Name', 'Product']
     };
     const mCols = findCols(masterRaw, masterKeywords, 50);
     
     // [PHASE 1: Metadata Mapping from Production (배포용) Sheet]
     const prodKeywords = {
         Model: ['기종', 'Model'],
-        Group: ['시리즈', 'Series', '그룹'],
-        Site: ['공장', '사업장', 'Site'],
+        Group: ['기종분류', '시리즈', 'Series', '그룹'],
+        Site: ['생산처', '공장', '사업장', 'Site'],
         RPM: ['RPM', '주축', 'Spindle']
     };
     const pCols = findCols(prodRaw, prodKeywords, 50);
@@ -187,7 +207,11 @@ function processMpsFile(input, rules = {}) {
         if (m) {
             const mKey = getMatchKey(m);
             if (!metaMap[mKey]) {
-                metaMap[mKey] = { site: lastMetaSite, group: lastMetaGroup, model: m, rpm: rpm };
+                metaMap[mKey] = [];
+            }
+            const exists = metaMap[mKey].some(item => item.site === lastMetaSite && item.model === m);
+            if (!exists) {
+                metaMap[mKey].push({ site: lastMetaSite, group: lastMetaGroup, model: m, rpm: rpm });
             }
         }
     });
@@ -260,11 +284,39 @@ function processMpsFile(input, rules = {}) {
 
         // Enrichment from Meta Map (Legacy V3.2 style)
         // Try exact match first, then partial match like V3.2
-        let foundMeta = metaMap[mKey];
-        if (!foundMeta) {
+        let foundMetaList = metaMap[mKey];
+        if (!foundMetaList || foundMetaList.length === 0) {
             const possibleKeys = Object.keys(metaMap);
-            const bestMatch = possibleKeys.find(k => k.includes(mKey) || mKey.includes(k));
-            if (bestMatch) foundMeta = metaMap[bestMatch];
+            const bestMatch = possibleKeys.find(k => {
+                if (k.length <= 1 || mKey.length <= 1) return false;
+                return k.startsWith(mKey) || mKey.startsWith(k);
+            });
+            if (bestMatch) foundMetaList = metaMap[bestMatch];
+        }
+
+        let foundMeta = null;
+        if (foundMetaList && foundMetaList.length > 0) {
+            if (foundMetaList.length === 1) {
+                foundMeta = foundMetaList[0];
+            } else {
+                // Determine main plant from originalSite (stored in finalSite initially)
+                let mpsMainPlant = '남산';
+                if (finalSite === '1842' || finalSite.includes('성주')) {
+                    mpsMainPlant = '성주';
+                }
+                
+                // Select matching main plant from list
+                foundMeta = foundMetaList.find(item => {
+                    const itemSiteClean = item.site.replace(/^\d+\.\s*/, '').trim();
+                    let itemMainPlant = '남산';
+                    if (itemSiteClean.includes('성주') || itemSiteClean.includes('성우')) {
+                        itemMainPlant = '성주';
+                    }
+                    return itemMainPlant === mpsMainPlant;
+                });
+                
+                if (!foundMeta) foundMeta = foundMetaList[0];
+            }
         }
 
         if (foundMeta) {
