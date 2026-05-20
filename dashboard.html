@@ -1495,6 +1495,11 @@ DST: 22. 지티테크`;
 
             const totalQtySum = filteredData.reduce((acc, row) => acc + (parseInt(row.Qty) || 0), 0);
             totalRowsSpan.textContent = totalQtySum.toLocaleString();
+
+            const sapCount = filteredData.filter(r => r.Serial || r.SalesDoc || (r.Product && r.Product.includes('결합'))).length;
+            const sapEl = document.getElementById('sap-rows');
+            if (sapEl) sapEl.textContent = sapCount.toLocaleString();
+
             renderTable();
         }
 
