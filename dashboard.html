@@ -700,6 +700,11 @@
                 <div class="stat-label">SAP 결합 정보</div>
                 <div class="stat-value" style="font-size: 1.75rem; font-weight: 700; color: #60a5fa;"><span id="sap-rows">0</span> <span style="font-size: 1rem; font-weight: normal; color: var(--text-secondary);">대</span></div>
             </div>
+            <div class="stat-item" id="copy-salesdoc-section" style="margin-left: auto; display: none;">
+                <button onclick="copySalesDocs()" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 0.8rem 1.5rem; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.2s; border: none;">
+                    📋 SALES DOC 복사
+                </button>
+            </div>
             <div id="sap-join-section" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none;">
                 <div style="flex: 1;">
                     <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">🔗 SAP 상세 정보(S/O) 결합</div>
@@ -1500,6 +1505,11 @@ DST: 22. 지티테크`;
             const sapEl = document.getElementById('sap-rows');
             if (sapEl) sapEl.textContent = sapCount.toLocaleString();
 
+            const copySection = document.getElementById('copy-salesdoc-section');
+            if (copySection) {
+                copySection.style.display = sapCount > 0 ? 'block' : 'none';
+            }
+
             renderTable();
         }
 
@@ -1795,6 +1805,38 @@ DST: 22. 지티테크`;
             // 헤더 업데이트를 위해 테이블 다시 그리기
             alert('결합이 완료되었습니다. 테이블 컬럼이 확장되었습니다.');
             applyFilters();
+        }
+
+        function copySalesDocs() {
+            const salesDocs = filteredData
+                .map(row => (row.SalesDoc || '').toString().trim())
+                .filter(val => val && val !== '-');
+            
+            const uniqueSalesDocs = [...new Set(salesDocs)];
+            
+            if (uniqueSalesDocs.length === 0) {
+                alert('복사할 SALES DOC 데이터가 없습니다.');
+                return;
+            }
+            
+            const textToCopy = uniqueSalesDocs.join('\n');
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다!\n\n[복사된 목록 첫 3건]:\n${uniqueSalesDocs.slice(0, 3).join('\n')}\n...`);
+            }).catch(err => {
+                console.error('클립보드 복사 실패:', err);
+                const textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다! (Fallback)`);
+                } catch (e) {
+                    alert('클립보드 복사에 실패했습니다.');
+                }
+                document.body.removeChild(textArea);
+            });
         }
 
 
