@@ -249,6 +249,12 @@ function processMpsFile(input, rules = {}) {
                 }
             }
         });
+
+        // 6개월 계획 한계 설정 (감지된 달 중 상위 6개만 계획 수립에 반영하고 7번째 달은 제외)
+        if (masterMonthCols.length > 6) {
+            masterMonthCols.splice(6);
+        }
+
         masterHeaderIdx = typeRowIdx;
     }
 
@@ -354,8 +360,6 @@ function processMpsFile(input, rules = {}) {
             }
 
             masterMonthCols.forEach(mCol => {
-                const mMatch = mCol.name.match(/(\d{1,2})/);
-                if (mMatch && parseInt(mMatch[1]) >= 10) return; // User requested to exclude October (10월)
 
                 const q = parseInt(row[mCol.col]) || 0;
                 if (q > 0) {

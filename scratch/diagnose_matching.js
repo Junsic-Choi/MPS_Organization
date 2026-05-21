@@ -1,34 +1,52 @@
 const XLSX = require('xlsx');
-const { processMpsFile } = require('../extractor');
-const fs = require('fs');
 
-async function diagnoseMatching() {
-    const buffer = fs.readFileSync('MPS2605-1.xlsx');
-    const rules = {
-        siteMaster: {
-            "I0215116": "07. 삼광", "I0205716": "09. 서진", "I0206873": "성주", "I0206954": "성주",
-            "I0215001": "LEO", "I0212077": "04. 성우", "I0213836": "04. 성우", "I0213835": "06. 원진",
-            "I0206330": "05. 세양", "I0206329": "05. 세양", "I0206328": "05. 세양", "I0205562": "15. 신우",
-            "I0205561": "15. 신우", "I0205560": "15. 신우", "I0206254": "11. 대영", "I0206253": "11. 대영",
-            "9AHT": "21. 휴텍", "1840": "남산", "1842": "성주", "9ASW": "04. 성우",
-            "9ACE": "지티테크", "I0169394": "지티테크"
-        }
-    };
+const wb = XLSX.readFile('MPS2604-1.xlsx');
+const ws = wb.Sheets['MPS'];
+const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-    console.log('--- Diagnosing VTR and DBM Matching ---');
-    const result = await processMpsFile(buffer, rules);
+const row4 = raw[4] || [];
+const monthCols = [
+    { name: '4월', col: 12 },
+    { name: '5월', col: 17 },
+    { name: '6월', col: 22 },
+    { name: '7월', col: 28 },
+    { name: '8월', col: 34 },
+    { name: '9월', col: 40 }
+];
+
+console.log('=== CHECKING SKIPPED OR MISSED ROWS OR QTY DIFFERENCES ===');
+
+let totalQtyAllRows = 0;
+let totalQtySeongjuAllRows = 0;
+
+let skippedRows = 0;
+
+raw.forEach((row, idx) => {
+    if (idx <= 4) return; // skip headers
     
-    const vtrMatches = result.finalResults.filter(r => r.Site === '성주' && r.Month === '6월' && r.Model.includes('VTR'));
-    console.log(`VTR Matches (성주, 6월): ${vtrMatches.length}`);
-    vtrMatches.forEach(m => console.log(`  Match: ${m.Model} -> ${m.Product}`));
+    // Calculate total quantity in 4-9월 for this row
+    let rowPlanQty = 0;
+    monthCols.forEach(m => {
+        rowPlanQty += parseInt(row[m.col]) || 0;
+    });
 
-    const vtrUnused = result.unusedData.filter(r => r.Site === '성주' && r.Month === '6월' && r.Model.includes('VTR'));
-    console.log(`VTR Unmapped (성주, 6월): ${vtrUnused.length}`);
-    vtrUnused.forEach(u => console.log(`  Unmapped: ${u.UnmappedModel} (Qty: ${u.Qty})`));
+    if (rowPlanQty > 0) {
+        const mModel = String(row[3] || '').trim();
+        const pName = String(row[4] || '').trim();
+        const site = String(row[6] || '').trim();
+        
+        totalQtyAllRows += rowPlanQty;
+        if (site === '1842' || site.includes('성주')) {
+            totalQtySeongjuAllRows += rowPlanQty;
+        }
 
-    const dbmUnused = result.unusedData.filter(r => r.Site === '성주' && r.Month === '9월' && r.Model.includes('DBM'));
-    console.log(`DBM Unmapped (성주, 9월): ${dbmUnused.length}`);
-    dbmUnused.forEach(u => console.log(`  Unmapped: ${u.UnmappedModel} (Qty: ${u.Qty})`));
-}
+        if (!mModel && !pName) {
+            skippedRows++;
+            console.log(`Skipped Row ${idx}: Site="${site}", Plan Qty=${rowPlanQty}`);
+        }
+    }
+});
 
-diagnoseMatching();
+console.log(`\nSum of all rows in Excel (4-9월): ${totalQtyAllRows}`);
+console.log(`Sum of all Seongju rows in Excel (4-9월): ${totalQtySeongjuAllRows}`);
+console.log(`Number of skipped rows (no Model and no Product): ${skippedRows}`);

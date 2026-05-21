@@ -1,41 +1,48 @@
 const XLSX = require('xlsx');
 
-const wb = XLSX.readFile('MPS2605-1.xlsx');
-const ws = wb.Sheets['생산배포용'];
+const wb = XLSX.readFile('MPS2604-1.xlsx');
+const ws = wb.Sheets['MPS'];
 const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-const headerRow = raw[2];
-console.log('Header Row 2:', headerRow);
+const row2 = raw[2] || [];
+const row4 = raw[4] || [];
 
-let lastSite = '';
-let seongjuRows = [];
-const monthlySums = {};
-
-raw.forEach((row, idx) => {
-    if (idx <= 5) return; // Skip headers and metadata
-    const s = (row[0] || '').toString().trim();
-    if (s) lastSite = s;
-
-    if (lastSite.includes('성주')) {
-        seongjuRows.push({ idx, row });
-        // Let's sum for each column that has a numeric header or contains '생산'
-        headerRow.forEach((colName, colIdx) => {
-            if (colIdx >= 4) {
-                const val = parseInt(row[colIdx]) || 0;
-                const key = `${colIdx}: ${colName || ''}`;
-                monthlySums[key] = (monthlySums[key] || 0) + val;
-            }
-        });
+const numericCols = [];
+for (let c = 8; c < row4.length; c++) {
+    let hasNumeric = false;
+    let sum = 0;
+    for (let r = 5; r < raw.length; r++) {
+        const val = parseInt((raw[r] || [])[c]) || 0;
+        sum += val;
+        if (val > 0) hasNumeric = true;
     }
-});
-
-console.log('Seongju Monthly Sums in 생산배포용:');
-console.log(monthlySums);
-
-let totalSeongjuInExcel = 0;
-for (const [key, val] of Object.entries(monthlySums)) {
-    if (key.includes('생산')) {
-        totalSeongjuInExcel += val;
+    if (hasNumeric) {
+        let label = '';
+        for (let idx = c; idx >= 0; idx--) {
+            if (row2[idx]) {
+                label = row2[idx];
+                break;
+            }
+        }
+        numericCols.push({ idx: c, label, header: row4[c], sum });
     }
 }
-console.log('Total Seongju production sum across all "생산" columns:', totalSeongjuInExcel);
+
+console.log('Numeric columns in MPS sheet:');
+numericCols.forEach(nc => {
+    console.log(`Col ${nc.idx}: label="${nc.label}", header="${nc.header}", sum=${nc.sum}`);
+});
+
+console.log('\nSeongju (Site 1842) sums by column:');
+numericCols.forEach(nc => {
+    let sjSum = 0;
+    for (let r = 5; r < raw.length; r++) {
+        const row = raw[r] || [];
+        const site = String(row[6] || '').trim();
+        const isSeongju = (site === '1842' || site.includes('성주'));
+        if (isSeongju) {
+            sjSum += parseInt(row[nc.idx]) || 0;
+        }
+    }
+    console.log(`Col ${nc.idx} (${nc.label} - ${nc.header}): sjSum=${sjSum}`);
+});
