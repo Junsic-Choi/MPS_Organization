@@ -30,7 +30,16 @@ app.get('/api/list-files', (req, res) => {
         const files = fs.readdirSync(__dirname)
             .filter(f => f.startsWith('MPS') && f.endsWith('.xlsx'))
             .sort().reverse(); // 최신순 (이름 기준)
-        res.json({ success: true, files });
+        const filesWithDetails = files.map(filename => {
+            const filePath = path.join(__dirname, filename);
+            const stats = fs.statSync(filePath);
+            return {
+                filename,
+                size: stats.size,
+                mtime: stats.mtime
+            };
+        });
+        res.json({ success: true, files: filesWithDetails });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -56,6 +65,11 @@ app.post('/api/extract-live', upload.single('file'), async (req, res) => {
         
         console.log(`[api] Live extract started: ${req.file.originalname} (${req.file.size} bytes)`);
         
+        // 업로드된 파일을 서버에 저장
+        const savePath = path.join(__dirname, req.file.originalname);
+        fs.writeFileSync(savePath, req.file.buffer);
+        console.log(`[api] File saved to server: ${savePath}`);
+        
         const result = await processMpsFile(req.file.buffer, rules);
         
         console.log(`[api] Live extract success: ${result.finalResults.length} rows`);
@@ -67,6 +81,40 @@ app.post('/api/extract-live', upload.single('file'), async (req, res) => {
             error: err.message,
             stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
         });
+    }
+});
+
+// [Saved] 서버에 저장된 파일 직접 추출 API
+app.post('/api/extract-saved', async (req, res) => {
+    try {
+        const { filename, rules: rulesStr } = req.body;
+        if (!filename) {
+            return res.status(400).json({ success: false, error: '파일명이 제공되지 않았습니다.' });
+        }
+        
+        const filePath = path.join(__dirname, filename);
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, error: `파일을 찾을 수 없습니다: ${filename}` });
+        }
+        
+        let rules = {};
+        if (rulesStr) {
+            try {
+                rules = typeof rulesStr === 'object' ? rulesStr : JSON.parse(rulesStr);
+            } catch (e) {
+                console.error('[api] Failed to parse rules:', e.message);
+            }
+        }
+        
+        console.log(`[api] Saved file extract started: ${filename}`);
+        const fileBuffer = fs.readFileSync(filePath);
+        const result = await processMpsFile(fileBuffer, rules);
+        
+        console.log(`[api] Saved file extract success: ${result.finalResults.length} rows`);
+        res.json({ success: true, ...result });
+    } catch (err) {
+        console.error(`[api] Saved file extract failed:`, err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

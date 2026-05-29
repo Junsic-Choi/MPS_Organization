@@ -579,19 +579,39 @@
                     <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 표준 형식 지원)</span>
                 </p>
 
-                <!-- File picker area -->
-                <div id="drop-zone"
-                    onclick="document.getElementById('file-input').click()"
-                    style="cursor:pointer; border: 2px dashed var(--accent-color); border-radius: 12px; padding: 2.5rem 2rem; max-width: 480px; margin: 0 auto 2rem; background: rgba(59,130,246,0.05); transition: background 0.2s;"
-                    ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)';"
-                    ondragleave="this.style.background='rgba(59,130,246,0.05)';"
-                    ondrop="handleDrop(event)">
-                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.4rem;">엑셀 파일 선택 또는 드래그</div>
-                    <div id="file-name-display" style="font-size: 0.9rem; color: var(--accent-color); margin-top: 0.5rem;">클릭하여 .xlsx 파일을 선택하세요</div>
-                </div>
+                <!-- Two-Column Selection Area -->
+                <div style="display: flex; gap: 2rem; justify-content: center; max-width: 960px; margin: 0 auto 2rem; flex-wrap: wrap; text-align: left;">
+                    
+                    <!-- Left: Upload Zone -->
+                    <div style="flex: 1.2; min-width: 320px; max-width: 460px; display: flex; flex-direction: column;">
+                        <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>💻 로컬에서 신규 파일 업로드</span>
+                        </h3>
+                        <div id="drop-zone"
+                            onclick="document.getElementById('file-input').click()"
+                            style="cursor:pointer; border: 2px dashed rgba(59,130,246,0.5); border-radius: 12px; padding: 2.2rem 1.5rem; background: rgba(59,130,246,0.03); transition: all 0.2s; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;"
+                            ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)'; this.style.borderColor='var(--accent-color)';"
+                            ondragleave="this.style.background='rgba(59,130,246,0.03)'; this.style.borderColor='rgba(59,130,246,0.5)';"
+                            ondrop="handleDrop(event)">
+                            <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📂</div>
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.4rem; font-size: 1rem;">엑셀 파일 선택 또는 드래그</div>
+                            <div id="file-name-display" style="font-size: 0.85rem; color: var(--accent-color); margin-top: 0.3rem; word-break: break-all;">클릭하여 .xlsx 파일을 선택하세요</div>
+                        </div>
+                        <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this.files[0])">
+                    </div>
 
-                <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this.files[0])">
+                    <!-- Right: Server Saved Files -->
+                    <div style="flex: 1; min-width: 320px; max-width: 440px; display: flex; flex-direction: column;">
+                        <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                            <span>💾 서버 저장된 파일 목록</span>
+                            <button onclick="fetchSavedMpsFiles()" class="btn-small" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">🔄 새로고침</button>
+                        </h3>
+                        <div id="saved-files-list" style="border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.8rem; background: rgba(15,23,42,0.4); flex: 1; min-height: 160px; max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem;">
+                            <div style="color: var(--text-secondary); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오는 중...</div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
 
             <button class="extract-btn" id="extract-btn" onclick="startExtraction()" style="padding: 1.5rem 4rem; font-size: 1.25rem;">
@@ -898,7 +918,126 @@ DST: 22. 지티테크`;
 
         // ========== Client-side Excel processing (SheetJS) ==========
         let selectedXlsxFile = null;
+        let selectedSavedFile = null;
+        let savedMpsFiles = [];
 
+        async function fetchSavedMpsFiles() {
+            const listContainer = document.getElementById('saved-files-list');
+            if (!listContainer) return;
+            listContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오는 중...</div>';
+            
+            try {
+                const response = await fetch('/api/list-files');
+                if (!response.ok) throw new Error('파일 목록 조회 실패');
+                const data = await response.json();
+                
+                if (data.success && data.files) {
+                    savedMpsFiles = data.files;
+                    renderSavedFilesList();
+                } else {
+                    listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오기 실패</div>';
+                }
+            } catch (e) {
+                console.error(e);
+                listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">오류 발생</div>';
+            }
+        }
+
+        function renderSavedFilesList() {
+            const listContainer = document.getElementById('saved-files-list');
+            if (!listContainer) return;
+            listContainer.innerHTML = '';
+            
+            if (savedMpsFiles.length === 0) {
+                listContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 3.5rem; font-size: 0.9rem; text-align: center;">저장된 파일 없음</div>';
+                return;
+            }
+            
+            const lastSavedFile = localStorage.getItem('lastMpsFilename');
+            
+            savedMpsFiles.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'saved-file-item';
+                
+                const sizeStr = file.size ? `${(file.size / 1024).toFixed(0)} KB` : '크기 불명';
+                
+                let dateStr = '';
+                if (file.mtime) {
+                    const d = new Date(file.mtime);
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                }
+                
+                const isSelected = selectedSavedFile === file.filename;
+                
+                item.style.padding = '0.6rem 0.8rem';
+                item.style.border = isSelected ? '1px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.05)';
+                item.style.borderRadius = '8px';
+                item.style.background = isSelected ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.02)';
+                item.style.cursor = 'pointer';
+                item.style.transition = 'all 0.2s';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                
+                item.addEventListener('mouseenter', () => {
+                    if (selectedSavedFile !== file.filename) {
+                        item.style.background = 'rgba(255,255,255,0.06)';
+                        item.style.borderColor = 'rgba(255,255,255,0.2)';
+                    }
+                });
+                item.addEventListener('mouseleave', () => {
+                    if (selectedSavedFile !== file.filename) {
+                        item.style.background = 'rgba(255,255,255,0.02)';
+                        item.style.borderColor = 'rgba(255,255,255,0.05)';
+                    }
+                });
+                
+                item.onclick = () => selectSavedFile(file.filename);
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.innerHTML = `
+                    <div style="font-weight:600; color:${isSelected ? 'var(--accent-color)' : 'var(--text-primary)'}; font-size:0.9rem;">📄 ${file.filename}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.2rem;">${sizeStr} | ${dateStr}</div>
+                `;
+                
+                const badge = document.createElement('div');
+                if (file.filename === lastSavedFile) {
+                    badge.textContent = '최근 분석됨';
+                    badge.style.fontSize = '0.7rem';
+                    badge.style.background = 'rgba(16,185,129,0.15)';
+                    badge.style.color = '#10b981';
+                    badge.style.border = '1px solid rgba(16,185,129,0.3)';
+                    badge.style.padding = '0.1rem 0.3rem';
+                    badge.style.borderRadius = '4px';
+                }
+                
+                item.appendChild(infoDiv);
+                if (file.filename === lastSavedFile) {
+                    item.appendChild(badge);
+                }
+                
+                listContainer.appendChild(item);
+            });
+        }
+
+        function selectSavedFile(filename) {
+            selectedSavedFile = filename;
+            selectedXlsxFile = null;
+            
+            document.getElementById('file-name-display').textContent = `💾 서버 저장 파일: ${filename}`;
+            document.getElementById('file-name-display').style.color = '#10b981';
+            
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.style.background = 'rgba(16,185,129,0.03)';
+            dropZone.style.borderColor = '#10b981';
+            
+            extractBtn.disabled = false;
+            extractBtn.style.opacity = '1';
+            const span = extractBtn.querySelector('span');
+            if (span) span.textContent = '🚀 선택된 파일 분석 시작';
+            
+            renderSavedFilesList();
+        }
 
         function handleDrop(event) {
             event.preventDefault();
@@ -913,11 +1052,22 @@ DST: 22. 지티테크`;
                 return;
             }
             selectedXlsxFile = file;
+            selectedSavedFile = null; // 서버 저장 파일 선택 해제
+            
             document.getElementById('file-name-display').textContent = `✅ ${file.name} (${(file.size/1024/1024).toFixed(1)}MB)`;
+            document.getElementById('file-name-display').style.color = 'var(--accent-color)';
+            
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.style.background = 'rgba(59,130,246,0.05)';
+            dropZone.style.borderColor = 'var(--accent-color)';
+            
             extractBtn.disabled = false;
             extractBtn.style.opacity = '1';
             const span = extractBtn.querySelector('span');
-            if (span) span.textContent = '🚀 지금 바로 분석 시작';
+            if (span) span.textContent = '🚀 선택된 파일 분석 시작';
+            
+            // 서버 파일 목록 하이라이트 해제
+            renderSavedFilesList();
         }
 
         function getMatchKey(model) {
@@ -964,8 +1114,12 @@ DST: 22. 지티테크`;
                 let m = n.match(/VTR(\d{2})/);
                 if (m) return 'VTR' + m[1];
             }
-            if (n.startsWith('VCF') || n.startsWith('VF') || n.startsWith('DVF')) {
-                let m = n.match(/(?:VCF|VF|DVF)(\d)/);
+            if (n.startsWith('DVF')) {
+                let m = n.match(/DVF(\d)/);
+                if (m) return 'DVF' + m[1];
+            }
+            if (n.startsWith('VCF') || n.startsWith('VF')) {
+                let m = n.match(/(?:VCF|VF)(\d)/);
                 if (m) return 'VF' + m[1];
             }
 
@@ -1046,7 +1200,7 @@ DST: 22. 지티테크`;
         let realSiteLookup = {}; // 보조 매핑 데이터용
 
         async function startExtraction() {
-            if (!selectedXlsxFile) {
+            if (!selectedXlsxFile && !selectedSavedFile) {
                 document.getElementById('file-input').click();
                 return;
             }
@@ -1060,21 +1214,40 @@ DST: 22. 지티테크`;
             try {
                 processingText.innerHTML = '🚀 서버에서 데이터 분석 중... (메모리 보호 모드)';
                 
-                const formData = new FormData();
-                formData.append('file', selectedXlsxFile);
-                
                 // 수동 매핑 규칙 전달
                 const rules = {
                     siteMaster: manualSiteMap,
                     realSiteLookup: realSiteLookup
                 };
-                formData.append('rules', JSON.stringify(rules));
 
-                console.log('[Upload] Sending file to server...', selectedXlsxFile.name);
-                const response = await fetch('/api/extract-live', {
-                    method: 'POST',
-                    body: formData
-                });
+                let response;
+                let currentFilename = '';
+                
+                if (selectedXlsxFile) {
+                    currentFilename = selectedXlsxFile.name;
+                    const formData = new FormData();
+                    formData.append('file', selectedXlsxFile);
+                    formData.append('rules', JSON.stringify(rules));
+                    
+                    console.log('[Upload] Sending file to server...', selectedXlsxFile.name);
+                    response = await fetch('/api/extract-live', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    currentFilename = selectedSavedFile;
+                    console.log('[Saved Load] Fetching from server...', selectedSavedFile);
+                    response = await fetch('/api/extract-saved', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filename: selectedSavedFile,
+                            rules: rules
+                        })
+                    });
+                }
 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -1090,6 +1263,10 @@ DST: 22. 지티테크`;
 
                 const result = await response.json();
                 console.log('[Upload] Response received:', result);
+                
+                // 성공한 파일명을 최신 사용 파일로 기록 및 갱신
+                localStorage.setItem('lastMpsFilename', currentFilename);
+                fetchSavedMpsFiles();
                 
                 rawData = result.finalResults || [];
                 unusedData = (result.unusedData || []).map(row => ({ ...row, isUnmapped: true }));
@@ -1740,13 +1917,19 @@ DST: 22. 지티테크`;
                         newRow.OrderNum = sapMatch.Order;
                         newRow.SalesDoc = sapMatch.SalesDoc;
                         newRow.StartDate = sapMatch.StartDate;
-                        newRow.Product = (newRow.Product || '') + ' (🔗결합)';
+                        
+                        const prodStr = newRow.Product || '';
+                        if (!prodStr.includes('(🔗결합)')) {
+                            newRow.Product = prodStr + ' (🔗결합)';
+                        }
                         
                         // 1840 규칙: 기존 Site 규칙에 없는 Ver은 '남산'으로 처리
                         if (row.Site !== '성주' && sapMatch.Ver) {
                             let foundSite = null;
-                            for (const [siteName, prefixes] of Object.entries(siteMaster)) {
-                                if (prefixes.some(p => sapMatch.Ver.startsWith(p))) {
+                            const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
+                            for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
+                                const cleanPrefix = verPrefix.trim().toUpperCase();
+                                if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
                                     foundSite = siteName;
                                     break;
                                 }
@@ -1783,11 +1966,18 @@ DST: 22. 지티테크`;
                         newRow.SalesDoc = sapMatch.SalesDoc;
                         newRow.StartDate = sapMatch.StartDate;
                         
+                        const prodNameStr = newRow.ProductName || '';
+                        if (!prodNameStr.includes('(🔗결합)')) {
+                            newRow.ProductName = prodNameStr + ' (🔗결합)';
+                        }
+                        
                         // 1840 규칙 적용
                         if (row.Site !== '성주' && sapMatch.Ver) {
                             let foundSite = null;
-                            for (const [siteName, prefixes] of Object.entries(siteMaster)) {
-                                if (prefixes.some(p => sapMatch.Ver.startsWith(p))) {
+                            const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
+                            for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
+                                const cleanPrefix = verPrefix.trim().toUpperCase();
+                                if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
                                     foundSite = siteName;
                                     break;
                                 }
@@ -1843,6 +2033,14 @@ DST: 22. 지티테크`;
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
             loadSiteMaster();
+            
+            // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택
+            fetchSavedMpsFiles().then(() => {
+                const lastSavedFile = localStorage.getItem('lastMpsFilename');
+                if (lastSavedFile && savedMpsFiles.some(f => f.filename === lastSavedFile)) {
+                    selectSavedFile(lastSavedFile);
+                }
+            });
         });
     </script>
     <style>

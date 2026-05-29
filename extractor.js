@@ -35,8 +35,12 @@ function getMatchKey(s) {
         let m = n.match(/VTR(\d{2})/);
         if (m) return 'VTR' + m[1];
     }
-    if (n.startsWith('VCF') || n.startsWith('VF') || n.startsWith('DVF')) {
-        let m = n.match(/(?:VCF|VF|DVF)(\d)/);
+    if (n.startsWith('DVF')) {
+        let m = n.match(/DVF(\d)/);
+        if (m) return 'DVF' + m[1];
+    }
+    if (n.startsWith('VCF') || n.startsWith('VF')) {
+        let m = n.match(/(?:VCF|VF)(\d)/);
         if (m) return 'VF' + m[1];
     }
 
@@ -94,6 +98,67 @@ function extractMonth(s) {
         if (n >= 1 && n <= 12) return n;
     }
     return null;
+}
+
+function selectMeta(foundMetaList, finalSite, month, pName, mModel) {
+    if (!foundMetaList || foundMetaList.length === 0) return null;
+    if (foundMetaList.length === 1) return foundMetaList[0];
+    
+    // 1. Filter by site
+    let mpsMainPlant = '남산';
+    if (finalSite === '성주' || finalSite.includes('성주')) {
+        mpsMainPlant = '성주';
+    }
+    
+    const siteMatches = foundMetaList.filter(item => {
+        const itemSiteClean = item.site.replace(/^\d+\.\s*/, '').trim();
+        let itemMainPlant = '남산';
+        if (itemSiteClean.includes('성주') || itemSiteClean.includes('성우')) {
+            itemMainPlant = '성주';
+        }
+        return itemMainPlant === mpsMainPlant;
+    });
+    
+    const candidates = siteMatches.length > 0 ? siteMatches : foundMetaList;
+    if (candidates.length === 1) return candidates[0];
+    
+    // 2. Parse product suffix to find control type (H, S, F)
+    const parts = pName.split('-');
+    let targetKeyword = '';
+    if (parts.length > 1) {
+        const subCode = parts[1].toUpperCase();
+        if (subCode.includes('H')) targetKeyword = 'H';
+        else if (subCode.includes('S')) targetKeyword = 'S';
+    }
+    if (!targetKeyword) targetKeyword = 'F'; // Default to Fanuc
+    
+    // 3. Filter candidates by control type
+    let typeFiltered = [];
+    if (targetKeyword === 'H') {
+        typeFiltered = candidates.filter(c => c.rpm.toUpperCase().includes('H/H'));
+    } else if (targetKeyword === 'S') {
+        typeFiltered = candidates.filter(c => {
+            const up = c.rpm.toUpperCase();
+            return up.includes('SONE') || up.includes('SIEMENS') || up.includes('지멘스');
+        });
+    } else if (targetKeyword === 'F') {
+        typeFiltered = candidates.filter(c => {
+            const up = c.rpm.toUpperCase();
+            return !up.includes('H/H') && !up.includes('SONE') && !up.includes('SIEMENS') && !up.includes('지멘스');
+        });
+    }
+    
+    const finalCandidates = typeFiltered.length > 0 ? typeFiltered : candidates;
+    if (finalCandidates.length === 1) return finalCandidates[0];
+    
+    // 4. Filter by monthly plan quantity in the production sheet
+    const withPlanQty = finalCandidates.filter(c => c.monthlyPlan && c.monthlyPlan[month] > 0);
+    if (withPlanQty.length > 0) {
+        return withPlanQty.reduce((max, c) => (c.monthlyPlan[month] > max.monthlyPlan[month] ? c : max), withPlanQty[0]);
+    }
+    
+    // 5. Fallback
+    return finalCandidates[0];
 }
 
 function processMpsFile(input, rules = {}) {
@@ -192,7 +257,24 @@ function processMpsFile(input, rules = {}) {
 
     // Legacy V3.2 logic: Use "배포용" as a lookup for Site, Group, and RPM
     const metaMap = {};
-    let lastMetaSite = '', lastMetaGroup = '';
+    let lastMetaSite = '', lastMetaGroup = '', lastMetaModel = '';
+    
+    // Find month columns in production sheet dynamically
+    const prodMonthCols = {};
+    if (prodHeaderIdx !== -1) {
+        const headerRow = prodRaw[prodHeaderIdx];
+        headerRow.forEach((cell, idx) => {
+            if (!cell) return;
+            const str = cell.toString().trim();
+            const mMatch = str.match(/^(\d+)(?:월)?/);
+            if (mMatch) {
+                const mNum = parseInt(mMatch[1]);
+                if (mNum >= 1 && mNum <= 12) {
+                    prodMonthCols[mNum + '월'] = idx;
+                }
+            }
+        });
+    }
     
     prodRaw.forEach((row, idx) => {
         if (idx <= prodHeaderIdx) return;
@@ -203,15 +285,36 @@ function processMpsFile(input, rules = {}) {
         
         if (s) lastMetaSite = s;
         if (g) lastMetaGroup = g;
+        if (m) lastMetaModel = m;
         
-        if (m) {
-            const mKey = getMatchKey(m);
+        if (lastMetaModel) {
+            const mKey = getMatchKey(lastMetaModel);
             if (!metaMap[mKey]) {
                 metaMap[mKey] = [];
             }
-            const exists = metaMap[mKey].some(item => item.site === lastMetaSite && item.model === m);
+            
+            // Extract monthly planned quantities for this RPM row
+            const monthlyPlan = {};
+            for (const [monthName, colIdx] of Object.entries(prodMonthCols)) {
+                monthlyPlan[monthName] = parseInt(row[colIdx]) || 0;
+            }
+            
+            const exists = metaMap[mKey].some(item => item.site === lastMetaSite && item.model === lastMetaModel && item.rpm === rpm);
             if (!exists) {
-                metaMap[mKey].push({ site: lastMetaSite, group: lastMetaGroup, model: m, rpm: rpm });
+                metaMap[mKey].push({ 
+                    site: lastMetaSite, 
+                    group: lastMetaGroup, 
+                    model: lastMetaModel, 
+                    rpm: rpm,
+                    monthlyPlan: monthlyPlan
+                });
+            } else {
+                const existingItem = metaMap[mKey].find(item => item.site === lastMetaSite && item.model === lastMetaModel && item.rpm === rpm);
+                if (existingItem) {
+                    for (const [monthName, colIdx] of Object.entries(prodMonthCols)) {
+                        existingItem.monthlyPlan[monthName] = (existingItem.monthlyPlan[monthName] || 0) + (parseInt(row[colIdx]) || 0);
+                    }
+                }
             }
         }
     });
@@ -363,12 +466,21 @@ function processMpsFile(input, rules = {}) {
 
                 const q = parseInt(row[mCol.col]) || 0;
                 if (q > 0) {
+                    // Resolve monthly RPM dynamically
+                    let monthlyRPM = mRPM;
+                    if (foundMetaList && foundMetaList.length > 1) {
+                        const resolvedMeta = selectMeta(foundMetaList, finalSite, mCol.name, pName, mModel);
+                        if (resolvedMeta) {
+                            monthlyRPM = resolvedMeta.rpm;
+                        }
+                    }
+
                     // Create main results directly from MPS (This makes it look like V3.2)
                     finalResults.push({
                         Site: finalSite || '기타', 
                         Group: mGroup || '기타', 
                         Model: modelPart,
-                        RPM: mRPM, 
+                        RPM: monthlyRPM, 
                         Month: mCol.name, 
                         Code: mCode,
                         Product: pName, 
