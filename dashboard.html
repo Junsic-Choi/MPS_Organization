@@ -559,9 +559,6 @@
     <header style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; padding: 0 2rem;">
         <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V3.3 - Material/품명 정밀 매칭 엔진 적용</span></div>
         <div style="display: flex; gap: 1rem; align-items: center;">
-            <button class="btn" id="header-reset-btn" onclick="if(confirm('학습된 메모리를 삭제하시겠습니까?')) { localStorage.removeItem('mpsAutoModelMap'); alert('학습 메모리가 완전히 초기화되었습니다.'); location.reload(); }" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">
-                🧠 학습 메모리 초기화
-            </button>
             <div class="user-info" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">
                 실시간 엔진 업데이트 완료
             </div>
@@ -1275,64 +1272,7 @@ DST: 22. 지티테크`;
                 window.masterModels = result.masterModelsByGroup || null;
                 headers = ['Site', 'Model', 'RPM', 'Month', 'Code', 'Product'];
 
-                // ========================================================
-                // 🚀 새로 탑재된 클라이언트 영구 메모리 로직 (Auto-apply)
-                // ========================================================
-                let customModelMap = {};
-                try {
-                    customModelMap = JSON.parse(localStorage.getItem('mpsAutoModelMap')) || {};
-                } catch(e){}
 
-                // 아이템 그룹화 (배열을 위해)
-                const memoryGroups = {};
-                for (let i = unusedData.length - 1; i >= 0; i--) {
-                    const item = unusedData[i];
-                    const mapKey1 = (item.Group || '') + '|==|' + item.ProductName;
-                    const mapKey2 = '|==|' + item.ProductName;
-                    const savedTarget = customModelMap[mapKey1] || customModelMap[mapKey2];
-                    
-                    if (savedTarget) {
-                        const trackKey = mapKey1 + '|==|' + item.Month + '|==|' + item.Site;
-                        if (!memoryGroups[trackKey]) memoryGroups[trackKey] = { items: [], targetModel: savedTarget, group: item.Group||'', month: item.Month, product: item.ProductName };
-                        memoryGroups[trackKey].items.push({ item, originalIdx: i });
-                    }
-                }
-
-                Object.values(memoryGroups).forEach(mg => {
-                    let plan = null;
-                    if (window.masterPlan && window.masterPlan[mg.group] && window.masterPlan[mg.group][mg.targetModel]) {
-                        plan = window.masterPlan[mg.group][mg.targetModel][mg.month];
-                    }
-                    if ((!plan || plan.length === 0) && window.masterPlan) {
-                        // 전역 스캔 (그룹 불일치 대비)
-                        for (const g in window.masterPlan) {
-                            if (window.masterPlan[g][mg.targetModel]) {
-                                plan = window.masterPlan[g][mg.targetModel][mg.month];
-                                if (plan && plan.length > 0) break;
-                            }
-                        }
-                    }
-
-                    const assignments = getRpmAssignments(mg.items.length, plan, mg.product);
-                    
-                    mg.items.forEach((obj, idx) => {
-                        rawData.push({
-                            Site: obj.item.Site,
-                            Group: mg.group || '미분류(자동학습)',
-                            Model: mg.targetModel,
-                            RPM: assignments[idx],
-                            Month: mg.month,
-                            Code: obj.item.ModelCode,
-                            Product: obj.item.ProductName + ' (★메모리)'
-                        });
-                    });
-                });
-                
-                // unusedData에서 할당된 아이템 깔끔하게 지우기
-                const assignedIndices = new Set();
-                Object.values(memoryGroups).forEach(mg => mg.items.forEach(obj => assignedIndices.add(obj.originalIdx)));
-                unusedData = unusedData.filter((_, idx) => !assignedIndices.has(idx));
-                // ========================================================
 
                 actionArea.style.marginTop = '0';
                 actionArea.style.padding = '1.5rem';
@@ -1364,13 +1304,7 @@ DST: 22. 지티테크`;
             }
         }
 
-        function resetLearningMemory() {
-            if (confirm('브라우저가 학습한 모든 수동 매핑 메모리를 영구 삭제하시겠습니까?')) {
-                localStorage.removeItem('mpsAutoModelMap');
-                alert('학습 메모리가 초기화되었습니다. 페이지를 새로고침합니다.');
-                location.reload();
-            }
-        }
+
 
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
@@ -1479,149 +1413,7 @@ DST: 22. 지티테크`;
         };
 
 
-        function getRpmAssignments(totalQty, plan, productName) {
-            let assignments = [];
-            const parts = (productName||'').split('-');
-            
-            let targetKeyword = '';
-            if (parts.length > 1) {
-                const subCode = parts[1].toUpperCase();
-                if (subCode.includes('H')) targetKeyword = 'H';
-                else if (subCode.includes('S')) targetKeyword = 'S';
-            }
-            if (!targetKeyword) targetKeyword = 'F'; // Default to Fanuc
 
-            // 마스터 계획이 전혀 없을 경우 기본값 부여
-            if (!plan || plan.length === 0) {
-                let fallback = '기본';
-                if (targetKeyword === 'H') fallback = '12K(H/H)';
-                else if (targetKeyword === 'S') fallback = '12K(지멘스)';
-                else if (targetKeyword === 'F') fallback = '12K';
-                
-                for(let i=0; i<totalQty; i++) assignments.push(fallback);
-                return assignments;
-            }
-            
-            // 안전복사
-            let localPlan = plan.map(p => ({rpm: p.rpm, qty: p.qty}));
-            let remaining = totalQty;
-            
-            // 1. 타겟 키워드(H/S/F)에 따른 마스터 내 우선 배정 대상을 찾는다
-            const findTargetPlan = () => {
-                if (targetKeyword === 'H') {
-                    return localPlan.find(p => p.rpm.toUpperCase().includes('H/H'));
-                } else if (targetKeyword === 'S') {
-                    return localPlan.find(p => {
-                        const up = p.rpm.toUpperCase();
-                        return up.includes('SONE') || up.includes('SIEMENS') || up.includes('지멘스');
-                    });
-                } else if (targetKeyword === 'F') {
-                    return localPlan.find(p => {
-                        const up = p.rpm.toUpperCase();
-                        // H/H나 SONE, 지멘스가 아닌 일반 기종(Fanuc 등)을 F로 취급
-                        return !up.includes('H/H') && !up.includes('SONE') && !up.includes('SIEMENS') && !up.includes('지멘스');
-                    });
-                }
-            };
-
-            const targetPlan = findTargetPlan();
-
-            // 2. 우선 배정 대상(targetPlan)이 발견되었다면 수량 소진
-            if (targetPlan && targetPlan.qty > 0) {
-                let alloc = Math.min(targetPlan.qty, remaining);
-                for(let k=0; k<alloc; k++) assignments.push(targetPlan.rpm);
-                targetPlan.qty -= alloc;
-                remaining -= alloc;
-            } else {
-                // 마스터에 해당 목표가 없거나 다 소진되었지만 여전히 할당해야 한다면 강제화
-                // [User Feedback]: 원본 파일을 보고 RPM이 적혀있으면 수량만큼 매칭! (만약 타겟 쿼터가 모자라면 억지로라도 타겟으로 명시)
-                let forcedRpm = localPlan[0].rpm;
-                
-                if (targetKeyword === 'H' && !forcedRpm.includes('H/H')) {
-                    forcedRpm = forcedRpm.includes('(') ? forcedRpm.replace(/\(.*\)/, '(H/H)') : forcedRpm + '(H/H)';
-                } else if (targetKeyword === 'S' && !forcedRpm.toUpperCase().includes('SONE') && !forcedRpm.includes('지멘스')) {
-                    forcedRpm = forcedRpm.includes('(') ? forcedRpm.replace(/\(.*\)/, '(SONE)') : forcedRpm + '(SONE)';
-                }
-                
-                // 만약 targetPlan을 애초에 못찾았다면 (master sheet에 그 옵션이 없다면) 강제 배정 후 종류 유지
-                // => 무조건 해당 타겟으로 다 밀어버릴까? 아니면 남은 건 넘길까?
-                // => 만약 못 찾았을 때는 해당 속성이 강력하므로 전량 강제 할당
-                if (!targetPlan) {
-                    let alloc = remaining; 
-                    for(let k=0; k<alloc; k++) assignments.push(forcedRpm);
-                    remaining -= alloc;
-                }
-            }
-            
-            // 3. 만약 우선 배정 대상을 다 소거하고도 수량이 남았다면 일반 분배 (남은 쿼터 순서대로)
-            localPlan.forEach(p => {
-                if (remaining > 0 && p.qty > 0) {
-                    let alloc = Math.min(p.qty, remaining);
-                    for(let k=0; k<alloc; k++) assignments.push(p.rpm);
-                    p.qty -= alloc;
-                    remaining -= alloc;
-                }
-            });
-            
-            // 4. 그래도 남았다면 첫번째 RPM으로 몰아넣기
-            while(remaining > 0) {
-                assignments.push(localPlan[0].rpm);
-                remaining--;
-            }
-            return assignments;
-        }
-
-        window.approveProposal = function(idx, group, month, productName) {
-            if(!confirm('해당 항목을 제안된 비율대로 분할하여 모든 생산처에 일괄 할당하시겠습니까? (이 결정은 영구적으로 기억됩니다)')) return;
-            const selectEl = document.getElementById(`prop-select-${idx}`);
-            const targetModel = selectEl.value;
-            if (!targetModel) {
-                alert('매핑할 마스터 기종을 먼저 선택해주세요!');
-                return;
-            }
-
-            // 💾 메모리 저장 로직
-            try {
-                let customModelMap = JSON.parse(localStorage.getItem('mpsAutoModelMap')) || {};
-                customModelMap[(group || '') + '|==|' + productName] = targetModel;
-                localStorage.setItem('mpsAutoModelMap', JSON.stringify(customModelMap));
-            } catch(e) {
-                console.warn('로컬 저장 실패', e);
-            }
-
-            let plan = null;
-            if (window.masterPlan && window.masterPlan[group] && window.masterPlan[group][targetModel]) {
-                plan = window.masterPlan[group][targetModel][month];
-            }
-            if ((!plan || plan.length === 0) && window.masterPlan) {
-                for (const g in window.masterPlan) {
-                    if (window.masterPlan[g][targetModel]) {
-                        plan = window.masterPlan[g][targetModel][month];
-                        if (plan && plan.length > 0) break;
-                    }
-                }
-            }
-            
-            const itemsToMove = unusedData.filter(r => (r.Group || '') === group && r.Month === month && (r.UnmappedModel === productName || r.ProductName === productName));
-            const totalQty = itemsToMove.length;
-            
-            const assignments = getRpmAssignments(totalQty, plan, productName);
-
-            itemsToMove.forEach((item, i) => {
-                rawData.push({
-                    Site: item.Site,
-                    Group: group || '미분류(제안변환)',
-                    Model: targetModel,
-                    RPM: assignments[i],
-                    Month: item.Month,
-                    Code: item.ModelCode,
-                    Product: targetModel + ' (★)'
-                });
-            });
-
-            unusedData = unusedData.filter(r => !((r.Group || '') === group && r.Month === month && (r.UnmappedModel === productName || r.ProductName === productName)));
-            applyFilters();
-        };
 
         function toggleMasterEditor() {
             try {
