@@ -1844,6 +1844,38 @@ DST: 22. 지티테크`;
             applyFilters();
         }
 
+        function showToast(message) {
+            let toast = document.getElementById('copy-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'copy-toast';
+                toast.style.position = 'fixed';
+                toast.style.bottom = '20px';
+                toast.style.right = '20px';
+                toast.style.background = 'rgba(15, 23, 42, 0.9)';
+                toast.style.color = '#fff';
+                toast.style.padding = '10px 20px';
+                toast.style.borderRadius = '8px';
+                toast.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.3)';
+                toast.style.zIndex = '9999';
+                toast.style.fontFamily = 'sans-serif';
+                toast.style.fontSize = '0.9rem';
+                toast.style.transition = 'opacity 0.3s, transform 0.3s';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+            
+            clearTimeout(toast.timeoutId);
+            toast.timeoutId = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+            }, 1500);
+        }
+
         function copySalesDocs() {
             const salesDocs = filteredData
                 .map(row => (row.SalesDoc || '').toString().trim())
@@ -1857,20 +1889,21 @@ DST: 22. 지티테크`;
             }
             
             const textToCopy = uniqueSalesDocs.join('\n');
+            const successMsg = `📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다!\n\n[복사된 목록 첫 3건]:\n${uniqueSalesDocs.slice(0, 3).join('\n')}\n...`;
             
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(textToCopy).then(() => {
-                    alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다!\n\n[복사된 목록 첫 3건]:\n${uniqueSalesDocs.slice(0, 3).join('\n')}\n...`);
+                    alert(successMsg);
                 }).catch(err => {
                     console.error('클립보드 복사 실패, Fallback 실행:', err);
-                    fallbackCopyText(textToCopy, uniqueSalesDocs.length);
+                    fallbackCopyText(textToCopy, successMsg);
                 });
             } else {
-                fallbackCopyText(textToCopy, uniqueSalesDocs.length);
+                fallbackCopyText(textToCopy, successMsg);
             }
         }
 
-        function fallbackCopyText(text, count) {
+        function fallbackCopyText(text, successMessage = null, useToast = false) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
             textArea.style.position = 'fixed';
@@ -1883,7 +1916,13 @@ DST: 22. 지티테크`;
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
-                    alert(`📋 총 ${count}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다! (Fallback)`);
+                    if (successMessage) {
+                        if (useToast) {
+                            showToast(successMessage);
+                        } else {
+                            alert(successMessage);
+                        }
+                    }
                 } else {
                     alert('클립보드 복사에 실패했습니다.');
                 }
@@ -1979,13 +2018,16 @@ DST: 22. 지티테크`;
 
                     const textToCopy = textLines.join('\n');
 
+                    const successMsg = `📋 선택한 ${selectedCells.length}개 셀이 클립보드에 복사되었습니다.`;
                     if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(textToCopy).catch(err => {
+                        navigator.clipboard.writeText(textToCopy).then(() => {
+                            showToast(successMsg);
+                        }).catch(err => {
                             console.error('클립보드 복사 실패:', err);
-                            fallbackCopyText(textToCopy, selectedCells.length);
+                            fallbackCopyText(textToCopy, successMsg, true);
                         });
                     } else {
-                        fallbackCopyText(textToCopy, selectedCells.length);
+                        fallbackCopyText(textToCopy, successMsg, true);
                     }
                 }
             });
