@@ -791,6 +791,18 @@
         let filteredData = [];
         let headers = [];
         let currentTab = 'main';
+        let currentSortKey = null;
+        let currentSortDirection = null;
+
+        function getCellValue(row, h) {
+            let val = row[h] || '';
+            if (row.isUnmapped) {
+                if (h === 'Model') val = row['UnmappedModel'] || row['Model'] || '';
+                if (h === 'Product') val = row['ProductName'] || '';
+                if (h === 'Code') val = row['ModelCode'] || '';
+            }
+            return val.toString().trim();
+        }
         window.masterPlan = null;
         window.masterModels = null;
 
@@ -1465,6 +1477,30 @@ DST: 22. 지티테크`;
                 return matchSite && matchGroup && matchMonth && matchSearch;
             });
 
+            // 정렬 적용
+            if (currentSortKey && currentSortDirection) {
+                filteredData.sort((a, b) => {
+                    let valA = getCellValue(a, currentSortKey);
+                    let valB = getCellValue(b, currentSortKey);
+                    
+                    if (currentSortKey === 'Qty') {
+                        const numA = parseInt(valA) || 0;
+                        const numB = parseInt(valB) || 0;
+                        return currentSortDirection === 'asc' ? numA - numB : numB - numA;
+                    }
+                    
+                    if (currentSortKey === 'Month') {
+                        const numA = parseInt(valA.replace(/[^0-9]/g, '')) || 0;
+                        const numB = parseInt(valB.replace(/[^0-9]/g, '')) || 0;
+                        return currentSortDirection === 'asc' ? numA - numB : numB - numA;
+                    }
+                    
+                    return currentSortDirection === 'asc' 
+                        ? valA.localeCompare(valB, 'ko', { numeric: true }) 
+                        : valB.localeCompare(valA, 'ko', { numeric: true });
+                });
+            }
+
             const totalQtySum = filteredData.reduce((acc, row) => acc + (parseInt(row.Qty) || 0), 0);
             totalRowsSpan.textContent = totalQtySum.toLocaleString();
 
@@ -1490,6 +1526,7 @@ DST: 22. 지티테크`;
             const tableHead = document.getElementById('table-head');
             const tableBody = document.getElementById('table-body');
             tableHead.innerHTML = ''; tableBody.innerHTML = '';
+            if (typeof clearCellSelection === 'function') clearCellSelection();
 
             const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
             const labels = {
@@ -1500,7 +1537,27 @@ DST: 22. 지티테크`;
 
             activeHeaders.forEach(h => {
                 const th = document.createElement('th');
-                th.textContent = labels[h] || h;
+                th.style.cursor = 'pointer';
+                th.style.userSelect = 'none';
+                
+                let labelText = labels[h] || h;
+                if (currentSortKey === h) {
+                    labelText += currentSortDirection === 'asc' ? ' ▲' : ' ▼';
+                    th.style.color = '#3b82f6'; // Highlight sort column
+                } else {
+                    labelText += ' ↕';
+                }
+                th.textContent = labelText;
+                
+                th.onclick = () => {
+                    if (currentSortKey === h) {
+                        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortKey = h;
+                        currentSortDirection = 'asc';
+                    }
+                    applyFilters();
+                };
                 tableHead.appendChild(th);
             });
 
@@ -1837,11 +1894,136 @@ DST: 22. 지티테크`;
             document.body.removeChild(textArea);
         }
 
+        let isSelecting = false;
+        let startCell = { rowIndex: -1, colIndex: -1 };
+        let endCell = { rowIndex: -1, colIndex: -1 };
+
+        function initCellSelection() {
+            const tbody = document.getElementById('table-body');
+            const table = document.getElementById('data-table');
+            
+            if (!tbody || !table) return;
+
+            tbody.addEventListener('mousedown', (e) => {
+                const td = e.target.closest('td');
+                if (!td) return;
+
+                e.preventDefault(); // Prevent default text selection drag
+
+                const tr = td.parentElement;
+                const rowIndex = Array.from(tbody.rows).indexOf(tr);
+                const colIndex = Array.from(tr.cells).indexOf(td);
+
+                if (rowIndex !== -1 && colIndex !== -1) {
+                    isSelecting = true;
+                    startCell = { rowIndex, colIndex };
+                    endCell = { rowIndex, colIndex };
+                    updateSelectionVisuals();
+                }
+            });
+
+            table.addEventListener('mousemove', (e) => {
+                if (!isSelecting) return;
+                const td = e.target.closest('td');
+                if (!td) return;
+
+                const tr = td.parentElement;
+                const rowIndex = Array.from(tbody.rows).indexOf(tr);
+                const colIndex = Array.from(tr.cells).indexOf(td);
+
+                if (rowIndex !== -1 && colIndex !== -1) {
+                    endCell = { rowIndex, colIndex };
+                    updateSelectionVisuals();
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isSelecting = false;
+            });
+
+            // Clear selection when clicking outside table
+            document.addEventListener('mousedown', (e) => {
+                if (!e.target.closest('#data-table')) {
+                    clearCellSelection();
+                }
+            });
+
+            // Copy selected cells on Ctrl+C / Cmd+C
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                    const selectedCells = document.querySelectorAll('#table-body td.selected-cell');
+                    if (selectedCells.length === 0) return;
+
+                    const activeEl = document.activeElement;
+                    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                        return;
+                    }
+
+                    e.preventDefault();
+
+                    const rowsMap = {};
+                    selectedCells.forEach(cell => {
+                        const tr = cell.parentElement;
+                        const rIdx = Array.from(tbody.rows).indexOf(tr);
+                        const cIdx = Array.from(tr.cells).indexOf(cell);
+                        if (!rowsMap[rIdx]) rowsMap[rIdx] = [];
+                        rowsMap[rIdx].push({ cIdx, text: cell.textContent.trim() });
+                    });
+
+                    const sortedRowKeys = Object.keys(rowsMap).sort((a, b) => parseInt(a) - parseInt(b));
+                    const textLines = sortedRowKeys.map(rIdx => {
+                        const rowCells = rowsMap[rIdx];
+                        rowCells.sort((a, b) => a.cIdx - b.cIdx);
+                        return rowCells.map(c => c.text).join('\t');
+                    });
+
+                    const textToCopy = textLines.join('\n');
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(textToCopy).catch(err => {
+                            console.error('클립보드 복사 실패:', err);
+                            fallbackCopyText(textToCopy, selectedCells.length);
+                        });
+                    } else {
+                        fallbackCopyText(textToCopy, selectedCells.length);
+                    }
+                }
+            });
+        }
+
+        function updateSelectionVisuals() {
+            const tbody = document.getElementById('table-body');
+            if (!tbody) return;
+
+            const minRow = Math.min(startCell.rowIndex, endCell.rowIndex);
+            const maxRow = Math.max(startCell.rowIndex, endCell.rowIndex);
+            const minCol = Math.min(startCell.colIndex, endCell.colIndex);
+            const maxCol = Math.max(startCell.colIndex, endCell.colIndex);
+
+            Array.from(tbody.rows).forEach((row, rIdx) => {
+                Array.from(row.cells).forEach((cell, cIdx) => {
+                    if (rIdx >= minRow && rIdx <= maxRow && cIdx >= minCol && cIdx <= maxCol) {
+                        cell.classList.add('selected-cell');
+                    } else {
+                        cell.classList.remove('selected-cell');
+                    }
+                });
+            });
+        }
+
+        function clearCellSelection() {
+            const selected = document.querySelectorAll('#table-body td.selected-cell');
+            selected.forEach(c => c.classList.remove('selected-cell'));
+            startCell = { rowIndex: -1, colIndex: -1 };
+            endCell = { rowIndex: -1, colIndex: -1 };
+        }
+
 
 
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
             loadSiteMaster();
+            initCellSelection();
             
             // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택
             fetchSavedMpsFiles().then(() => {
@@ -1853,6 +2035,14 @@ DST: 22. 지티테크`;
         });
     </script>
     <style>
+        #data-table {
+            user-select: none;
+        }
+        #data-table td.selected-cell {
+            background-color: rgba(59, 130, 246, 0.15) !important;
+            outline: 1.5px solid #3b82f6;
+            outline-offset: -1.5px;
+        }
         .sap-upload-box {
             display: flex;
             flex-direction: column;
