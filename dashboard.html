@@ -796,8 +796,6 @@
 
         const DEFAULT_SITE_MASTER = `I0215116: 07. 삼광
 I0205716: 09. 서진
-I0206873: 성주
-I0206954: 성주
 I0215001: LEO
 I0212077: 성우
 0AM1: MC1직_조립_1840
@@ -1803,23 +1801,42 @@ DST: 22. 지티테크`;
             
             const textToCopy = uniqueSalesDocs.join('\n');
             
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다!\n\n[복사된 목록 첫 3건]:\n${uniqueSalesDocs.slice(0, 3).join('\n')}\n...`);
-            }).catch(err => {
-                console.error('클립보드 복사 실패:', err);
-                const textArea = document.createElement('textarea');
-                textArea.value = textToCopy;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다! (Fallback)`);
-                } catch (e) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert(`📋 총 ${uniqueSalesDocs.length}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다!\n\n[복사된 목록 첫 3건]:\n${uniqueSalesDocs.slice(0, 3).join('\n')}\n...`);
+                }).catch(err => {
+                    console.error('클립보드 복사 실패, Fallback 실행:', err);
+                    fallbackCopyText(textToCopy, uniqueSalesDocs.length);
+                });
+            } else {
+                fallbackCopyText(textToCopy, uniqueSalesDocs.length);
+            }
+        }
+
+        function fallbackCopyText(text, count) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert(`📋 총 ${count}건의 고유 SALES DOC 번호가 클립보드에 복사되었습니다! (Fallback)`);
+                } else {
                     alert('클립보드 복사에 실패했습니다.');
                 }
-                document.body.removeChild(textArea);
-            });
+            } catch (err) {
+                console.error('Fallback 복사 실패:', err);
+                alert('클립보드 복사에 실패했습니다.');
+            }
+            document.body.removeChild(textArea);
         }
+
 
 
         window.addEventListener('DOMContentLoaded', () => {

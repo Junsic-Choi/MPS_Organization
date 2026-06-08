@@ -8,7 +8,8 @@ tmp_extraction/
 *.xlsb
 *.xlsm
 *.xls
-# *.xlsx  # 메인 데이터 파일은 포함할 수도 있으므로 주석 처리하거나 개별 관리
+*.xlsx
+scratch/
 *.csv
 
 # 로그 및 임시 출력 파일
