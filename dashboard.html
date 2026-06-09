@@ -728,6 +728,7 @@
                     <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 .MHTML 파일을 올려 기종별 상세 정보를 결합합니다. (Sales Doc, 시작일 포함)</div>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <button onclick="autoLoadServerMhtml()" class="btn-small" id="btn-autoload" style="background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; height: 36px; margin-top: 15px;">서버 파일 자동 로드</button>
                     <div class="sap-upload-box">
                         <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-bottom:4px;">1842(성주)</label>
                         <input type="file" id="sap-1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1842')">
@@ -1195,6 +1196,7 @@ DST: 22. 지티테크`;
             return s;
         }
 
+
         // MPS 시트 원시 코드 → 정식 명칭 변환 (보조 수단)
         const mpsSiteMap = {
             "1840":"01. 남산", "1841":"01. 남산", "1":"01. 남산", "10":"01. 남산(보조)",
@@ -1615,6 +1617,44 @@ DST: 22. 지티테크`;
             reader.readAsText(file);
         }
 
+        async function autoLoadServerMhtml() {
+            const btn = document.getElementById('btn-autoload');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⚡ 로딩 중...';
+            try {
+                const r1840 = await fetch('/export.MHTML');
+                if (!r1840.ok) throw new Error('export.MHTML 로드 실패');
+                const t1840 = await r1840.text();
+                sapData['1840'] = parseSapMhtml(t1840);
+                document.getElementById('btn-1840').textContent = `✅ export.MHTML`;
+                document.getElementById('btn-1840').style.background = 'var(--success)';
+                document.getElementById('btn-1840').style.color = 'white';
+
+                const r1842 = await fetch('/export2.MHTML');
+                if (!r1842.ok) throw new Error('export2.MHTML 로드 실패');
+                const t1842 = await r1842.text();
+                sapData['1842'] = parseSapMhtml(t1842);
+                document.getElementById('btn-1842').textContent = `✅ export2.MHTML`;
+                document.getElementById('btn-1842').style.background = 'var(--success)';
+                document.getElementById('btn-1842').style.color = 'white';
+
+                checkJoinReady();
+                btn.style.background = 'var(--success)';
+                btn.textContent = '✅ 완료';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#10b981';
+                    btn.disabled = false;
+                }, 2000);
+            } catch (err) {
+                alert('서버 MHTML 자동 로드 실패: ' + err.message);
+                console.error(err);
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
         function checkJoinReady() {
             const hasData = sapData['1842'].length > 0 || sapData['1840'].length > 0;
             document.getElementById('join-btn').disabled = !hasData;
@@ -1676,7 +1716,12 @@ DST: 22. 지티테크`;
             }
 
             const findIdx = (keywords) => {
-                return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+                let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                if (idx !== -1) return idx;
+                return headerCells.findIndex(cell => keywords.some(k => {
+                    if (k === 'MATERIAL' && cell.includes('DESCRIPTION')) return false;
+                    return cell.includes(k);
+                }));
             };
 
             const mapping = {
@@ -1742,17 +1787,33 @@ DST: 22. 지티테크`;
                 const qty = parseInt(row.Qty) || 0;
                 const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
                 
+                // Optimize: precompute variables and filter candidates outside the qty loop
+                const mpsProduct = (row.Product || '').trim();
+                const mpsModelKey = getMatchKey(row.Model);
+                const rowCodeUpper = row.Code ? row.Code.trim().toUpperCase() : '';
+                const rowModel = row.Model;
+
+                // Filter candidates by Month and version criteria once per row
+                const candidates = sourceSap.filter(s => {
+                    if (s.Month !== row.Month) return false;
+                    // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
+                    return (!s.Ver || !rowCodeUpper) || (s.Ver.trim().toUpperCase() === rowCodeUpper);
+                });
+                
                 for (let i = 0; i < qty; i++) {
-                    const mpsProduct = (row.Product || '').trim();
-                    const mpsModelKey = getMatchKey(row.Model);
-                    
-                    // 정밀 매칭 (1순위: Material(SAP) === 품명(MPS), 2순위: 기종명 매칭)
-                    const sapMatch = sourceSap.find(s => {
-                        if (s.Used || s.Month !== row.Month) return false;
+                    // Find first unused matching candidate in the filtered subset
+                    const sapMatch = candidates.find(s => {
+                        if (s.Used) return false;
+                        
+                        // 두 자재 코드가 모두 존재할 경우 반드시 정확히 일치해야 함 (버전/국가코드 불일치 조인 방지)
+                        if (s.Material && mpsProduct) {
+                            if (s.Material !== mpsProduct) {
+                                return false;
+                            }
+                        }
                         
                         const isMaterialMatch = s.Material && s.Material === mpsProduct;
-                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(row.Model));
-                        
+                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
                         return isMaterialMatch || isModelMatch;
                     });
                     
@@ -1793,14 +1854,32 @@ DST: 22. 지티테크`;
                 const qty = parseInt(row.Qty) || 0;
                 const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
                 
+                // Optimize: precompute variables and filter candidates outside the qty loop
+                const mpsProduct = (row.ProductName || '').trim();
+                const mpsModelKey = getMatchKey(row.UnmappedModel);
+                const rowModelCodeUpper = row.ModelCode ? row.ModelCode.trim().toUpperCase() : '';
+                const rowUnmappedModel = row.UnmappedModel;
+
+                // Filter candidates by Month and version criteria once per row
+                const candidates = sourceSap.filter(s => {
+                    if (s.Month !== row.Month) return false;
+                    // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
+                    return (!s.Ver || !rowModelCodeUpper) || (s.Ver.trim().toUpperCase() === rowModelCodeUpper);
+                });
+                
                 for (let i = 0; i < qty; i++) {
-                    const mpsProduct = (row.ProductName || '').trim();
-                    const mpsModelKey = getMatchKey(row.UnmappedModel);
-                    
-                    const sapMatch = sourceSap.find(s => {
-                        if (s.Used || s.Month !== row.Month) return false;
+                    const sapMatch = candidates.find(s => {
+                        if (s.Used) return false;
+                        
+                        // 두 자재 코드가 모두 존재할 경우 반드시 정확히 일치해야 함 (버전/국가코드 불일치 조인 방지)
+                        if (s.Material && mpsProduct) {
+                            if (s.Material !== mpsProduct) {
+                                return false;
+                            }
+                        }
+                        
                         const isMaterialMatch = s.Material && s.Material === mpsProduct;
-                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(row.UnmappedModel) || row.UnmappedModel.includes(s.ModelRaw)));
+                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
                         return isMaterialMatch || isModelMatch;
                     });
                     
