@@ -1779,6 +1779,18 @@ DST: 22. 지티테크`;
         function joinSapDetails() {
             if (!confirm('현재 분석 결과에 SAP 상세 정보를 결합하시겠습니까?\n모든 데이터가 수량 단위에서 시리얼 단위(1:1)로 전환됩니다.')) return;
 
+            const normalizeMaterialForComparison = (mat) => {
+                if (!mat) return '';
+                let s = mat.toString().trim().toUpperCase();
+                const parts = s.split('-');
+                if (parts.length > 1) {
+                    const lastIdx = parts.length - 1;
+                    parts[lastIdx] = parts[lastIdx].replace(/[A-Z]/g, '');
+                    return parts.join('-');
+                }
+                return s;
+            };
+
             const newRawData = [];
             const newUnusedData = [];
 
@@ -1796,6 +1808,14 @@ DST: 22. 지티테크`;
                 // Filter candidates by Month and version criteria once per row
                 const candidates = sourceSap.filter(s => {
                     if (s.Month !== row.Month) return false;
+                    
+                    // 성주 사업장의 경우 버전이 없거나 PL코드(I...)가 들어가므로 버전 매칭은 생략함
+                    const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
+                    const isPlCode = rowCodeUpper.startsWith('I');
+                    if (isSeongju || isPlCode) {
+                        return true;
+                    }
+                    
                     // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
                     return (!s.Ver || !rowCodeUpper) || (s.Ver.trim().toUpperCase() === rowCodeUpper);
                 });
@@ -1805,14 +1825,17 @@ DST: 22. 지티테크`;
                     const sapMatch = candidates.find(s => {
                         if (s.Used) return false;
                         
-                        // 두 자재 코드가 모두 존재할 경우 반드시 정확히 일치해야 함 (버전/국가코드 불일치 조인 방지)
-                        if (s.Material && mpsProduct) {
-                            if (s.Material !== mpsProduct) {
+                        const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
+                        const normSapMaterial = normalizeMaterialForComparison(s.Material);
+
+                        // 두 자재 코드가 모두 존재할 경우 국가 식별 알파벳을 제외하고 나머지가 일치해야 함
+                        if (normSapMaterial && normMpsProduct) {
+                            if (normSapMaterial !== normMpsProduct) {
                                 return false;
                             }
                         }
                         
-                        const isMaterialMatch = s.Material && s.Material === mpsProduct;
+                        const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
                         const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
                         return isMaterialMatch || isModelMatch;
                     });
@@ -1863,6 +1886,14 @@ DST: 22. 지티테크`;
                 // Filter candidates by Month and version criteria once per row
                 const candidates = sourceSap.filter(s => {
                     if (s.Month !== row.Month) return false;
+                    
+                    // 성주 사업장의 경우 버전이 없거나 PL코드(I...)가 들어가므로 버전 매칭은 생략함
+                    const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
+                    const isPlCode = rowModelCodeUpper.startsWith('I');
+                    if (isSeongju || isPlCode) {
+                        return true;
+                    }
+                    
                     // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
                     return (!s.Ver || !rowModelCodeUpper) || (s.Ver.trim().toUpperCase() === rowModelCodeUpper);
                 });
@@ -1871,14 +1902,17 @@ DST: 22. 지티테크`;
                     const sapMatch = candidates.find(s => {
                         if (s.Used) return false;
                         
-                        // 두 자재 코드가 모두 존재할 경우 반드시 정확히 일치해야 함 (버전/국가코드 불일치 조인 방지)
-                        if (s.Material && mpsProduct) {
-                            if (s.Material !== mpsProduct) {
+                        const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
+                        const normSapMaterial = normalizeMaterialForComparison(s.Material);
+
+                        // 두 자재 코드가 모두 존재할 경우 국가 식별 알파벳을 제외하고 나머지가 일치해야 함
+                        if (normSapMaterial && normMpsProduct) {
+                            if (normSapMaterial !== normMpsProduct) {
                                 return false;
                             }
                         }
                         
-                        const isMaterialMatch = s.Material && s.Material === mpsProduct;
+                        const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
                         const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
                         return isMaterialMatch || isModelMatch;
                     });
