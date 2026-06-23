@@ -3,8 +3,17 @@
   "version": "1.0.0",
   "description": "MPS Dashboard with PowerShell Extractor",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
     "start": "node server.js"
+  },
+  "pkg": {
+    "assets": [
+      "dashboard.html"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ]
   },
   "dependencies": {
     "cors": "^2.8.6",

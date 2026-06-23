@@ -1,10 +1,11 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const multer = require('multer');
 const { processMpsFile } = require('./extractor');
+
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -27,11 +28,12 @@ app.get('/', (req, res) => {
 // 가용 파일 목록 조회 API
 app.get('/api/list-files', (req, res) => {
     try {
-        const files = fs.readdirSync(__dirname)
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const files = fs.readdirSync(uploadDir)
             .filter(f => f.startsWith('MPS') && f.endsWith('.xlsx'))
             .sort().reverse(); // 최신순 (이름 기준)
         const filesWithDetails = files.map(filename => {
-            const filePath = path.join(__dirname, filename);
+            const filePath = path.join(uploadDir, filename);
             const stats = fs.statSync(filePath);
             return {
                 filename,
@@ -65,8 +67,9 @@ app.post('/api/extract-live', upload.single('file'), async (req, res) => {
         
         console.log(`[api] Live extract started: ${req.file.originalname} (${req.file.size} bytes)`);
         
-        // 업로드된 파일을 서버에 저장
-        const savePath = path.join(__dirname, req.file.originalname);
+        // 업로드된 파일을 서버에 저장 (exe 실행 시 exe 파일과 같은 폴더에 저장되도록 유도)
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const savePath = path.join(uploadDir, req.file.originalname);
         fs.writeFileSync(savePath, req.file.buffer);
         console.log(`[api] File saved to server: ${savePath}`);
         
@@ -92,7 +95,8 @@ app.post('/api/extract-saved', async (req, res) => {
             return res.status(400).json({ success: false, error: '파일명이 제공되지 않았습니다.' });
         }
         
-        const filePath = path.join(__dirname, filename);
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const filePath = path.join(uploadDir, filename);
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ success: false, error: `파일을 찾을 수 없습니다: ${filename}` });
         }
@@ -116,6 +120,15 @@ app.post('/api/extract-saved', async (req, res) => {
         console.error(`[api] Saved file extract failed:`, err);
         res.status(500).json({ success: false, error: err.message });
     }
+});
+
+// 서버 종료 API
+app.post('/api/shutdown', (req, res) => {
+    console.log('[api] Shutdown requested. Exiting...');
+    res.json({ success: true, message: 'Server is shutting down...' });
+    setTimeout(() => {
+        process.exit(0);
+    }, 1000);
 });
 
 // Multer & General Error Handler
@@ -145,6 +158,13 @@ function broadcastLog(msg) {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`MPS Server LIVE on Port ${PORT}`);
+    
+    // Automatically open browser on startup
+    const url = `http://localhost:${PORT}`;
+    const startCmd = process.platform === 'win32' ? 'start ""' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
+    exec(`${startCmd} "${url}"`, (err) => {
+        if (err) console.error('Failed to open browser:', err);
+    });
 });
 
 server.on('error', (err) => {
