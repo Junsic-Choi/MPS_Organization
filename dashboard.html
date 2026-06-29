@@ -33,6 +33,15 @@
             font-family: 'Inter', sans-serif;
         }
 
+        #summary-table {
+            border-collapse: collapse !important;
+            width: 100%;
+        }
+        #summary-table th, #summary-table td {
+            border: 1px solid var(--border-color) !important;
+            padding: 0.8rem 1.2rem;
+        }
+
         body {
             background-color: var(--bg-color);
             color: var(--text-primary);
@@ -789,7 +798,8 @@
 
         <div class="tab-system" id="tab-system" style="display: none;">
             <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
-            <button class="tab-btn" id="tab-master" style="margin-left: auto;">⚙️ 사이트 마스터</button>
+            <button class="tab-btn" id="tab-summary" style="margin-left: auto;">📈 요약 대시보드</button>
+            <button class="tab-btn" id="tab-master">⚙️ 사이트 마스터</button>
         </div>
 
         <!-- Stats -->
@@ -838,6 +848,40 @@
                     <tr id="table-head"></tr>
                 </thead>
                 <tbody id="table-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Summary Data Grid (Summary Tab) -->
+        <div class="table-container" id="summary-container" style="display: none;">
+            <!-- Comparison Controls Card -->
+            <div id="compare-controls" style="display: flex; gap: 1rem; align-items: center; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">📊 계획 데이터 비교 분석 (Comparison Mode)</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">두 개의 생산 계획 파일을 선택하여 변동 내역(추가/삭제/지연)을 비교 분석합니다.</div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                    <div class="compare-select-box">
+                        <label for="compare-file-a" style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px;">기준 계획 (파일 A)</label>
+                        <select id="compare-file-a" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem; border-radius:6px; font-size:0.85rem; width:180px;"></select>
+                    </div>
+                    <div class="compare-select-box">
+                        <label for="compare-file-b" style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px;">대비 계획 (파일 B)</label>
+                        <select id="compare-file-b" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem; border-radius:6px; font-size:0.85rem; width:180px;"></select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 1.2rem;">
+                        <input type="checkbox" id="compare-intersection-only" onchange="if(window.compareMode) runComparison()">
+                        <label for="compare-intersection-only" style="font-size:0.85rem; color:var(--text-primary); cursor:pointer; user-select:none;">공통 기간만 보기</label>
+                    </div>
+                    <button onclick="runComparison()" class="btn" id="compare-btn" style="background: var(--accent-color); color:white; padding: 0.6rem 1.2rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; margin-top: 1.2rem; height: 38px;">비교 실행</button>
+                    <button onclick="exitComparison()" class="btn" id="compare-exit-btn" style="background: rgba(239, 68, 68, 0.2); color:#ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.6rem 1.2rem; font-weight:600; border-radius:8px; cursor:pointer; margin-top: 1.2rem; height: 38px; display: none;">비교 종료</button>
+                </div>
+            </div>
+            
+            <table id="summary-table" style="width: 100%; min-width: unset;">
+                <thead id="summary-head">
+                    <!-- Dynamic header row will be appended here -->
+                </thead>
+                <tbody id="summary-body"></tbody>
             </table>
         </div>
 
@@ -906,6 +950,7 @@
         const actionArea = document.getElementById('action-area');
         const checkUnmapped = document.getElementById('check-unmapped');
         const tabMain = document.getElementById('tab-main');
+        const tabSummary = document.getElementById('tab-summary');
 
         let rawData = [];
         let unusedData = [];
@@ -1062,6 +1107,7 @@ DST: 22. 지티테크`;
                 if (data.success && data.files) {
                     savedMpsFiles = data.files;
                     renderSavedFilesList();
+                    populateCompareSelects();
                 } else {
                     listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오기 실패</div>';
                 }
@@ -1433,6 +1479,9 @@ DST: 22. 지티테크`;
             } finally {
                 processingText.style.display = 'none';
                 loader.style.display = 'none';
+                extractBtn.disabled = false;
+                const span = extractBtn.querySelector('span');
+                if (span) span.textContent = '🚀 선택된 파일 분석 시작';
             }
         }
 
@@ -1448,7 +1497,12 @@ DST: 22. 지티테크`;
             const groupsSet = new Set();
             const monthsSet = new Set();
 
-            const activeData = [...rawData, ...unusedData];
+            let activeData;
+            if (window.compareMode) {
+                activeData = [...window.compareRawA, ...window.compareRawB];
+            } else {
+                activeData = [...rawData, ...unusedData];
+            }
 
             activeData.forEach(row => {
                 if (row['Site']) sitesSet.add(row['Site']);
@@ -1488,7 +1542,12 @@ DST: 22. 지티테크`;
         }
 
         function updateGroupOptions() {
-            const activeData = [...rawData, ...unusedData];
+            let activeData;
+            if (window.compareMode) {
+                activeData = [...window.compareRawA, ...window.compareRawB];
+            } else {
+                activeData = [...rawData, ...unusedData];
+            }
 
             const addedSites = activeFilters.selectedSites.filter(s => !lastSelectedSites.includes(s));
             const removedSites = lastSelectedSites.filter(s => !activeFilters.selectedSites.includes(s));
@@ -1715,10 +1774,16 @@ DST: 22. 지티테크`;
 
         searchModel.addEventListener('input', applyFilters);
         checkUnmapped.addEventListener('change', applyFilters);
-
         function switchTab(tabId) {
             currentTab = tabId;
             tabMain.classList.toggle('active', tabId === 'main');
+            if (tabSummary) tabSummary.classList.toggle('active', tabId === 'summary');
+            if (tabId === 'summary') {
+                populateCompareSelects();
+            }
+            
+            // Save active tab in localStorage
+            localStorage.setItem('mps_active_tab', tabId);
             
             // 탭 변경 시 마스터 에디터 닫기
             const overlay = document.getElementById('master-editor-overlay');
@@ -1730,7 +1795,8 @@ DST: 22. 지티테크`;
         }
 
         tabMain.addEventListener('click', () => switchTab('main'));
-        
+        if (tabSummary) tabSummary.addEventListener('click', () => switchTab('summary'));
+
         document.getElementById('tab-master').onclick = function(e) {
             e.preventDefault();
             toggleMasterEditor();
@@ -1830,14 +1896,882 @@ DST: 22. 지티테크`;
                 copySalesDocBtn.style.display = sapCount > 0 ? 'flex' : 'none';
             }
 
-            renderTable();
+            if (currentTab === 'summary') {
+                if (window.compareMode) {
+                    applyComparisonFilters();
+                } else {
+                    renderSummaryTable();
+                }
+            } else {
+                renderTable();
+            }
+        }
+
+        function renderSummaryTable() {
+            const tableContainer = document.getElementById('table-container');
+            const summaryContainer = document.getElementById('summary-container');
+            const dualContainer = document.getElementById('dual-container');
+            
+            tableContainer.style.display = 'none';
+            summaryContainer.style.display = 'block';
+            dualContainer.style.display = 'none';
+            
+            const summaryHead = document.getElementById('summary-head');
+            const summaryBody = document.getElementById('summary-body');
+            
+            summaryHead.innerHTML = '';
+            summaryBody.innerHTML = '';
+            
+            // 1. Get sorted unique months from filteredData
+            const monthsSet = new Set();
+            filteredData.forEach(row => {
+                if (row.Month) {
+                    monthsSet.add(row.Month);
+                }
+            });
+            const sortedMonths = Array.from(monthsSet);
+            sortedMonths.sort((a, b) => {
+                const getMonthNum = (m) => parseInt(m.replace(/[^0-9]/g, '')) || 0;
+                return getMonthNum(a) - getMonthNum(b);
+            });
+            
+            // 2. Build header row
+            const trHead = document.createElement('tr');
+            
+            const thDiv = document.createElement('th');
+            thDiv.textContent = '구분';
+            thDiv.style.textAlign = 'center';
+            thDiv.style.width = '10%';
+            trHead.appendChild(thDiv);
+            
+            const thGroup = document.createElement('th');
+            thGroup.textContent = '기종분류';
+            thGroup.style.textAlign = 'center';
+            thGroup.style.width = '18%';
+            trHead.appendChild(thGroup);
+            
+            const thModel = document.createElement('th');
+            thModel.textContent = '기종';
+            thModel.style.textAlign = 'center';
+            thModel.style.width = '17%';
+            trHead.appendChild(thModel);
+            
+            const thSite = document.createElement('th');
+            thSite.textContent = '생산처';
+            thSite.style.textAlign = 'center';
+            thSite.style.width = '12%';
+            trHead.appendChild(thSite);
+            
+            // Dynamic month headers
+            sortedMonths.forEach(month => {
+                const thMonth = document.createElement('th');
+                thMonth.textContent = month;
+                thMonth.style.textAlign = 'right';
+                trHead.appendChild(thMonth);
+            });
+            
+            const thTotal = document.createElement('th');
+            thTotal.textContent = '합계';
+            thTotal.style.textAlign = 'right';
+            thTotal.style.width = '8%';
+            trHead.appendChild(thTotal);
+            
+            summaryHead.appendChild(trHead);
+            
+            // 3. Group data by (division, group, model, site) and month
+            const pivotData = {};
+            filteredData.forEach(row => {
+                const division = getDivision(row.Group) || '기타';
+                const group = row.Group || '-';
+                const model = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
+                const site = row.Site || '-';
+                const month = row.Month || '-';
+                const qty = parseInt(row.Qty) || 0;
+                
+                const rowKey = `${division}||${group}||${model}||${site}`;
+                if (!pivotData[rowKey]) {
+                    pivotData[rowKey] = {
+                        division,
+                        group,
+                        model,
+                        site,
+                        monthlyQty: {}
+                    };
+                }
+                
+                if (!pivotData[rowKey].monthlyQty[month]) {
+                    pivotData[rowKey].monthlyQty[month] = 0;
+                }
+                pivotData[rowKey].monthlyQty[month] += qty;
+            });
+            
+            const rowList = Object.values(pivotData);
+            
+            // 4. Sort rowList by division -> group -> model -> site
+            rowList.sort((a, b) => {
+                const divComp = a.division.localeCompare(b.division, 'ko');
+                if (divComp !== 0) return divComp;
+                
+                const grpComp = a.group.localeCompare(b.group, 'ko');
+                if (grpComp !== 0) return grpComp;
+                
+                const modelComp = a.model.localeCompare(b.model, 'ko');
+                if (modelComp !== 0) return modelComp;
+                
+                return a.site.localeCompare(b.site, 'ko');
+            });
+            
+            // 5. Calculate rowspans for cell merging
+            let i = 0;
+            while (i < rowList.length) {
+                let j = i;
+                while (j < rowList.length && rowList[j].division === rowList[i].division) {
+                    j++;
+                }
+                const divCount = j - i;
+                
+                let k = i;
+                while (k < j) {
+                    let l = k;
+                    while (l < j && rowList[l].group === rowList[k].group) {
+                        l++;
+                    }
+                    const grpCount = l - k;
+                    
+                    rowList[k].grpSpan = grpCount;
+                    for (let m = k + 1; m < l; m++) {
+                        rowList[m].grpSpan = 0;
+                    }
+                    
+                    // Inside group k to l, calculate model rowspan
+                    let n = k;
+                    while (n < l) {
+                        let p = n;
+                        while (p < l && rowList[p].model === rowList[n].model) {
+                            p++;
+                        }
+                        const modelCount = p - n;
+                        
+                        rowList[n].modelSpan = modelCount;
+                        for (let m = n + 1; m < p; m++) {
+                            rowList[m].modelSpan = 0;
+                        }
+                        n = p;
+                    }
+                    
+                    k = l;
+                }
+                
+                rowList[i].divSpan = divCount;
+                for (let m = i + 1; m < j; m++) {
+                    rowList[m].divSpan = 0;
+                }
+                
+                i = j;
+            }
+            
+            // 6. Render rows
+            rowList.forEach(item => {
+                const tr = document.createElement('tr');
+                
+                // Division Cell (with rowspan if applicable)
+                if (item.divSpan > 0) {
+                    const tdDiv = document.createElement('td');
+                    tdDiv.textContent = item.division;
+                    tdDiv.rowSpan = item.divSpan;
+                    tdDiv.style.textAlign = 'center';
+                    tdDiv.style.fontWeight = 'bold';
+                    tdDiv.style.background = 'var(--surface-hover)';
+                    tdDiv.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdDiv);
+                }
+                
+                // Group Cell (with rowspan if applicable)
+                if (item.grpSpan > 0) {
+                    const tdGroup = document.createElement('td');
+                    tdGroup.textContent = item.group;
+                    tdGroup.rowSpan = item.grpSpan;
+                    tdGroup.style.fontWeight = '500';
+                    tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
+                    tdGroup.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdGroup);
+                }
+                
+                // Model Cell (with rowspan if applicable)
+                if (item.modelSpan > 0) {
+                    const tdModel = document.createElement('td');
+                    tdModel.textContent = item.model;
+                    tdModel.rowSpan = item.modelSpan;
+                    tdModel.style.fontWeight = '500';
+                    tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
+                    tdModel.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdModel);
+                }
+                
+                // Site Cell
+                const tdSite = document.createElement('td');
+                tdSite.textContent = item.site;
+                tdSite.style.textAlign = 'center';
+                tr.appendChild(tdSite);
+                
+                // Monthly Qty Cells
+                let rowSum = 0;
+                sortedMonths.forEach(month => {
+                    const tdMonthVal = document.createElement('td');
+                    const qty = item.monthlyQty[month] || 0;
+                    tdMonthVal.textContent = qty > 0 ? qty.toLocaleString() : '-';
+                    tdMonthVal.style.textAlign = 'right';
+                    if (qty > 0) {
+                        tdMonthVal.style.fontWeight = '500';
+                    } else {
+                        tdMonthVal.style.color = 'var(--text-secondary)';
+                        tdMonthVal.style.opacity = '0.5';
+                    }
+                    tr.appendChild(tdMonthVal);
+                    rowSum += qty;
+                });
+                
+                // Row Total Cell
+                const tdTotalVal = document.createElement('td');
+                tdTotalVal.textContent = rowSum.toLocaleString();
+                tdTotalVal.style.textAlign = 'right';
+                tdTotalVal.style.fontWeight = 'bold';
+                tdTotalVal.style.color = 'var(--success)';
+                tdTotalVal.style.background = 'rgba(16, 185, 129, 0.05)';
+                tr.appendChild(tdTotalVal);
+                
+                summaryBody.appendChild(tr);
+            });
+        }
+
+        window.compareMode = false;
+        window.compareRawA = [];
+        window.compareRawB = [];
+
+        function filterDataset(dataset) {
+            const searchVal = searchModel.value.toLowerCase();
+            const unmappedOnly = checkUnmapped.checked;
+            
+            return dataset.filter(row => {
+                if (unmappedOnly && !row.isUnmapped) return false;
+
+                const matchSite = activeFilters.selectedSites.includes(row['Site'] || '') || (!row['Site'] && activeFilters.selectedSites.length === activeFilters.sites.length);
+                const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
+                const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
+                const division = getDivision(row['Group']);
+                const matchDivision = activeFilters.selectedDivisions.includes(division);
+                
+                const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
+                const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
+                const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
+
+                const matchSearch = !searchVal || 
+                                   model.includes(searchVal) ||
+                                   product.includes(searchVal) ||
+                                   code.includes(searchVal);
+                
+                return matchSite && matchGroup && matchMonth && matchDivision && matchSearch;
+            });
+        }
+
+        function populateCompareSelects() {
+            const selectA = document.getElementById('compare-file-a');
+            const selectB = document.getElementById('compare-file-b');
+            if (!selectA || !selectB) return;
+
+            const currentValA = selectA.value;
+            const currentValB = selectB.value;
+
+            selectA.innerHTML = '<option value="">-- 파일 선택 --</option>';
+            selectB.innerHTML = '<option value="">-- 파일 선택 --</option>';
+
+            savedMpsFiles.forEach(file => {
+                const optA = document.createElement('option');
+                optA.value = file.filename;
+                optA.textContent = file.filename;
+                selectA.appendChild(optA);
+
+                const optB = document.createElement('option');
+                optB.value = file.filename;
+                optB.textContent = file.filename;
+                selectB.appendChild(optB);
+            });
+
+            if (currentValA && savedMpsFiles.some(f => f.filename === currentValA)) selectA.value = currentValA;
+            if (currentValB && savedMpsFiles.some(f => f.filename === currentValB)) selectB.value = currentValB;
+        }
+
+        async function runComparison() {
+            const fileA = document.getElementById('compare-file-a').value;
+            const fileB = document.getElementById('compare-file-b').value;
+            const intersectionOnly = document.getElementById('compare-intersection-only').checked;
+
+            if (!fileA || !fileB) {
+                alert('비교할 두 파일을 모두 선택해 주세요.');
+                return;
+            }
+            if (fileA === fileB) {
+                alert('서로 다른 두 파일을 선택해 주세요.');
+                return;
+            }
+
+            const compareBtn = document.getElementById('compare-btn');
+            compareBtn.disabled = true;
+            compareBtn.textContent = '⌛ 비교 분석 중...';
+
+            try {
+                const rules = {
+                    siteMaster: manualSiteMap,
+                    realSiteLookup: realSiteLookup
+                };
+
+                const resA = await fetch('/api/extract-saved', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: fileA, rules })
+                });
+                if (!resA.ok) throw new Error(`${fileA} 분석 실패`);
+                const dataA = await resA.json();
+
+                const resB = await fetch('/api/extract-saved', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: fileB, rules })
+                });
+                if (!resB.ok) throw new Error(`${fileB} 분석 실패`);
+                const dataB = await resB.json();
+
+                window.compareRawA = [...(dataA.finalResults || []), ...(dataA.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
+                window.compareRawB = [...(dataB.finalResults || []), ...(dataB.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
+                window.compareMode = true;
+
+                populateFilters();
+                document.getElementById('compare-exit-btn').style.display = 'inline-block';
+                applyComparisonFilters();
+            } catch (err) {
+                alert('비교 중 오류가 발생했습니다: ' + err.message);
+                console.error(err);
+            } finally {
+                compareBtn.disabled = false;
+                compareBtn.textContent = '비교 실행';
+            }
+        }
+
+        function exitComparison() {
+            window.compareMode = false;
+            populateFilters();
+            document.getElementById('compare-exit-btn').style.display = 'none';
+            document.getElementById('compare-file-a').value = '';
+            document.getElementById('compare-file-b').value = '';
+            applyFilters();
+        }
+
+        function applyComparisonFilters() {
+            const filteredA = filterDataset(window.compareRawA);
+            const filteredB = filterDataset(window.compareRawB);
+            const intersectionOnly = document.getElementById('compare-intersection-only').checked;
+            renderComparisonTable(filteredA, filteredB, intersectionOnly);
+        }
+
+        function renderComparisonTable(filteredA, filteredB, intersectionOnly) {
+            const tableContainer = document.getElementById('table-container');
+            const summaryContainer = document.getElementById('summary-container');
+            const dualContainer = document.getElementById('dual-container');
+            
+            tableContainer.style.display = 'none';
+            summaryContainer.style.display = 'block';
+            dualContainer.style.display = 'none';
+            
+            const summaryHead = document.getElementById('summary-head');
+            const summaryBody = document.getElementById('summary-body');
+            
+            summaryHead.innerHTML = '';
+            summaryBody.innerHTML = '';
+
+            const monthsA = new Set();
+            filteredA.forEach(row => { if (row.Month) monthsA.add(row.Month); });
+            const monthsB = new Set();
+            filteredB.forEach(row => { if (row.Month) monthsB.add(row.Month); });
+
+            const getMonthNum = (m) => parseInt(m.replace(/[^0-9]/g, '')) || 0;
+            const sortedMonthsA = Array.from(monthsA).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+            const sortedMonthsB = Array.from(monthsB).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+
+            let targetMonths = [];
+            if (intersectionOnly) {
+                targetMonths = sortedMonthsA.filter(m => monthsB.has(m));
+            } else {
+                const allMonths = new Set([...monthsA, ...monthsB]);
+                targetMonths = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+            }
+
+            const tr1 = document.createElement('tr');
+            
+            const thDiv = document.createElement('th');
+            thDiv.textContent = '구분';
+            thDiv.rowSpan = 2;
+            thDiv.style.textAlign = 'center';
+            thDiv.style.width = '8%';
+            tr1.appendChild(thDiv);
+
+            const thGroup = document.createElement('th');
+            thGroup.textContent = '기종분류';
+            thGroup.rowSpan = 2;
+            thGroup.style.textAlign = 'center';
+            thGroup.style.width = '14%';
+            tr1.appendChild(thGroup);
+
+            const thModel = document.createElement('th');
+            thModel.textContent = '기종';
+            thModel.rowSpan = 2;
+            thModel.style.textAlign = 'center';
+            thModel.style.width = '13%';
+            tr1.appendChild(thModel);
+
+            const thSite = document.createElement('th');
+            thSite.textContent = '생산처';
+            thSite.rowSpan = 2;
+            thSite.style.textAlign = 'center';
+            thSite.style.width = '10%';
+            tr1.appendChild(thSite);
+
+            targetMonths.forEach(month => {
+                const thMonth = document.createElement('th');
+                thMonth.textContent = month;
+                thMonth.colSpan = 3;
+                thMonth.style.textAlign = 'center';
+                const hasA = monthsA.has(month);
+                const hasB = monthsB.has(month);
+                if (!hasA || !hasB) {
+                    thMonth.style.background = 'rgba(255, 255, 255, 0.05)';
+                    thMonth.style.color = 'var(--text-secondary)';
+                }
+                tr1.appendChild(thMonth);
+            });
+
+            const thTotal = document.createElement('th');
+            thTotal.textContent = '합계';
+            thTotal.colSpan = 3;
+            thTotal.style.textAlign = 'center';
+            tr1.appendChild(thTotal);
+
+            summaryHead.appendChild(tr1);
+
+            const tr2 = document.createElement('tr');
+            targetMonths.forEach(month => {
+                const hasA = monthsA.has(month);
+                const hasB = monthsB.has(month);
+
+                const thA = document.createElement('th');
+                thA.textContent = 'A';
+                thA.style.textAlign = 'right';
+                thA.style.fontSize = '0.75rem';
+                if (!hasA) {
+                    thA.style.background = 'rgba(0, 0, 0, 0.2)';
+                    thA.style.opacity = '0.4';
+                }
+                tr2.appendChild(thA);
+
+                const thB = document.createElement('th');
+                thB.textContent = 'B';
+                thB.style.textAlign = 'right';
+                thB.style.fontSize = '0.75rem';
+                if (!hasB) {
+                    thB.style.background = 'rgba(0, 0, 0, 0.2)';
+                    thB.style.opacity = '0.4';
+                }
+                tr2.appendChild(thB);
+
+                const thDiff = document.createElement('th');
+                thDiff.textContent = 'Δ';
+                thDiff.style.textAlign = 'right';
+                thDiff.style.fontSize = '0.75rem';
+                if (!hasA || !hasB) {
+                    thDiff.style.background = 'rgba(0, 0, 0, 0.2)';
+                    thDiff.style.opacity = '0.4';
+                }
+                tr2.appendChild(thDiff);
+            });
+
+            const thTotA = document.createElement('th');
+            thTotA.textContent = 'A합';
+            thTotA.style.textAlign = 'right';
+            thTotA.style.fontSize = '0.75rem';
+            tr2.appendChild(thTotA);
+
+            const thTotB = document.createElement('th');
+            thTotB.textContent = 'B합';
+            thTotB.style.textAlign = 'right';
+            thTotB.style.fontSize = '0.75rem';
+            tr2.appendChild(thTotB);
+
+            const thTotDiff = document.createElement('th');
+            thTotDiff.textContent = 'Δ';
+            thTotDiff.style.textAlign = 'right';
+            thTotDiff.style.fontSize = '0.75rem';
+            tr2.appendChild(thTotDiff);
+
+            summaryHead.appendChild(tr2);
+
+            const pivotData = {};
+            const addData = (row, fileLabel) => {
+                const division = getDivision(row.Group) || '기타';
+                const group = row.Group || '-';
+                const model = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
+                const site = row.Site || '-';
+                const month = row.Month || '-';
+                const qty = parseInt(row.Qty) || 0;
+
+                const rowKey = `${division}||${group}||${model}||${site}`;
+                if (!pivotData[rowKey]) {
+                    pivotData[rowKey] = {
+                        division,
+                        group,
+                        model,
+                        site,
+                        monthlyQtyA: {},
+                        monthlyQtyB: {}
+                    };
+                }
+
+                const targetQtyObj = fileLabel === 'A' ? pivotData[rowKey].monthlyQtyA : pivotData[rowKey].monthlyQtyB;
+                if (!targetQtyObj[month]) {
+                    targetQtyObj[month] = 0;
+                }
+                targetQtyObj[month] += qty;
+            };
+
+            filteredA.forEach(row => addData(row, 'A'));
+            filteredB.forEach(row => addData(row, 'B'));
+
+            const rowList = Object.values(pivotData);
+
+            rowList.sort((a, b) => {
+                const divComp = a.division.localeCompare(b.division, 'ko');
+                if (divComp !== 0) return divComp;
+                
+                const grpComp = a.group.localeCompare(b.group, 'ko');
+                if (grpComp !== 0) return grpComp;
+                
+                const modelComp = a.model.localeCompare(b.model, 'ko');
+                if (modelComp !== 0) return modelComp;
+                
+                return a.site.localeCompare(b.site, 'ko');
+            });
+
+            let i = 0;
+            while (i < rowList.length) {
+                let j = i;
+                while (j < rowList.length && rowList[j].division === rowList[i].division) {
+                    j++;
+                }
+                const divCount = j - i;
+                
+                let k = i;
+                while (k < j) {
+                    let l = k;
+                    while (l < j && rowList[l].group === rowList[k].group) {
+                        l++;
+                    }
+                    const grpCount = l - k;
+                    
+                    rowList[k].grpSpan = grpCount;
+                    for (let m = k + 1; m < l; m++) {
+                        rowList[m].grpSpan = 0;
+                    }
+                    
+                    let n = k;
+                    while (n < l) {
+                        let p = n;
+                        while (p < l && rowList[p].model === rowList[n].model) {
+                            p++;
+                        }
+                        const modelCount = p - n;
+                        
+                        rowList[n].modelSpan = modelCount;
+                        for (let m = n + 1; m < p; m++) {
+                            rowList[m].modelSpan = 0;
+                        }
+                        n = p;
+                    }
+                    
+                    k = l;
+                }
+                
+                rowList[i].divSpan = divCount;
+                for (let m = i + 1; m < j; m++) {
+                    rowList[m].divSpan = 0;
+                }
+                
+                i = j;
+            }
+
+            rowList.forEach(item => {
+                const tr = document.createElement('tr');
+
+                if (item.divSpan > 0) {
+                    const tdDiv = document.createElement('td');
+                    tdDiv.textContent = item.division;
+                    tdDiv.rowSpan = item.divSpan;
+                    tdDiv.style.textAlign = 'center';
+                    tdDiv.style.fontWeight = 'bold';
+                    tdDiv.style.background = 'var(--surface-hover)';
+                    tdDiv.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdDiv);
+                }
+
+                if (item.grpSpan > 0) {
+                    const tdGroup = document.createElement('td');
+                    tdGroup.textContent = item.group;
+                    tdGroup.rowSpan = item.grpSpan;
+                    tdGroup.style.fontWeight = '500';
+                    tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
+                    tdGroup.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdGroup);
+                }
+
+                if (item.modelSpan > 0) {
+                    const tdModel = document.createElement('td');
+                    tdModel.textContent = item.model;
+                    tdModel.rowSpan = item.modelSpan;
+                    tdModel.style.fontWeight = '500';
+                    tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
+                    tdModel.style.borderRight = '1px solid var(--border-color)';
+                    tr.appendChild(tdModel);
+                }
+
+                const tdSite = document.createElement('td');
+                tdSite.textContent = item.site;
+                tdSite.style.textAlign = 'center';
+                tr.appendChild(tdSite);
+
+                let rowSumA = 0;
+                let rowSumB = 0;
+
+                targetMonths.forEach(month => {
+                    const hasA = monthsA.has(month);
+                    const hasB = monthsB.has(month);
+
+                    const qtyA = item.monthlyQtyA[month] || 0;
+                    const qtyB = item.monthlyQtyB[month] || 0;
+                    const diff = qtyB - qtyA;
+
+                    rowSumA += qtyA;
+                    rowSumB += qtyB;
+
+                    const tdA = document.createElement('td');
+                    tdA.style.textAlign = 'right';
+                    if (!hasA) {
+                        tdA.textContent = '-';
+                        tdA.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdA.style.opacity = '0.3';
+                        tdA.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                    } else {
+                        tdA.textContent = qtyA > 0 ? qtyA.toLocaleString() : '-';
+                        if (qtyA === 0) tdA.style.opacity = '0.5';
+                    }
+                    tr.appendChild(tdA);
+
+                    const tdB = document.createElement('td');
+                    tdB.style.textAlign = 'right';
+                    if (!hasB) {
+                        tdB.textContent = '-';
+                        tdB.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdB.style.opacity = '0.3';
+                        tdB.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                    } else {
+                        tdB.textContent = qtyB > 0 ? qtyB.toLocaleString() : '-';
+                        if (qtyB === 0) tdB.style.opacity = '0.5';
+                    }
+                    tr.appendChild(tdB);
+
+                    const tdDiff = document.createElement('td');
+                    tdDiff.style.textAlign = 'right';
+                    tdDiff.style.fontWeight = 'bold';
+                    if (!hasA || !hasB) {
+                        tdDiff.textContent = '-';
+                        tdDiff.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdDiff.style.opacity = '0.3';
+                        tdDiff.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                    } else {
+                        if (diff > 0) {
+                            tdDiff.textContent = `+${diff.toLocaleString()}`;
+                            tdDiff.style.color = '#10b981';
+                            tdDiff.style.background = 'rgba(16, 185, 129, 0.05)';
+                        } else if (diff < 0) {
+                            tdDiff.textContent = diff.toLocaleString();
+                            tdDiff.style.color = '#ef4444';
+                            tdDiff.style.background = 'rgba(239, 68, 68, 0.05)';
+                        } else {
+                            tdDiff.textContent = '-';
+                            tdDiff.style.color = 'var(--text-secondary)';
+                            tdDiff.style.opacity = '0.5';
+                        }
+                    }
+                    tr.appendChild(tdDiff);
+                });
+
+                const tdTotValA = document.createElement('td');
+                tdTotValA.textContent = rowSumA > 0 ? rowSumA.toLocaleString() : '-';
+                tdTotValA.style.textAlign = 'right';
+                tdTotValA.style.fontWeight = '500';
+                tr.appendChild(tdTotValA);
+
+                const tdTotValB = document.createElement('td');
+                tdTotValB.textContent = rowSumB > 0 ? rowSumB.toLocaleString() : '-';
+                tdTotValB.style.textAlign = 'right';
+                tdTotValB.style.fontWeight = '500';
+                tr.appendChild(tdTotValB);
+
+                const tdTotValDiff = document.createElement('td');
+                const rowDiff = rowSumB - rowSumA;
+                if (rowDiff > 0) {
+                    tdTotValDiff.textContent = `+${rowDiff.toLocaleString()}`;
+                    tdTotValDiff.style.color = '#10b981';
+                    tdTotValDiff.style.background = 'rgba(16, 185, 129, 0.1)';
+                } else if (rowDiff < 0) {
+                    tdTotValDiff.textContent = rowDiff.toLocaleString();
+                    tdTotValDiff.style.color = '#ef4444';
+                    tdTotValDiff.style.background = 'rgba(239, 68, 68, 0.1)';
+                } else {
+                    tdTotValDiff.textContent = '-';
+                    tdTotValDiff.style.opacity = '0.5';
+                }
+                tdTotValDiff.style.textAlign = 'right';
+                tdTotValDiff.style.fontWeight = 'bold';
+                tr.appendChild(tdTotValDiff);
+
+                summaryBody.appendChild(tr);
+            });
+
+            // Grand Total Row
+            if (rowList.length > 0) {
+                const trTotal = document.createElement('tr');
+                trTotal.style.fontWeight = 'bold';
+                trTotal.style.background = 'rgba(59, 130, 246, 0.08)';
+                trTotal.style.borderTop = '2px double var(--border-color)';
+                trTotal.style.borderBottom = '2px double var(--border-color)';
+                
+                const tdLabel = document.createElement('td');
+                tdLabel.textContent = '합계';
+                tdLabel.colSpan = 4;
+                tdLabel.style.textAlign = 'center';
+                tdLabel.style.background = 'var(--surface-hover)';
+                trTotal.appendChild(tdLabel);
+
+                let grandSumA = 0;
+                let grandSumB = 0;
+
+                targetMonths.forEach(month => {
+                    const hasA = monthsA.has(month);
+                    const hasB = monthsB.has(month);
+
+                    let monthlyTotalA = 0;
+                    let monthlyTotalB = 0;
+
+                    rowList.forEach(item => {
+                        monthlyTotalA += item.monthlyQtyA[month] || 0;
+                        monthlyTotalB += item.monthlyQtyB[month] || 0;
+                    });
+
+                    grandSumA += monthlyTotalA;
+                    grandSumB += monthlyTotalB;
+
+                    const diff = monthlyTotalB - monthlyTotalA;
+
+                    // A Total Cell
+                    const tdTotalA = document.createElement('td');
+                    tdTotalA.style.textAlign = 'right';
+                    if (!hasA) {
+                        tdTotalA.textContent = '-';
+                        tdTotalA.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdTotalA.style.opacity = '0.3';
+                    } else {
+                        tdTotalA.textContent = monthlyTotalA > 0 ? monthlyTotalA.toLocaleString() : '-';
+                    }
+                    trTotal.appendChild(tdTotalA);
+
+                    // B Total Cell
+                    const tdTotalB = document.createElement('td');
+                    tdTotalB.style.textAlign = 'right';
+                    if (!hasB) {
+                        tdTotalB.textContent = '-';
+                        tdTotalB.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdTotalB.style.opacity = '0.3';
+                    } else {
+                        tdTotalB.textContent = monthlyTotalB > 0 ? monthlyTotalB.toLocaleString() : '-';
+                    }
+                    trTotal.appendChild(tdTotalB);
+
+                    // Diff Total Cell
+                    const tdTotalDiff = document.createElement('td');
+                    tdTotalDiff.style.textAlign = 'right';
+                    tdTotalDiff.style.fontWeight = 'bold';
+                    if (!hasA || !hasB) {
+                        tdTotalDiff.textContent = '-';
+                        tdTotalDiff.style.background = 'rgba(0, 0, 0, 0.1)';
+                        tdTotalDiff.style.opacity = '0.3';
+                    } else {
+                        if (diff > 0) {
+                            tdTotalDiff.textContent = `+${diff.toLocaleString()}`;
+                            tdTotalDiff.style.color = '#10b981';
+                            tdTotalDiff.style.background = 'rgba(16, 185, 129, 0.08)';
+                        } else if (diff < 0) {
+                            tdTotalDiff.textContent = diff.toLocaleString();
+                            tdTotalDiff.style.color = '#ef4444';
+                            tdTotalDiff.style.background = 'rgba(239, 68, 68, 0.08)';
+                        } else {
+                            tdTotalDiff.textContent = '-';
+                            tdTotalDiff.style.opacity = '0.5';
+                        }
+                    }
+                    trTotal.appendChild(tdTotalDiff);
+                });
+
+                // Grand Totals Column A
+                const tdGrandA = document.createElement('td');
+                tdGrandA.textContent = grandSumA > 0 ? grandSumA.toLocaleString() : '-';
+                tdGrandA.style.textAlign = 'right';
+                tdGrandA.style.color = 'var(--success)';
+                trTotal.appendChild(tdGrandA);
+
+                // Grand Totals Column B
+                const tdGrandB = document.createElement('td');
+                tdGrandB.textContent = grandSumB > 0 ? grandSumB.toLocaleString() : '-';
+                tdGrandB.style.textAlign = 'right';
+                tdGrandB.style.color = 'var(--success)';
+                trTotal.appendChild(tdGrandB);
+
+                // Grand Totals Column Diff
+                const tdGrandDiff = document.createElement('td');
+                const diffGrand = grandSumB - grandSumA;
+                if (diffGrand > 0) {
+                    tdGrandDiff.textContent = `+${diffGrand.toLocaleString()}`;
+                    tdGrandDiff.style.color = '#10b981';
+                    tdGrandDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                } else if (diffGrand < 0) {
+                    tdGrandDiff.textContent = diffGrand.toLocaleString();
+                    tdGrandDiff.style.color = '#ef4444';
+                    tdGrandDiff.style.background = 'rgba(239, 68, 68, 0.15)';
+                } else {
+                    tdGrandDiff.textContent = '-';
+                    tdGrandDiff.style.opacity = '0.5';
+                }
+                tdGrandDiff.style.textAlign = 'right';
+                tdGrandDiff.style.fontWeight = 'bold';
+                trTotal.appendChild(tdGrandDiff);
+
+                summaryBody.appendChild(trTotal);
+            }
         }
 
         function renderTable() {
             const tableContainer = document.getElementById('table-container');
+            const summaryContainer = document.getElementById('summary-container');
             const dualContainer = document.getElementById('dual-container');
             
             tableContainer.style.display = 'block';
+            summaryContainer.style.display = 'none';
             dualContainer.style.display = 'none';
             
             const tableHead = document.getElementById('table-head');
@@ -2459,11 +3393,20 @@ DST: 22. 지티테크`;
             loadSiteMaster();
             initCellSelection();
             
-            // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택
+            // Restore active tab from localStorage
+            const savedTab = localStorage.getItem('mps_active_tab') || 'main';
+            currentTab = savedTab;
+            
+            if (tabMain) tabMain.classList.toggle('active', currentTab === 'main');
+            if (tabSummary) tabSummary.classList.toggle('active', currentTab === 'summary');
+            
+            // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택 및 자동 실행
             fetchSavedMpsFiles().then(() => {
                 const lastSavedFile = localStorage.getItem('lastMpsFilename');
                 if (lastSavedFile && savedMpsFiles.some(f => f.filename === lastSavedFile)) {
                     selectSavedFile(lastSavedFile);
+                    // 자동 분석 실행
+                    startExtraction();
                 }
             });
         });
@@ -2485,6 +3428,50 @@ DST: 22. 지티테크`;
 
         // ========== Pretty Excel Export (xlsx-js-style) ==========
         function exportToExcel() {
+            if (window.compareMode) {
+                const table = document.getElementById('summary-table');
+                if (!table) {
+                    alert("내보낼 비교 데이터가 없습니다.");
+                    return;
+                }
+                const ws = XLSX.utils.table_to_sheet(table);
+                
+                // Apply font styling to sheet cells
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    ws[key].s = {
+                        font: { name: "맑은 고딕", sz: 10 },
+                        alignment: { vertical: "center" }
+                    };
+                    // Highlight diff cells if value contains + or -
+                    const val = ws[key].v;
+                    if (typeof val === 'string') {
+                        if (val.startsWith('+')) {
+                            ws[key].s.font.color = { rgb: "10B981" };
+                            ws[key].s.font.bold = true;
+                        } else if (val.startsWith('-') && val !== '-') {
+                            ws[key].s.font.color = { rgb: "EF4444" };
+                            ws[key].s.font.bold = true;
+                        }
+                    }
+                });
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "계획 비교 결과");
+                
+                const now = new Date();
+                const dateStr = now.getFullYear() + 
+                                String(now.getMonth() + 1).padStart(2, '0') + 
+                                String(now.getDate()).padStart(2, '0') + "_" + 
+                                String(now.getHours()).padStart(2, '0') + 
+                                String(now.getMinutes()).padStart(2, '0') + 
+                                String(now.getSeconds()).padStart(2, '0');
+                
+                const filename = `MPS_Comparison_${dateStr}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                return;
+            }
+
             if (!filteredData || filteredData.length === 0) {
                 alert("내보낼 데이터가 없습니다.");
                 return;

@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 rem Background Server Start
 taskkill /f /im node.exe >nul 2>&1
 timeout /t 1 /nobreak >nul

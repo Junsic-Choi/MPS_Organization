@@ -1,15 +1,26 @@
+@chcp 65001 >nul
 @echo off
-title [MPS 생산계획 대시보드 서버 - 실행 중]
+cd /d "%~dp0"
+title [MPS Dashboard Server]
 cls
 echo ==========================================================
-echo   MPS 생산계획 대시보드 서버가 실행 중입니다.
-echo   이 창을 닫으면 대시보드가 종료됩니다.
-echo   사용 완료 후 브라우저의 [서버 종료] 버튼을 누르면
-echo   이 창도 자동으로 함께 닫힙니다.
+echo   MPS Dashboard Server is running.
+echo   Please do not close this window.
+echo   If you want to stop the server, press Ctrl+C or close this window.
 echo ==========================================================
 echo.
+
 taskkill /f /im mps_dashboard.exe >nul 2>&1
 taskkill /f /im node.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
-mps_dashboard.exe
-exit
+
+if exist mps_dashboard.exe (
+    mps_dashboard.exe
+) else (
+    echo [INFO] mps_dashboard.exe not found. Running with Node.js...
+    node server.js
+)
+
+echo.
+echo [DEBUG] Server process terminated.
+pause
