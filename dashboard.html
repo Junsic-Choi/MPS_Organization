@@ -877,6 +877,26 @@
                 </div>
             </div>
             
+            <!-- Comparison Summary Cards -->
+            <div id="compare-summary-cards" style="display: none; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <div class="summary-card" style="flex: 1; min-width: 200px; background: var(--surface-color); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">기준 계획 (A) 총수량</div>
+                    <div id="compare-stat-qty-a" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0대</div>
+                </div>
+                <div class="summary-card" style="flex: 1; min-width: 200px; background: var(--surface-color); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">대비 계획 (B) 총수량</div>
+                    <div id="compare-stat-qty-b" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0대</div>
+                </div>
+                <div class="summary-card" style="flex: 1; min-width: 200px; background: var(--surface-color); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">순수 계획 변동량 (Net Delta)</div>
+                    <div id="compare-stat-delta" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0대</div>
+                </div>
+                <div class="summary-card" style="flex: 1; min-width: 200px; background: var(--surface-color); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">변동 발생 기종 수</div>
+                    <div id="compare-stat-changed-models" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">0개 기종</div>
+                </div>
+            </div>
+            
             <table id="summary-table" style="width: 100%; min-width: unset;">
                 <thead id="summary-head">
                     <!-- Dynamic header row will be appended here -->
@@ -2261,6 +2281,7 @@ DST: 22. 지티테크`;
             window.compareMode = false;
             populateFilters();
             document.getElementById('compare-exit-btn').style.display = 'none';
+            document.getElementById('compare-summary-cards').style.display = 'none';
             document.getElementById('compare-file-a').value = '';
             document.getElementById('compare-file-b').value = '';
             applyFilters();
@@ -2340,10 +2361,12 @@ DST: 22. 지티테크`;
                 thMonth.textContent = month;
                 thMonth.colSpan = 3;
                 thMonth.style.textAlign = 'center';
+                thMonth.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
+                
                 const hasA = monthsA.has(month);
                 const hasB = monthsB.has(month);
                 if (!hasA || !hasB) {
-                    thMonth.style.background = 'rgba(255, 255, 255, 0.05)';
+                    thMonth.style.background = 'rgba(255, 255, 255, 0.03)';
                     thMonth.style.color = 'var(--text-secondary)';
                 }
                 tr1.appendChild(thMonth);
@@ -2353,6 +2376,7 @@ DST: 22. 지티테크`;
             thTotal.textContent = '합계';
             thTotal.colSpan = 3;
             thTotal.style.textAlign = 'center';
+            thTotal.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
             tr1.appendChild(thTotal);
 
             summaryHead.appendChild(tr1);
@@ -2366,6 +2390,7 @@ DST: 22. 지티테크`;
                 thA.textContent = 'A';
                 thA.style.textAlign = 'right';
                 thA.style.fontSize = '0.75rem';
+                thA.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
                 if (!hasA) {
                     thA.style.background = 'rgba(0, 0, 0, 0.2)';
                     thA.style.opacity = '0.4';
@@ -2386,6 +2411,7 @@ DST: 22. 지티테크`;
                 thDiff.textContent = 'Δ';
                 thDiff.style.textAlign = 'right';
                 thDiff.style.fontSize = '0.75rem';
+                thDiff.style.background = 'rgba(255, 255, 255, 0.03)';
                 if (!hasA || !hasB) {
                     thDiff.style.background = 'rgba(0, 0, 0, 0.2)';
                     thDiff.style.opacity = '0.4';
@@ -2397,6 +2423,7 @@ DST: 22. 지티테크`;
             thTotA.textContent = 'A합';
             thTotA.style.textAlign = 'right';
             thTotA.style.fontSize = '0.75rem';
+            thTotA.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
             tr2.appendChild(thTotA);
 
             const thTotB = document.createElement('th');
@@ -2409,6 +2436,7 @@ DST: 22. 지티테크`;
             thTotDiff.textContent = 'Δ';
             thTotDiff.style.textAlign = 'right';
             thTotDiff.style.fontSize = '0.75rem';
+            thTotDiff.style.background = 'rgba(255, 255, 255, 0.03)';
             tr2.appendChild(thTotDiff);
 
             summaryHead.appendChild(tr2);
@@ -2445,6 +2473,64 @@ DST: 22. 지티테크`;
             filteredB.forEach(row => addData(row, 'B'));
 
             const rowList = Object.values(pivotData);
+
+            // Pre-calculate statistics for top highlight cards and model modifications
+            let totalQtyA = 0;
+            let totalQtyB = 0;
+            let changedModelsCount = 0;
+            const modelChanges = {};
+
+            rowList.forEach(item => {
+                let modelHasDiff = false;
+                let rowSumA = 0;
+                let rowSumB = 0;
+
+                targetMonths.forEach(month => {
+                    const qtyA = item.monthlyQtyA[month] || 0;
+                    const qtyB = item.monthlyQtyB[month] || 0;
+                    rowSumA += qtyA;
+                    rowSumB += qtyB;
+                    if (qtyA !== qtyB) {
+                        modelHasDiff = true;
+                    }
+                });
+
+                totalQtyA += rowSumA;
+                totalQtyB += rowSumB;
+
+                if (modelHasDiff) {
+                    modelChanges[item.model] = true;
+                }
+            });
+
+            // Count unique changed models
+            const uniqueModelsWithDiff = new Set();
+            rowList.forEach(item => {
+                if (modelChanges[item.model]) {
+                    uniqueModelsWithDiff.add(item.model);
+                }
+            });
+            changedModelsCount = uniqueModelsWithDiff.size;
+
+            // Render stats cards
+            const netDelta = totalQtyB - totalQtyA;
+            let netDeltaText = `${netDelta.toLocaleString()}대`;
+            if (netDelta > 0) netDeltaText = `+${netDeltaText}`;
+
+            document.getElementById('compare-stat-qty-a').textContent = `${totalQtyA.toLocaleString()}대`;
+            document.getElementById('compare-stat-qty-b').textContent = `${totalQtyB.toLocaleString()}대`;
+            
+            const deltaEl = document.getElementById('compare-stat-delta');
+            deltaEl.textContent = netDeltaText;
+            if (netDelta > 0) {
+                deltaEl.style.color = '#10b981';
+            } else if (netDelta < 0) {
+                deltaEl.style.color = '#ef4444';
+            } else {
+                deltaEl.style.color = 'var(--text-primary)';
+            }
+            document.getElementById('compare-stat-changed-models').textContent = `${changedModelsCount}개 기종`;
+            document.getElementById('compare-summary-cards').style.display = 'flex';
 
             rowList.sort((a, b) => {
                 const divComp = a.division.localeCompare(b.division, 'ko');
@@ -2537,6 +2623,15 @@ DST: 22. 지티테크`;
                     tdModel.style.fontWeight = '500';
                     tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
                     tdModel.style.borderRight = '1px solid var(--border-color)';
+                    
+                    if (modelChanges[item.model]) {
+                        const dot = document.createElement('span');
+                        dot.innerHTML = '● ';
+                        dot.style.color = '#f59e0b';
+                        dot.style.marginRight = '6px';
+                        dot.title = '이 기종은 계획 변동 내역이 있습니다.';
+                        tdModel.prepend(dot);
+                    }
                     tr.appendChild(tdModel);
                 }
 
@@ -2561,6 +2656,7 @@ DST: 22. 지티테크`;
 
                     const tdA = document.createElement('td');
                     tdA.style.textAlign = 'right';
+                    tdA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
                     if (!hasA) {
                         tdA.textContent = '-';
                         tdA.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2597,15 +2693,16 @@ DST: 22. 지티테크`;
                         if (diff > 0) {
                             tdDiff.textContent = `+${diff.toLocaleString()}`;
                             tdDiff.style.color = '#10b981';
-                            tdDiff.style.background = 'rgba(16, 185, 129, 0.05)';
+                            tdDiff.style.background = 'rgba(16, 185, 129, 0.15)';
                         } else if (diff < 0) {
                             tdDiff.textContent = diff.toLocaleString();
                             tdDiff.style.color = '#ef4444';
-                            tdDiff.style.background = 'rgba(239, 68, 68, 0.05)';
+                            tdDiff.style.background = 'rgba(239, 68, 68, 0.12)';
                         } else {
                             tdDiff.textContent = '-';
                             tdDiff.style.color = 'var(--text-secondary)';
-                            tdDiff.style.opacity = '0.5';
+                            tdDiff.style.opacity = '0.3';
+                            tdDiff.style.background = 'rgba(255, 255, 255, 0.02)';
                         }
                     }
                     tr.appendChild(tdDiff);
@@ -2615,6 +2712,7 @@ DST: 22. 지티테크`;
                 tdTotValA.textContent = rowSumA > 0 ? rowSumA.toLocaleString() : '-';
                 tdTotValA.style.textAlign = 'right';
                 tdTotValA.style.fontWeight = '500';
+                tdTotValA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
                 tr.appendChild(tdTotValA);
 
                 const tdTotValB = document.createElement('td');
@@ -2628,14 +2726,16 @@ DST: 22. 지티테크`;
                 if (rowDiff > 0) {
                     tdTotValDiff.textContent = `+${rowDiff.toLocaleString()}`;
                     tdTotValDiff.style.color = '#10b981';
-                    tdTotValDiff.style.background = 'rgba(16, 185, 129, 0.1)';
+                    tdTotValDiff.style.background = 'rgba(16, 185, 129, 0.18)';
                 } else if (rowDiff < 0) {
                     tdTotValDiff.textContent = rowDiff.toLocaleString();
                     tdTotValDiff.style.color = '#ef4444';
-                    tdTotValDiff.style.background = 'rgba(239, 68, 68, 0.1)';
+                    tdTotValDiff.style.background = 'rgba(239, 68, 68, 0.15)';
                 } else {
                     tdTotValDiff.textContent = '-';
-                    tdTotValDiff.style.opacity = '0.5';
+                    tdTotValDiff.style.color = 'var(--text-secondary)';
+                    tdTotValDiff.style.opacity = '0.3';
+                    tdTotValDiff.style.background = 'rgba(255, 255, 255, 0.02)';
                 }
                 tdTotValDiff.style.textAlign = 'right';
                 tdTotValDiff.style.fontWeight = 'bold';
@@ -2679,9 +2779,9 @@ DST: 22. 지티테크`;
 
                     const diff = monthlyTotalB - monthlyTotalA;
 
-                    // A Total Cell
                     const tdTotalA = document.createElement('td');
                     tdTotalA.style.textAlign = 'right';
+                    tdTotalA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
                     if (!hasA) {
                         tdTotalA.textContent = '-';
                         tdTotalA.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2691,7 +2791,6 @@ DST: 22. 지티테크`;
                     }
                     trTotal.appendChild(tdTotalA);
 
-                    // B Total Cell
                     const tdTotalB = document.createElement('td');
                     tdTotalB.style.textAlign = 'right';
                     if (!hasB) {
@@ -2703,7 +2802,6 @@ DST: 22. 지티테크`;
                     }
                     trTotal.appendChild(tdTotalB);
 
-                    // Diff Total Cell
                     const tdTotalDiff = document.createElement('td');
                     tdTotalDiff.style.textAlign = 'right';
                     tdTotalDiff.style.fontWeight = 'bold';
@@ -2715,47 +2813,49 @@ DST: 22. 지티테크`;
                         if (diff > 0) {
                             tdTotalDiff.textContent = `+${diff.toLocaleString()}`;
                             tdTotalDiff.style.color = '#10b981';
-                            tdTotalDiff.style.background = 'rgba(16, 185, 129, 0.08)';
+                            tdTotalDiff.style.background = 'rgba(16, 185, 129, 0.15)';
                         } else if (diff < 0) {
                             tdTotalDiff.textContent = diff.toLocaleString();
                             tdTotalDiff.style.color = '#ef4444';
-                            tdTotalDiff.style.background = 'rgba(239, 68, 68, 0.08)';
+                            tdTotalDiff.style.background = 'rgba(239, 68, 68, 0.12)';
                         } else {
                             tdTotalDiff.textContent = '-';
-                            tdTotalDiff.style.opacity = '0.5';
+                            tdTotalDiff.style.color = 'var(--text-secondary)';
+                            tdTotalDiff.style.opacity = '0.3';
+                            tdTotalDiff.style.background = 'rgba(255, 255, 255, 0.02)';
                         }
                     }
                     trTotal.appendChild(tdTotalDiff);
                 });
 
-                // Grand Totals Column A
                 const tdGrandA = document.createElement('td');
                 tdGrandA.textContent = grandSumA > 0 ? grandSumA.toLocaleString() : '-';
                 tdGrandA.style.textAlign = 'right';
                 tdGrandA.style.color = 'var(--success)';
+                tdGrandA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
                 trTotal.appendChild(tdGrandA);
 
-                // Grand Totals Column B
                 const tdGrandB = document.createElement('td');
                 tdGrandB.textContent = grandSumB > 0 ? grandSumB.toLocaleString() : '-';
                 tdGrandB.style.textAlign = 'right';
                 tdGrandB.style.color = 'var(--success)';
                 trTotal.appendChild(tdGrandB);
 
-                // Grand Totals Column Diff
                 const tdGrandDiff = document.createElement('td');
                 const diffGrand = grandSumB - grandSumA;
                 if (diffGrand > 0) {
                     tdGrandDiff.textContent = `+${diffGrand.toLocaleString()}`;
                     tdGrandDiff.style.color = '#10b981';
-                    tdGrandDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                    tdGrandDiff.style.background = 'rgba(16, 185, 129, 0.18)';
                 } else if (diffGrand < 0) {
                     tdGrandDiff.textContent = diffGrand.toLocaleString();
                     tdGrandDiff.style.color = '#ef4444';
                     tdGrandDiff.style.background = 'rgba(239, 68, 68, 0.15)';
                 } else {
                     tdGrandDiff.textContent = '-';
-                    tdGrandDiff.style.opacity = '0.5';
+                    tdGrandDiff.style.color = 'var(--text-secondary)';
+                    tdGrandDiff.style.opacity = '0.3';
+                    tdGrandDiff.style.background = 'rgba(255, 255, 255, 0.02)';
                 }
                 tdGrandDiff.style.textAlign = 'right';
                 tdGrandDiff.style.fontWeight = 'bold';
