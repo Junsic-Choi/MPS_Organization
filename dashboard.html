@@ -3265,6 +3265,10 @@ DST: 22. 지티테크`;
         let startCell = { rowIndex: -1, colIndex: -1 };
         let endCell = { rowIndex: -1, colIndex: -1 };
 
+        let autoScrollSpeed = { x: 0, y: 0 };
+        let lastMouseCoords = { x: 0, y: 0 };
+        let autoScrollFrameId = null;
+
         function getTableGrid(tbody) {
             const grid = [];
             const rows = Array.from(tbody.rows);
@@ -3297,6 +3301,57 @@ DST: 22. 지티테크`;
             });
             
             return grid;
+        }
+
+        function startAutoScrollLoop() {
+            if (autoScrollFrameId) return;
+
+            const loop = () => {
+                if (!isSelecting || !activeSelectTable || !activeSelectTbody) {
+                    autoScrollFrameId = null;
+                    return;
+                }
+
+                const container = activeSelectTable.closest('.table-container');
+                if (container) {
+                    let scrolled = false;
+                    if (autoScrollSpeed.x !== 0) {
+                        container.scrollLeft += autoScrollSpeed.x;
+                        scrolled = true;
+                    }
+                    if (autoScrollSpeed.y !== 0) {
+                        container.scrollTop += autoScrollSpeed.y;
+                        scrolled = true;
+                    }
+
+                    if (scrolled && lastMouseCoords) {
+                        const elem = document.elementFromPoint(lastMouseCoords.x, lastMouseCoords.y);
+                        const td = elem?.closest('td');
+                        if (td && td.closest('tbody') === activeSelectTbody) {
+                            const grid = getTableGrid(activeSelectTbody);
+                            let rowIndex = -1;
+                            let colIndex = -1;
+
+                            for (let r = 0; r < grid.length; r++) {
+                                const cIdx = grid[r].indexOf(td);
+                                if (cIdx !== -1) {
+                                    rowIndex = r;
+                                    colIndex = cIdx;
+                                    break;
+                                }
+                            }
+
+                            if (rowIndex !== -1 && colIndex !== -1) {
+                                endCell = { rowIndex, colIndex };
+                                updateSelectionVisuals();
+                            }
+                        }
+                    }
+                }
+
+                autoScrollFrameId = requestAnimationFrame(loop);
+            };
+            autoScrollFrameId = requestAnimationFrame(loop);
         }
 
         function initCellSelection() {
@@ -3332,12 +3387,16 @@ DST: 22. 지티테크`;
                     isSelecting = true;
                     startCell = { rowIndex, colIndex };
                     endCell = { rowIndex, colIndex };
+                    lastMouseCoords = { x: e.clientX, y: e.clientY };
                     updateSelectionVisuals();
+                    startAutoScrollLoop();
                 }
             };
 
             const handleMouseMove = (e) => {
                 if (!isSelecting || !activeSelectTbody) return;
+                lastMouseCoords = { x: e.clientX, y: e.clientY };
+
                 const td = e.target.closest('td');
                 if (!td || td.closest('tbody') !== activeSelectTbody) return;
 
@@ -3360,6 +3419,43 @@ DST: 22. 지티테크`;
                 }
             };
 
+            const handleGlobalMouseMove = (e) => {
+                if (!isSelecting || !activeSelectTable) {
+                    autoScrollSpeed = { x: 0, y: 0 };
+                    return;
+                }
+
+                lastMouseCoords = { x: e.clientX, y: e.clientY };
+
+                const container = activeSelectTable.closest('.table-container');
+                if (!container) return;
+
+                const rect = container.getBoundingClientRect();
+                const edgeSize = 40; 
+                const maxSpeed = 15; 
+
+                let speedX = 0;
+                let speedY = 0;
+
+                if (e.clientX > rect.right - edgeSize) {
+                    const ratio = Math.min(1, (e.clientX - (rect.right - edgeSize)) / edgeSize);
+                    speedX = Math.max(2, ratio * maxSpeed);
+                } else if (e.clientX < rect.left + edgeSize) {
+                    const ratio = Math.min(1, ((rect.left + edgeSize) - e.clientX) / edgeSize);
+                    speedX = -Math.max(2, ratio * maxSpeed);
+                }
+
+                if (e.clientY > rect.bottom - edgeSize) {
+                    const ratio = Math.min(1, (e.clientY - (rect.bottom - edgeSize)) / edgeSize);
+                    speedY = Math.max(2, ratio * maxSpeed);
+                } else if (e.clientY < rect.top + edgeSize) {
+                    const ratio = Math.min(1, ((rect.top + edgeSize) - e.clientY) / edgeSize);
+                    speedY = -Math.max(2, ratio * maxSpeed);
+                }
+
+                autoScrollSpeed = { x: speedX, y: speedY };
+            };
+
             const mainTbody = document.getElementById('table-body');
             const summaryTbody = document.getElementById('summary-body');
 
@@ -3372,9 +3468,11 @@ DST: 22. 지티테크`;
 
             document.getElementById('data-table')?.addEventListener('mousemove', handleMouseMove);
             document.getElementById('summary-table')?.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mousemove', handleGlobalMouseMove);
 
             document.addEventListener('mouseup', () => {
                 isSelecting = false;
+                autoScrollSpeed = { x: 0, y: 0 };
             });
 
             document.addEventListener('mousedown', (e) => {
