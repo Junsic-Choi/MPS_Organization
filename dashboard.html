@@ -3260,24 +3260,73 @@ DST: 22. 지티테크`;
         }
 
         let isSelecting = false;
+        let activeSelectTable = null;
+        let activeSelectTbody = null;
         let startCell = { rowIndex: -1, colIndex: -1 };
         let endCell = { rowIndex: -1, colIndex: -1 };
 
-        function initCellSelection() {
-            const tbody = document.getElementById('table-body');
-            const table = document.getElementById('data-table');
+        function getTableGrid(tbody) {
+            const grid = [];
+            const rows = Array.from(tbody.rows);
             
-            if (!tbody || !table) return;
+            rows.forEach(() => {
+                grid.push([]);
+            });
+            
+            rows.forEach((row, rIdx) => {
+                let cIdx = 0;
+                Array.from(row.cells).forEach(cell => {
+                    while (grid[rIdx][cIdx] !== undefined) {
+                        cIdx++;
+                    }
+                    
+                    const rowspan = parseInt(cell.getAttribute('rowspan')) || 1;
+                    const colspan = parseInt(cell.getAttribute('colspan')) || 1;
+                    
+                    for (let r = 0; r < rowspan; r++) {
+                        for (let c = 0; c < colspan; c++) {
+                            const targetRow = rIdx + r;
+                            const targetCol = cIdx + c;
+                            if (grid[targetRow]) {
+                                grid[targetRow][targetCol] = cell;
+                            }
+                        }
+                    }
+                    cIdx += colspan;
+                });
+            });
+            
+            return grid;
+        }
 
-            tbody.addEventListener('mousedown', (e) => {
+        function initCellSelection() {
+            const handleMouseDown = (e, tableId, tbodyId) => {
                 const td = e.target.closest('td');
                 if (!td) return;
 
-                e.preventDefault(); // Prevent default text selection drag
+                e.preventDefault();
 
-                const tr = td.parentElement;
-                const rowIndex = Array.from(tbody.rows).indexOf(tr);
-                const colIndex = Array.from(tr.cells).indexOf(td);
+                const table = document.getElementById(tableId);
+                const tbody = document.getElementById(tbodyId);
+                if (!table || !tbody) return;
+
+                clearCellSelection();
+
+                activeSelectTable = table;
+                activeSelectTbody = tbody;
+
+                const grid = getTableGrid(tbody);
+                let rowIndex = -1;
+                let colIndex = -1;
+
+                for (let r = 0; r < grid.length; r++) {
+                    const cIdx = grid[r].indexOf(td);
+                    if (cIdx !== -1) {
+                        rowIndex = r;
+                        colIndex = cIdx;
+                        break;
+                    }
+                }
 
                 if (rowIndex !== -1 && colIndex !== -1) {
                     isSelecting = true;
@@ -3285,38 +3334,58 @@ DST: 22. 지티테크`;
                     endCell = { rowIndex, colIndex };
                     updateSelectionVisuals();
                 }
-            });
+            };
 
-            table.addEventListener('mousemove', (e) => {
-                if (!isSelecting) return;
+            const handleMouseMove = (e) => {
+                if (!isSelecting || !activeSelectTbody) return;
                 const td = e.target.closest('td');
-                if (!td) return;
+                if (!td || td.closest('tbody') !== activeSelectTbody) return;
 
-                const tr = td.parentElement;
-                const rowIndex = Array.from(tbody.rows).indexOf(tr);
-                const colIndex = Array.from(tr.cells).indexOf(td);
+                const grid = getTableGrid(activeSelectTbody);
+                let rowIndex = -1;
+                let colIndex = -1;
+
+                for (let r = 0; r < grid.length; r++) {
+                    const cIdx = grid[r].indexOf(td);
+                    if (cIdx !== -1) {
+                        rowIndex = r;
+                        colIndex = cIdx;
+                        break;
+                    }
+                }
 
                 if (rowIndex !== -1 && colIndex !== -1) {
                     endCell = { rowIndex, colIndex };
                     updateSelectionVisuals();
                 }
-            });
+            };
+
+            const mainTbody = document.getElementById('table-body');
+            const summaryTbody = document.getElementById('summary-body');
+
+            if (mainTbody) {
+                mainTbody.addEventListener('mousedown', (e) => handleMouseDown(e, 'data-table', 'table-body'));
+            }
+            if (summaryTbody) {
+                summaryTbody.addEventListener('mousedown', (e) => handleMouseDown(e, 'summary-table', 'summary-body'));
+            }
+
+            document.getElementById('data-table')?.addEventListener('mousemove', handleMouseMove);
+            document.getElementById('summary-table')?.addEventListener('mousemove', handleMouseMove);
 
             document.addEventListener('mouseup', () => {
                 isSelecting = false;
             });
 
-            // Clear selection when clicking outside table
             document.addEventListener('mousedown', (e) => {
-                if (!e.target.closest('#data-table')) {
+                if (activeSelectTable && !e.target.closest('#' + activeSelectTable.id)) {
                     clearCellSelection();
                 }
             });
 
-            // Copy selected cells on Ctrl+C / Cmd+C
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-                    const selectedCells = document.querySelectorAll('#table-body td.selected-cell');
+                    const selectedCells = document.querySelectorAll('td.selected-cell');
                     if (selectedCells.length === 0) return;
 
                     const activeEl = document.activeElement;
@@ -3327,19 +3396,41 @@ DST: 22. 지티테크`;
                     e.preventDefault();
 
                     const rowsMap = {};
+                    const grid = getTableGrid(activeSelectTbody);
+
                     selectedCells.forEach(cell => {
-                        const tr = cell.parentElement;
-                        const rIdx = Array.from(tbody.rows).indexOf(tr);
-                        const cIdx = Array.from(tr.cells).indexOf(cell);
-                        if (!rowsMap[rIdx]) rowsMap[rIdx] = [];
-                        rowsMap[rIdx].push({ cIdx, text: cell.textContent.trim() });
+                        let rIdx = -1;
+                        let cIdx = -1;
+                        for (let r = 0; r < grid.length; r++) {
+                            const colIdx = grid[r].indexOf(cell);
+                            if (colIdx !== -1) {
+                                rIdx = r;
+                                cIdx = colIdx;
+                                break;
+                            }
+                        }
+                        if (rIdx !== -1 && cIdx !== -1) {
+                            if (!rowsMap[rIdx]) rowsMap[rIdx] = [];
+                            rowsMap[rIdx].push({ cIdx, text: cell.textContent.trim() });
+                        }
                     });
 
                     const sortedRowKeys = Object.keys(rowsMap).sort((a, b) => parseInt(a) - parseInt(b));
                     const textLines = sortedRowKeys.map(rIdx => {
                         const rowCells = rowsMap[rIdx];
                         rowCells.sort((a, b) => a.cIdx - b.cIdx);
-                        return rowCells.map(c => c.text).join('\t');
+                        
+                        // Filter duplicates that occur due to rowspan span mapping
+                        const seenCells = new Set();
+                        const uniqueCells = [];
+                        rowCells.forEach(c => {
+                            if (!seenCells.has(c.cIdx)) {
+                                seenCells.add(c.cIdx);
+                                uniqueCells.push(c);
+                            }
+                        });
+
+                        return uniqueCells.map(c => c.text).join('\t');
                     });
 
                     const textToCopy = textLines.join('\n');
@@ -3360,30 +3451,41 @@ DST: 22. 지티테크`;
         }
 
         function updateSelectionVisuals() {
-            const tbody = document.getElementById('table-body');
-            if (!tbody) return;
+            if (!activeSelectTbody) return;
+
+            const grid = getTableGrid(activeSelectTbody);
 
             const minRow = Math.min(startCell.rowIndex, endCell.rowIndex);
             const maxRow = Math.max(startCell.rowIndex, endCell.rowIndex);
             const minCol = Math.min(startCell.colIndex, endCell.colIndex);
             const maxCol = Math.max(startCell.colIndex, endCell.colIndex);
 
-            Array.from(tbody.rows).forEach((row, rIdx) => {
-                Array.from(row.cells).forEach((cell, cIdx) => {
-                    if (rIdx >= minRow && rIdx <= maxRow && cIdx >= minCol && cIdx <= maxCol) {
-                        cell.classList.add('selected-cell');
-                    } else {
-                        cell.classList.remove('selected-cell');
-                    }
+            // Clear class selection on all cells first
+            Array.from(activeSelectTbody.rows).forEach(row => {
+                Array.from(row.cells).forEach(cell => {
+                    cell.classList.remove('selected-cell');
                 });
             });
+
+            // Add selected-cell class based on grid coverage
+            for (let r = minRow; r <= maxRow; r++) {
+                if (!grid[r]) continue;
+                for (let c = minCol; c <= maxCol; c++) {
+                    const cell = grid[r][c];
+                    if (cell && cell.tagName === 'TD') {
+                        cell.classList.add('selected-cell');
+                    }
+                }
+            }
         }
 
         function clearCellSelection() {
-            const selected = document.querySelectorAll('#table-body td.selected-cell');
+            const selected = document.querySelectorAll('td.selected-cell');
             selected.forEach(c => c.classList.remove('selected-cell'));
             startCell = { rowIndex: -1, colIndex: -1 };
             endCell = { rowIndex: -1, colIndex: -1 };
+            activeSelectTable = null;
+            activeSelectTbody = null;
         }
 
 
@@ -3428,46 +3530,144 @@ DST: 22. 지티테크`;
 
         // ========== Pretty Excel Export (xlsx-js-style) ==========
         function exportToExcel() {
-            if (window.compareMode) {
+            const now = new Date();
+            const dateStr = now.getFullYear() + 
+                            String(now.getMonth() + 1).padStart(2, '0') + 
+                            String(now.getDate()).padStart(2, '0') + "_" + 
+                            String(now.getHours()).padStart(2, '0') + 
+                            String(now.getMinutes()).padStart(2, '0') + 
+                            String(now.getSeconds()).padStart(2, '0');
+
+            if (currentTab === 'summary') {
                 const table = document.getElementById('summary-table');
                 if (!table) {
-                    alert("내보낼 비교 데이터가 없습니다.");
+                    alert("내보낼 요약 데이터가 없습니다.");
                     return;
                 }
                 const ws = XLSX.utils.table_to_sheet(table);
-                
-                // Apply font styling to sheet cells
+
+                // Find the maximum row number to identify the bottom total row
+                let maxRow = 0;
                 Object.keys(ws).forEach(key => {
                     if (key.startsWith('!')) return;
+                    const r = parseInt(key.replace(/[^0-9]/g, '')) || 0;
+                    if (r > maxRow) maxRow = r;
+                });
+                
+                // Apply styling to sheet cells
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    
+                    const cellRef = key;
+                    const rowNum = parseInt(cellRef.replace(/[^0-9]/g, '')) || 0;
+                    
                     ws[key].s = {
                         font: { name: "맑은 고딕", sz: 10 },
-                        alignment: { vertical: "center" }
+                        alignment: { vertical: "center" },
+                        border: {
+                            top: { style: "thin", color: { rgb: "CBD5E1" } },
+                            bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+                            left: { style: "thin", color: { rgb: "CBD5E1" } },
+                            right: { style: "thin", color: { rgb: "CBD5E1" } }
+                        }
                     };
-                    // Highlight diff cells if value contains + or -
+
                     const val = ws[key].v;
-                    if (typeof val === 'string') {
-                        if (val.startsWith('+')) {
-                            ws[key].s.font.color = { rgb: "10B981" };
-                            ws[key].s.font.bold = true;
-                        } else if (val.startsWith('-') && val !== '-') {
-                            ws[key].s.font.color = { rgb: "EF4444" };
-                            ws[key].s.font.bold = true;
+                    const isHeader = rowNum === 1 || (window.compareMode && rowNum === 2);
+                    const isTotalRow = rowNum === maxRow && maxRow > 2;
+
+                    if (isHeader) {
+                        ws[key].s.font.bold = true;
+                        ws[key].s.font.color = { rgb: "FFFFFF" };
+                        ws[key].s.fill = {
+                            patternType: "solid",
+                            fgColor: { rgb: "1E293B" }
+                        };
+                        ws[key].s.alignment.horizontal = "center";
+                    } else if (isTotalRow) {
+                        ws[key].s.font.bold = true;
+                        ws[key].s.fill = {
+                            patternType: "solid",
+                            fgColor: { rgb: "EFF6FF" } // Soft blue for bottom total row
+                        };
+                        
+                        if (typeof val === 'number') {
+                            ws[key].s.alignment.horizontal = "right";
+                            ws[key].t = 'n';
+                            ws[key].z = '#,##0';
+                        } else if (typeof val === 'string') {
+                            if (val.startsWith('+')) {
+                                ws[key].s.font.color = { rgb: "10B981" };
+                                ws[key].s.alignment.horizontal = "right";
+                            } else if (val.startsWith('-') && val !== '-') {
+                                ws[key].s.font.color = { rgb: "EF4444" };
+                                ws[key].s.alignment.horizontal = "right";
+                            } else if (/^\d+$/.test(val)) {
+                                ws[key].s.alignment.horizontal = "right";
+                                ws[key].t = 'n';
+                                ws[key].z = '#,##0';
+                                ws[key].v = parseInt(val);
+                            } else {
+                                ws[key].s.alignment.horizontal = "center";
+                            }
+                        }
+                    } else {
+                        // Zebra striping for even rows
+                        if (rowNum % 2 === 0) {
+                            ws[key].s.fill = {
+                                patternType: "solid",
+                                fgColor: { rgb: "F8FAFC" }
+                            };
+                        }
+
+                        // Formatter
+                        if (typeof val === 'number') {
+                            ws[key].s.alignment.horizontal = "right";
+                            ws[key].t = 'n';
+                            ws[key].z = '#,##0';
+                        } else if (typeof val === 'string') {
+                            if (val.startsWith('+')) {
+                                ws[key].s.font.color = { rgb: "10B981" };
+                                ws[key].s.font.bold = true;
+                                ws[key].s.alignment.horizontal = "right";
+                            } else if (val.startsWith('-') && val !== '-') {
+                                ws[key].s.font.color = { rgb: "EF4444" };
+                                ws[key].s.font.bold = true;
+                                ws[key].s.alignment.horizontal = "right";
+                            } else if (val === '-') {
+                                ws[key].s.alignment.horizontal = "center";
+                                ws[key].s.font.color = { rgb: "94A3B8" };
+                            } else if (/^\d+$/.test(val)) {
+                                ws[key].s.alignment.horizontal = "right";
+                                ws[key].t = 'n';
+                                ws[key].z = '#,##0';
+                                ws[key].v = parseInt(val);
+                            } else if (val === '합계' || val === 'A합' || val === 'B합' || val === 'Δ') {
+                                ws[key].s.alignment.horizontal = "center";
+                                ws[key].s.font.bold = true;
+                            } else {
+                                ws[key].s.alignment.horizontal = "left";
+                            }
                         }
                     }
                 });
 
+                // Auto-fit column widths
+                const colWidths = {};
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    const colLetter = key.replace(/[0-9]/g, '');
+                    const val = ws[key].v;
+                    const strLen = val ? val.toString().length : 0;
+                    colWidths[colLetter] = Math.max(colWidths[colLetter] || 10, strLen + 4);
+                });
+                ws['!cols'] = Object.keys(colWidths).map(col => ({ wch: Math.min(colWidths[col], 40) }));
+
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "계획 비교 결과");
+                const sheetName = window.compareMode ? "계획 비교 결과" : "요약 대시보드";
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
                 
-                const now = new Date();
-                const dateStr = now.getFullYear() + 
-                                String(now.getMonth() + 1).padStart(2, '0') + 
-                                String(now.getDate()).padStart(2, '0') + "_" + 
-                                String(now.getHours()).padStart(2, '0') + 
-                                String(now.getMinutes()).padStart(2, '0') + 
-                                String(now.getSeconds()).padStart(2, '0');
-                
-                const filename = `MPS_Comparison_${dateStr}.xlsx`;
+                const filename = window.compareMode ? `MPS_Comparison_${dateStr}.xlsx` : `MPS_Summary_${dateStr}.xlsx`;
                 XLSX.writeFile(wb, filename);
                 return;
             }
@@ -3477,7 +3677,7 @@ DST: 22. 지티테크`;
                 return;
             }
 
-            // 1. Prepare data
+            // 1. Prepare data (Main List tab)
             const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
             const labels = {
                 'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 
@@ -3517,7 +3717,7 @@ DST: 22. 지티테크`;
             const ws = XLSX.utils.aoa_to_sheet(allRows);
 
             // 3. Apply Styling
-            const headerBgColor = "1E293B"; // Dark Slate (match dashboard header)
+            const headerBgColor = "1E293B"; // Dark Slate
             const headerTextColor = "FFFFFF";
             const zebraColor = "F8FAFC"; // Very light blue/gray
             const borderColor = "CBD5E1"; // Light gray border
@@ -3640,28 +3840,18 @@ DST: 22. 지티테크`;
                 }
             ];
 
-            // 4. Write workbook
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "MPS 조회결과");
+            XLSX.utils.book_append_sheet(wb, ws, "생산 실적 매칭 결과");
 
-            // Filename: MPS_Export_YYYYMMDD_HHMMSS.xlsx
-            const now = new Date();
-            const dateStr = now.getFullYear() + 
-                            String(now.getMonth() + 1).padStart(2, '0') + 
-                            String(now.getDate()).padStart(2, '0') + "_" + 
-                            String(now.getHours()).padStart(2, '0') + 
-                            String(now.getMinutes()).padStart(2, '0') + 
-                            String(now.getSeconds()).padStart(2, '0');
-            
-            const filename = `MPS_Export_${dateStr}.xlsx`;
+            const filename = `MPS_Matching_${dateStr}.xlsx`;
             XLSX.writeFile(wb, filename);
         }
     </script>
     <style>
-        #data-table {
+        #data-table, #summary-table {
             user-select: none;
         }
-        #data-table td.selected-cell {
+        td.selected-cell {
             background-color: rgba(59, 130, 246, 0.15) !important;
             outline: 1.5px solid #3b82f6;
             outline-offset: -1.5px;
