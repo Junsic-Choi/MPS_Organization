@@ -344,6 +344,63 @@
             color: var(--text-secondary);
         }
 
+        /* Column preferences dropdown styles */
+        .column-settings-container {
+            position: relative;
+            display: inline-block;
+        }
+        .column-settings-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            width: 220px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            backdrop-filter: blur(8px);
+        }
+        .column-settings-dropdown.active {
+            display: flex;
+        }
+        .column-settings-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .column-settings-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .column-settings-option:hover {
+            background: var(--surface-hover);
+        }
+        .column-settings-option input[type="checkbox"] {
+            cursor: pointer;
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-color);
+        }
+
         /* Controls / Filters */
         .controls {
             display: none;
@@ -543,7 +600,6 @@
 
         table {
             width: 100%;
-            min-width: 1600px; /* 상세 정보 표시를 위해 충분한 너비 확보 */
             border-collapse: collapse;
             text-align: left;
         }
@@ -628,7 +684,10 @@
         }
 
         /* 상세 테이블 확장 스타일 (V3.2) */
-        #data-table { min-width: 1800px !important; }
+        #data-table {
+            min-width: 100% !important;
+            width: 100%;
+        }
         #data-table th, #data-table td { white-space: nowrap !important; }
         .sap-upload-box { background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); }
     </style>
@@ -813,6 +872,20 @@
                 <div class="stat-value" style="font-size: 1.75rem; font-weight: 700; color: #60a5fa;"><span id="sap-rows">0</span> <span style="font-size: 1rem; font-weight: normal; color: var(--text-secondary);">대</span></div>
             </div>
             <div id="export-section" style="margin-left: auto; display: none; gap: 0.5rem; align-items: center;">
+                <div class="column-settings-container">
+                    <button id="col-settings-btn" onclick="toggleColumnSettings()" class="btn" style="background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.8rem 1.2rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s;">
+                        ⚙️ 열 설정
+                    </button>
+                    <div id="col-settings-dropdown" class="column-settings-dropdown">
+                        <div class="column-settings-title">
+                            <span>보여줄 열 선택</span>
+                            <span onclick="resetColumns()" style="cursor:pointer; font-size:0.75rem; text-decoration:underline; color:var(--text-secondary);">초기화</span>
+                        </div>
+                        <div id="col-options-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem;">
+                            <!-- Dynamically populated checkboxes -->
+                        </div>
+                    </div>
+                </div>
                 <button id="excel-export-btn" onclick="exportToExcel()" class="btn" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 0.8rem 1.5rem; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); transition: all 0.2s; border: none;">
                     📥 엑셀 내보내기
                 </button>
@@ -980,6 +1053,110 @@
         let currentSortKey = null;
         let currentSortDirection = null;
 
+        const allHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
+        const headerLabels = {
+            'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 
+            'Product':'품명', 'Qty':'수량', 'Serial':'S/O 시리얼', 'OrderNum':'주문번호', 
+            'SalesDoc':'Sales Doc', 'StartDate':'시작일', 'Customer':'고객명'
+        };
+        let userVisibleHeaders = [...allHeaders];
+
+        // 개인화 열 설정 로드
+        async function loadUserPreferences(retryCount = 0) {
+            try {
+                const response = await fetch('/api/preferences');
+                if (!response.ok) throw new Error('API 오류');
+                const data = await response.json();
+                if (data.success && data.preferences && Array.isArray(data.preferences.visibleHeaders)) {
+                    userVisibleHeaders = data.preferences.visibleHeaders.filter(h => allHeaders.includes(h));
+                    renderTable();
+                }
+            } catch (err) {
+                console.warn(`Failed to load user preferences (Attempt ${retryCount + 1}):`, err.message);
+                if (retryCount < 4) {
+                    setTimeout(() => loadUserPreferences(retryCount + 1), 800);
+                    return;
+                }
+            }
+            renderColumnSettingsDropdown();
+        }
+
+        // 개인화 열 설정 저장
+        async function saveUserPreferences() {
+            try {
+                await fetch('/api/preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ visibleHeaders: userVisibleHeaders })
+                });
+            } catch (err) {
+                console.error('Failed to save user preferences:', err);
+            }
+        }
+
+        // 열 설정 모달 토글
+        function toggleColumnSettings() {
+            const dropdown = document.getElementById('col-settings-dropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('active');
+            }
+        }
+
+        // 초기화
+        async function resetColumns() {
+            userVisibleHeaders = [...allHeaders];
+            await saveUserPreferences();
+            renderColumnSettingsDropdown();
+            renderTable();
+        }
+
+        // 열 체크박스 리스트 렌더링
+        function renderColumnSettingsDropdown() {
+            const container = document.getElementById('col-options-list');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            allHeaders.forEach(h => {
+                const label = document.createElement('label');
+                label.className = 'column-settings-option';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = userVisibleHeaders.includes(h);
+                
+                checkbox.onchange = async () => {
+                    if (checkbox.checked) {
+                        if (!userVisibleHeaders.includes(h)) {
+                            userVisibleHeaders.push(h);
+                            userVisibleHeaders.sort((a, b) => allHeaders.indexOf(a) - allHeaders.indexOf(b));
+                        }
+                    } else {
+                        if (userVisibleHeaders.length <= 1) {
+                            alert('최소 한 개 이상의 열은 선택해야 합니다.');
+                            checkbox.checked = true;
+                            return;
+                        }
+                        userVisibleHeaders = userVisibleHeaders.filter(col => col !== h);
+                    }
+                    await saveUserPreferences();
+                    renderTable();
+                };
+                
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(` ${headerLabels[h]}`));
+                container.appendChild(label);
+            });
+        }
+
+        // 드롭다운 외부 클릭 시 닫기
+        document.addEventListener('click', (e) => {
+            const container = document.querySelector('.column-settings-container');
+            const dropdown = document.getElementById('col-settings-dropdown');
+            if (container && dropdown && !container.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
         function getCellValue(row, h) {
             let val = row[h] || '';
             if (row.isUnmapped) {
@@ -1114,10 +1291,12 @@ DST: 22. 지티테크`;
         let selectedSavedFile = null;
         let savedMpsFiles = [];
 
-        async function fetchSavedMpsFiles() {
+        async function fetchSavedMpsFiles(retryCount = 0) {
             const listContainer = document.getElementById('saved-files-list');
             if (!listContainer) return;
-            listContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오는 중...</div>';
+            if (retryCount === 0) {
+                listContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오는 중...</div>';
+            }
             
             try {
                 const response = await fetch('/api/list-files');
@@ -1132,8 +1311,14 @@ DST: 22. 지티테크`;
                     listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오기 실패</div>';
                 }
             } catch (e) {
-                console.error(e);
-                listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">오류 발생</div>';
+                console.warn(`[fetchSavedMpsFiles] Attempt ${retryCount + 1} failed. Retrying...`, e);
+                if (retryCount < 4) { // 최대 5번 재시도 (800ms 간격)
+                    setTimeout(() => {
+                        fetchSavedMpsFiles(retryCount + 1);
+                    }, 800);
+                } else {
+                    listContainer.innerHTML = '<div style="color: var(--danger); text-align: center; margin-top: 3rem; font-size: 0.9rem;">오류 발생</div>';
+                }
             }
         }
 
@@ -2879,12 +3064,8 @@ DST: 22. 지티테크`;
             tableHead.innerHTML = ''; tableBody.innerHTML = '';
             if (typeof clearCellSelection === 'function') clearCellSelection();
 
-            const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
-            const labels = {
-                'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 
-                'Product':'품명', 'Qty':'수량', 'Serial':'S/O 시리얼', 'OrderNum':'주문번호', 
-                'SalesDoc':'Sales Doc', 'StartDate':'시작일', 'Customer':'고객명'
-            };
+            const activeHeaders = userVisibleHeaders;
+            const labels = headerLabels;
 
             activeHeaders.forEach(h => {
                 const th = document.createElement('th');
@@ -3691,6 +3872,7 @@ DST: 22. 지티테크`;
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
             loadSiteMaster();
+            loadUserPreferences();
             initCellSelection();
             
             // Restore active tab from localStorage
@@ -3876,12 +4058,8 @@ DST: 22. 지티테크`;
             }
 
             // 1. Prepare data (Main List tab)
-            const activeHeaders = ['Month', 'Site', 'Group', 'Model', 'RPM', 'Code', 'Product', 'Qty', 'Serial', 'OrderNum', 'SalesDoc', 'StartDate', 'Customer'];
-            const labels = {
-                'Month':'월', 'Site':'생산처', 'Group':'기종분류', 'Model':'기종', 'RPM':'RPM', 'Code':'모델코드', 
-                'Product':'품명', 'Qty':'수량', 'Serial':'S/O 시리얼', 'OrderNum':'주문번호', 
-                'SalesDoc':'Sales Doc', 'StartDate':'시작일', 'Customer':'고객명'
-            };
+            const activeHeaders = userVisibleHeaders;
+            const labels = headerLabels;
 
             // Header row
             const headerRow = activeHeaders.map(h => labels[h] || h);

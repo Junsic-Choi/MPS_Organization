@@ -122,6 +122,36 @@ app.post('/api/extract-saved', async (req, res) => {
     }
 });
 
+// 개인화 설정 로드 API
+app.get('/api/preferences', (req, res) => {
+    try {
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const prefPath = path.join(uploadDir, 'preferences.json');
+        if (fs.existsSync(prefPath)) {
+            const data = fs.readFileSync(prefPath, 'utf8');
+            res.json({ success: true, preferences: JSON.parse(data) });
+        } else {
+            res.json({ success: true, preferences: null });
+        }
+    } catch (err) {
+        console.error('[api] Load preferences failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 개인화 설정 저장 API
+app.post('/api/preferences', (req, res) => {
+    try {
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const prefPath = path.join(uploadDir, 'preferences.json');
+        fs.writeFileSync(prefPath, JSON.stringify(req.body, null, 2), 'utf8');
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[api] Save preferences failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 서버 종료 API
 app.post('/api/shutdown', (req, res) => {
     console.log('[api] Shutdown requested. Exiting...');

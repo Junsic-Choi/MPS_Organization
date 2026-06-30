@@ -77,3 +77,7 @@ ps_output*
 run_debug*
 vbs_log*
 vbs_step_log*
+
+# User preferences
+preferences.json
+

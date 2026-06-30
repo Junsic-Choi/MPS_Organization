@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>MPS 생산계획 대시보드 사용자 가이드</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --border: #e2e8f0;
+            --bg-light: #f8fafc;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+            color: var(--text-dark);
+            line-height: 1.6;
+            padding: 40px;
+            background: #ffffff;
+        }
+
+        /* PDF Page styles */
+        @page {
+            size: A4;
+            margin: 20mm 15mm 20mm 15mm;
+        }
+
+        .header {
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+
+        .header .meta {
+            text-align: right;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .section {
+            margin-bottom: 45px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary);
+            border-left: 5px solid var(--accent);
+            padding-left: 12px;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            color: #334155;
+            text-align: justify;
+        }
+
+        .bullet-list {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+
+        .bullet-list li {
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+            color: #334155;
+        }
+
+        .highlight-box {
+            background-color: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+
+        .highlight-box h4 {
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .image-container {
+            text-align: center;
+            margin: 25px 0;
+            page-break-inside: avoid;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .image-caption {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .badge-green {
+            background-color: #ecfdf5;
+            color: #047857;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-blue {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .footer {
+            margin-top: 60px;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            page-break-before: auto;
+        }
+
+        /* Page break helper */
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <div class="header">
+        <div>
+            <h1>MPS 생산계획 대시보드</h1>
+            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 1.1rem;">신규 기능 및 개선사항 사용자 가이드</p>
+        </div>
+        <div class="meta">
+            <div>배포 버전: v3.3 - Personalization</div>
+            <div>작성일자: 2026년 6월 30일</div>
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. 개요</div>
+        <p>본 문서는 MPS 생산계획 대시보드(v3.3)의 주요 기능 변경 및 새로 추가된 <strong>사용자 열 개인화 설정(Column Personalization)</strong> 기능에 대한 이해를 돕기 위한 사용자 가이드입니다.</p>
+        <div class="highlight-box">
+            <h4>핵심 업데이트 내용 요약</h4>
+            <ul class="bullet-list" style="margin-bottom: 0;">
+                <li><strong>계획 데이터 비교 분석의 Delta(Δ) 계산 규칙 수정</strong>: 공통 계획 수립 기간이 아닌 경우 Delta 계산에서 자동 제외되어 사용자의 불필요한 혼선을 제거했습니다.</li>
+                <li><strong>테이블 조회 열 개인화(On/Off) 및 영구 보존 기능 탑재</strong>: 사용자가 보고 싶은 열만 선택하여 화면을 구성할 수 있으며, 재접속 시에도 브라우저 캐시 및 서버 로컬 파일에 안전하게 보존됩니다.</li>
+                <li><strong>맞춤형 엑셀 출력 동기화</strong>: 화면에서 숨겨진 열은 엑셀 파일로 추출할 때도 자동으로 필터링되어 출력됩니다.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. 계획 비교 분석의 Delta(Δ) 계산 방식 개선</div>
+        <p>서로 계획 수립 기간(Planning Window)이 다른 두 MPS 파일(예: April~September vs May~October)을 비교할 때, 겹치지 않는 외곽 기간(4월 및 10월)에 대해 무리하게 변경량이 산출되는 문제를 수정했습니다.</p>
+        <ul class="bullet-list">
+            <li><strong>비겹침 기간(4월, 10월 등)</strong>: 한쪽 파일에만 계획 정보가 존재하는 기간은 실질적인 비교 대상이 아니므로, Delta(Δ) 열에 수치를 산출하지 않고 회색 음영의 대시(<code>-</code>) 마스킹 처리하여 보존합니다.</li>
+            <li><strong>겹침 기간(5월 ~ 9월)</strong>: 양쪽 파일 모두에 계획 기간이 존재할 경우, 한 파일에서 수량이 <code>0</code> 혹은 없는(<code>-</code>) 상태로 바뀌더라도 변동치(예: <code>-2</code> 또는 <code>+1</code>)를 정상적으로 도출하고 직관적인 색상 하이라이트(녹색/적색)를 표시합니다.</li>
+        </ul>
+        
+        <div class="image-container">
+            <img src="comparison_delta_overlapping_fixed.png" alt="Delta Calculation Reverted Layout">
+            <div class="image-caption">그림 1. 4월과 10월 등 공통되지 않은 계획 기간은 Delta 열에 마스킹(-) 및 음영 처리된 화면</div>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. 사용자 정의 조회 열 개인화(Personalization)</div>
+        <p>생산 실적 매칭 결과 화면에서 보고 싶은 정보만 선별하여 볼 수 있도록 테이블 열의 표시 여부를 제어하는 개인화 기능이 추가되었습니다.</p>
+        
+        <div class="highlight-box">
+            <h4>동작 메커니즘 및 편의성</h4>
+            <p style="margin-bottom: 0;">대시보드 프로그램이 실행되는 로컬 디렉토리에 <strong><code>preferences.json</code></strong> 파일이 자동으로 생성되어 사용자의 열 상태를 저장합니다. 따라서 컴퓨터를 껐다 켜거나, 다른 웹 브라우저로 접속하거나, 브라우저의 전체 캐시를 삭제하더라도 개인 맞춤 설정이 영구적으로 보존됩니다.</p>
+        </div>
+
+        <ul class="bullet-list">
+            <li><strong>설정 활성화</strong>: 화면 우측 상단의 <span class="badge-blue">⚙️ 열 설정</span> 버튼을 클릭하면 전체 열 목록 체크박스 드롭다운이 나타납니다.</li>
+            <li><strong>열 숨기기/보이기</strong>: 체크박스를 클릭해 체크를 지우면 화면에서 해당 열이 즉시 사라집니다. 다시 체크하면 해당 열이 본래 순서대로 즉각 복원됩니다.</li>
+            <li><strong>기능 초기화</strong>: 드롭다운 우측 상단의 <u>초기화</u> 링크를 클릭하면 즉시 모든 열이 표시되는 기본 상태로 초기화됩니다.</li>
+            <li><strong>자동 엑셀 내보내기 동기화</strong>: 사용자가 열 설정을 통해 필요한 칼럼만 노출시킨 상태에서 <span class="badge-green">📥 엑셀 내보내기</span>를 수행하면, 숨겨진 열들을 제외하고 화면에 보이는 칼럼들만 깨끗하게 엑셀 시트로 출력됩니다.</li>
+        </ul>
+
+        <div class="image-container">
+            <img src="personalization_dropdown_active.png" alt="Personalization Dropdown Menu">
+            <div class="image-caption">그림 2. ⚙️ 열 설정 버튼 클릭 시 활성화되는 선택 드롭다운 체크 리스트</div>
+        </div>
+
+        <div class="image-container">
+            <img src="compact_table_view.png" alt="Personalization Hidden Columns View">
+            <div class="image-caption">그림 3. 불필요한 열을 숨겼을 때 화면에 맞춰 자동으로 열 크기가 조절된 모습 (좌우 스크롤바가 생성되지 않음)</div>
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. SAP 상세 정보(S/O) 결합 기능 가이드</div>
+        <p>생산 실적 매칭 결과에 주문번호, Sales Doc, 생산 시작일, 고객명 등 상세 정보를 결합하기 위해 SAP ERP 시스템에서 추출한 상세 정보 데이터를 결합하는 기능을 지원합니다.</p>
+        
+        <div class="highlight-box">
+            <h4>ERP 데이터 조회 및 추출 방법</h4>
+            <ul class="bullet-list" style="margin-bottom: 0;">
+                <li><strong>사용 T-Code</strong>: SAP ERP 시스템에서 <strong><code>ZPPM6680</code></strong> 또는 <strong><code>ZPPM6681</code></strong> 트랜잭션 코드를 사용하여 필요한 기간의 생산 상세 내역을 조회합니다.</li>
+                <li><strong>추출 파일 포맷</strong>: 조회된 화면에서 데이터를 <strong>HTML 웹 보관파일 형식(<code>.mhtml</code> 또는 <code>.html</code>)</strong>으로 파일 시스템에 내보냅니다. (이 시스템은 유연한 파싱 엔진을 탑재하고 있어 파일의 레이아웃 형식이나 칼럼 순서에 구애받지 않고 자동으로 데이터를 파싱 및 병합합니다.)</li>
+            </ul>
+        </div>
+
+        <ul class="bullet-list">
+            <li><strong>1842(성주) 결합</strong>: 성주 사업장에 해당하는 생산 데이터를 전용으로 매칭 및 결합하고자 할 때 사용합니다.</li>
+            <li><strong>1840(남산+) 결합</strong>: 성주 사업장을 포함하여 남산 사업장 등 <strong>모든 Site(생산처)의 데이터 결합 및 매칭을 통합 지원</strong>합니다. 성주 이외의 다른 생산처 데이터를 분석하거나 전체 공장의 데이터를 결합해야 할 경우 이 버튼을 통해 업로드하여 진행합니다.</li>
+            <li><strong>결합 실행</strong>: 두 업로드 칸에 각각 알맞은 MHTML 파일을 지정한 뒤 우측의 <span class="badge-blue">결합 실행</span> 버튼을 누르면 즉시 테이블 칼럼에 상세 정보(Sales Doc, 시작일, 고객명 등)가 바인딩됩니다.</li>
+        </ul>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. 실행 방법 및 유의사항</div>
+        <ul class="bullet-list">
+            <li><strong>프로그램 실행</strong>: 제공된 압축파일(<code>mps_dashboard.zip</code>)의 압축을 풀고 <code>대시보드_실행.bat</code> 또는 <code>1.배경실행_대시보드.bat</code> 파일을 더블클릭하면 백그라운드 서버가 구동되며 웹 페이지가 자동으로 실행됩니다.</li>
+            <li><strong>서버 종료</strong>: 웹 브라우저 우측 상단의 <span class="badge-blue">● 서버 종료</span> 버튼을 누르면 백그라운드 서버가 안전하게 차단됩니다.</li>
+            <li><strong>설정 초기화 오류 시</strong>: 실행 폴더 내에 생성된 <code>preferences.json</code> 파일을 직접 휴지통에 버리고 페이지를 새로고침하면 모든 개인 설정이 즉시 공장 초기화됩니다.</li>
+        </ul>
+    </div>
+
+    <!-- Footer Section -->
+    <div class="footer">
+        © 2026 Advanced Material Planning System | MPS Production Planning Team
+    </div>
+
+</body>
+</html>
