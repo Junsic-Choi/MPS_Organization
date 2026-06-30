@@ -81,3 +81,9 @@ vbs_step_log*
 # User preferences
 preferences.json
 
+# User guide images
+comparison_delta_overlapping_fixed.png
+personalization_dropdown_active.png
+compact_table_view.png
+
+
