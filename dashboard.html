@@ -22,8 +22,27 @@
             --accent-color: #3b82f6;
             --accent-glow: rgba(59, 130, 246, 0.4);
             --border-color: #334155;
+            --border-color-medium: #475569;
+            --border-color-thick: #64748b;
+            --month-divider-color: #475569;
             --danger: #ef4444;
             --success: #10b981;
+        }
+
+        :root[data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --surface-color: #ffffff;
+            --surface-hover: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --accent-color: #2563eb;
+            --accent-glow: rgba(37, 99, 235, 0.1);
+            --border-color: #cbd5e1;
+            --border-color-medium: #94a3b8;
+            --border-color-thick: #64748b;
+            --month-divider-color: #cbd5e1;
+            --danger: #dc2626;
+            --success: #16a34a;
         }
 
         * {
@@ -636,7 +655,7 @@
         }
 
         tbody tr:hover {
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--surface-hover);
         }
 
         /* Loading Spinner */
@@ -690,6 +709,44 @@
         }
         #data-table th, #data-table td { white-space: nowrap !important; }
         .sap-upload-box { background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); }
+
+        /* saved-file-item styles */
+        .saved-file-item {
+            padding: 0.6rem 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--surface-color);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .saved-file-item:hover {
+            background: var(--surface-hover);
+            border-color: var(--accent-color);
+        }
+        .saved-file-item.selected {
+            border-color: var(--accent-color);
+            background: var(--accent-glow);
+        }
+
+        /* Custom Table Borders & Gridlines */
+        .month-cell {
+            border-left: 1.5px solid var(--month-divider-color) !important;
+        }
+        .month-start-cell {
+            border-left: 2.5px solid var(--border-color-thick) !important;
+        }
+        .total-cell {
+            border-left: 2.5px solid var(--border-color-thick) !important;
+        }
+        .border-bottom-thick {
+            border-bottom: 2.5px solid var(--border-color-thick) !important;
+        }
+        .border-bottom-medium {
+            border-bottom: 1.5px solid var(--border-color-medium) !important;
+        }
     </style>
 </head>
 
@@ -701,6 +758,9 @@
             <div class="user-info" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">
                 실시간 엔진 업데이트 완료
             </div>
+            <button id="theme-toggle-btn" onclick="toggleTheme()" style="background: rgba(255,255,255,0.15); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: background 0.2s;">
+                ☀️ 라이트 모드
+            </button>
             <button onclick="shutdownServer()" style="background: var(--danger); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
                 🔴 서버 종료
             </button>
@@ -712,7 +772,7 @@
         <div class="action-area" id="action-area" style="margin-top: 5rem; padding: 4rem;">
             <div style="margin-bottom: 1rem;">
                 <div class="badge" style="background: var(--accent-color); margin-bottom: 1rem;">준비 완료 (READY)</div>
-                <h1 style="font-weight: 700; font-size: 2.5rem; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">MPS 데이터 실시간 추출</h1>
+                <h1 style="font-weight: 700; font-size: 2.5rem; margin-bottom: 1rem; color: var(--text-primary);">MPS 데이터 실시간 추출</h1>
                 <p style="color: var(--text-secondary); font-size: 1.1rem; line-height: 1.6; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">
                     MPS 엑셀 파일을 선택하면 시스템이 즉시 분석을 시작합니다. <br>
                     <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 표준 형식 지원)</span>
@@ -990,6 +1050,32 @@
     </main>
 
     <script>
+        // ========== Theme Management ==========
+        function initTheme() {
+            const savedTheme = localStorage.getItem('mps_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+        initTheme();
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('mps_theme', newTheme);
+            updateThemeButton(newTheme);
+        }
+
+        function updateThemeButton(theme) {
+            const btn = document.getElementById('theme-toggle-btn');
+            if (btn) {
+                if (theme === 'light') {
+                    btn.innerHTML = '🌙 다크 모드';
+                } else {
+                    btn.innerHTML = '☀️ 라이트 모드';
+                }
+            }
+        }
+
         const extractBtn = document.getElementById('extract-btn');
         const statusMsg = document.getElementById('status-msg');
         const processingText = document.getElementById('processing-text');
@@ -1336,7 +1422,8 @@ DST: 22. 지티테크`;
             
             savedMpsFiles.forEach(file => {
                 const item = document.createElement('div');
-                item.className = 'saved-file-item';
+                const isSelected = selectedSavedFile === file.filename;
+                item.className = 'saved-file-item' + (isSelected ? ' selected' : '');
                 
                 const sizeStr = file.size ? `${(file.size / 1024).toFixed(0)} KB` : '크기 불명';
                 
@@ -1345,31 +1432,6 @@ DST: 22. 지티테크`;
                     const d = new Date(file.mtime);
                     dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
                 }
-                
-                const isSelected = selectedSavedFile === file.filename;
-                
-                item.style.padding = '0.6rem 0.8rem';
-                item.style.border = isSelected ? '1px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.05)';
-                item.style.borderRadius = '8px';
-                item.style.background = isSelected ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.02)';
-                item.style.cursor = 'pointer';
-                item.style.transition = 'all 0.2s';
-                item.style.display = 'flex';
-                item.style.justifyContent = 'space-between';
-                item.style.alignItems = 'center';
-                
-                item.addEventListener('mouseenter', () => {
-                    if (selectedSavedFile !== file.filename) {
-                        item.style.background = 'rgba(255,255,255,0.06)';
-                        item.style.borderColor = 'rgba(255,255,255,0.2)';
-                    }
-                });
-                item.addEventListener('mouseleave', () => {
-                    if (selectedSavedFile !== file.filename) {
-                        item.style.background = 'rgba(255,255,255,0.02)';
-                        item.style.borderColor = 'rgba(255,255,255,0.05)';
-                    }
-                });
                 
                 item.onclick = () => selectSavedFile(file.filename);
                 
@@ -2172,6 +2234,7 @@ DST: 22. 지티테크`;
                 const thMonth = document.createElement('th');
                 thMonth.textContent = month;
                 thMonth.style.textAlign = 'right';
+                thMonth.classList.add('month-cell');
                 trHead.appendChild(thMonth);
             });
             
@@ -2179,6 +2242,7 @@ DST: 22. 지티테크`;
             thTotal.textContent = '합계';
             thTotal.style.textAlign = 'right';
             thTotal.style.width = '8%';
+            thTotal.classList.add('total-cell');
             trHead.appendChild(thTotal);
             
             summaryHead.appendChild(trHead);
@@ -2276,8 +2340,13 @@ DST: 22. 지티테크`;
             }
             
             // 6. Render rows
-            rowList.forEach(item => {
+            rowList.forEach((item, idx) => {
                 const tr = document.createElement('tr');
+                
+                const isLastRow = (idx === rowList.length - 1);
+                const nextItem = isLastRow ? null : rowList[idx + 1];
+                const isGroupLast = isLastRow || (nextItem && nextItem.grpSpan > 0);
+                const isModelLast = isLastRow || (nextItem && nextItem.modelSpan > 0);
                 
                 // Division Cell (with rowspan if applicable)
                 if (item.divSpan > 0) {
@@ -2288,6 +2357,7 @@ DST: 22. 지티테크`;
                     tdDiv.style.fontWeight = 'bold';
                     tdDiv.style.background = 'var(--surface-hover)';
                     tdDiv.style.borderRight = '1px solid var(--border-color)';
+                    tdDiv.classList.add('border-bottom-thick');
                     tr.appendChild(tdDiv);
                 }
                 
@@ -2299,6 +2369,7 @@ DST: 22. 지티테크`;
                     tdGroup.style.fontWeight = '500';
                     tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
                     tdGroup.style.borderRight = '1px solid var(--border-color)';
+                    tdGroup.classList.add('border-bottom-thick');
                     tr.appendChild(tdGroup);
                 }
                 
@@ -2310,6 +2381,16 @@ DST: 22. 지티테크`;
                     tdModel.style.fontWeight = '500';
                     tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
                     tdModel.style.borderRight = '1px solid var(--border-color)';
+                    
+                    const endIdx = idx + item.modelSpan - 1;
+                    const endItemNext = (endIdx === rowList.length - 1) ? null : rowList[endIdx + 1];
+                    const isModelEndGroupLast = (endIdx === rowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
+                    
+                    if (isModelEndGroupLast) {
+                        tdModel.classList.add('border-bottom-thick');
+                    } else {
+                        tdModel.classList.add('border-bottom-medium');
+                    }
                     tr.appendChild(tdModel);
                 }
                 
@@ -2317,6 +2398,11 @@ DST: 22. 지티테크`;
                 const tdSite = document.createElement('td');
                 tdSite.textContent = item.site;
                 tdSite.style.textAlign = 'center';
+                if (isGroupLast) {
+                    tdSite.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdSite.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdSite);
                 
                 // Monthly Qty Cells
@@ -2326,6 +2412,12 @@ DST: 22. 지티테크`;
                     const qty = item.monthlyQty[month] || 0;
                     tdMonthVal.textContent = qty > 0 ? qty.toLocaleString() : '-';
                     tdMonthVal.style.textAlign = 'right';
+                    tdMonthVal.classList.add('month-cell');
+                    if (isGroupLast) {
+                        tdMonthVal.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdMonthVal.classList.add('border-bottom-medium');
+                    }
                     if (qty > 0) {
                         tdMonthVal.style.fontWeight = '500';
                     } else {
@@ -2343,6 +2435,12 @@ DST: 22. 지티테크`;
                 tdTotalVal.style.fontWeight = 'bold';
                 tdTotalVal.style.color = 'var(--success)';
                 tdTotalVal.style.background = 'rgba(16, 185, 129, 0.05)';
+                tdTotalVal.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdTotalVal.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdTotalVal.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdTotalVal);
                 
                 summaryBody.appendChild(tr);
@@ -2546,7 +2644,7 @@ DST: 22. 지티테크`;
                 thMonth.textContent = month;
                 thMonth.colSpan = 3;
                 thMonth.style.textAlign = 'center';
-                thMonth.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
+                thMonth.classList.add('month-start-cell');
                 
                 const hasA = monthsA.has(month);
                 const hasB = monthsB.has(month);
@@ -2561,7 +2659,7 @@ DST: 22. 지티테크`;
             thTotal.textContent = '합계';
             thTotal.colSpan = 3;
             thTotal.style.textAlign = 'center';
-            thTotal.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
+            thTotal.classList.add('month-start-cell');
             tr1.appendChild(thTotal);
 
             summaryHead.appendChild(tr1);
@@ -2575,7 +2673,7 @@ DST: 22. 지티테크`;
                 thA.textContent = 'A';
                 thA.style.textAlign = 'right';
                 thA.style.fontSize = '0.75rem';
-                thA.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
+                thA.classList.add('month-start-cell');
                 if (!hasA) {
                     thA.style.background = 'rgba(0, 0, 0, 0.2)';
                     thA.style.opacity = '0.4';
@@ -2608,7 +2706,7 @@ DST: 22. 지티테크`;
             thTotA.textContent = 'A합';
             thTotA.style.textAlign = 'right';
             thTotA.style.fontSize = '0.75rem';
-            thTotA.style.borderLeft = '2.5px solid rgba(255, 255, 255, 0.2)';
+            thTotA.classList.add('month-start-cell');
             tr2.appendChild(thTotA);
 
             const thTotB = document.createElement('th');
@@ -2777,8 +2875,13 @@ DST: 22. 지티테크`;
                 i = j;
             }
 
-            rowList.forEach(item => {
+            rowList.forEach((item, idx) => {
                 const tr = document.createElement('tr');
+
+                const isLastRow = (idx === rowList.length - 1);
+                const nextItem = isLastRow ? null : rowList[idx + 1];
+                const isGroupLast = isLastRow || (nextItem && nextItem.grpSpan > 0);
+                const isModelLast = isLastRow || (nextItem && nextItem.modelSpan > 0);
 
                 if (item.divSpan > 0) {
                     const tdDiv = document.createElement('td');
@@ -2788,6 +2891,7 @@ DST: 22. 지티테크`;
                     tdDiv.style.fontWeight = 'bold';
                     tdDiv.style.background = 'var(--surface-hover)';
                     tdDiv.style.borderRight = '1px solid var(--border-color)';
+                    tdDiv.classList.add('border-bottom-thick');
                     tr.appendChild(tdDiv);
                 }
 
@@ -2798,6 +2902,7 @@ DST: 22. 지티테크`;
                     tdGroup.style.fontWeight = '500';
                     tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
                     tdGroup.style.borderRight = '1px solid var(--border-color)';
+                    tdGroup.classList.add('border-bottom-thick');
                     tr.appendChild(tdGroup);
                 }
 
@@ -2808,6 +2913,16 @@ DST: 22. 지티테크`;
                     tdModel.style.fontWeight = '500';
                     tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
                     tdModel.style.borderRight = '1px solid var(--border-color)';
+                    
+                    const endIdx = idx + item.modelSpan - 1;
+                    const endItemNext = (endIdx === rowList.length - 1) ? null : rowList[endIdx + 1];
+                    const isModelEndGroupLast = (endIdx === rowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
+                    
+                    if (isModelEndGroupLast) {
+                        tdModel.classList.add('border-bottom-thick');
+                    } else {
+                        tdModel.classList.add('border-bottom-medium');
+                    }
                     
                     if (modelChanges[item.model]) {
                         const dot = document.createElement('span');
@@ -2823,6 +2938,11 @@ DST: 22. 지티테크`;
                 const tdSite = document.createElement('td');
                 tdSite.textContent = item.site;
                 tdSite.style.textAlign = 'center';
+                if (isGroupLast) {
+                    tdSite.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdSite.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdSite);
 
                 let rowSumA = 0;
@@ -2841,7 +2961,13 @@ DST: 22. 지티테크`;
 
                     const tdA = document.createElement('td');
                     tdA.style.textAlign = 'right';
-                    tdA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+                    tdA.classList.add('month-start-cell');
+                    tdA.classList.add('month-cell');
+                    if (isGroupLast) {
+                        tdA.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdA.classList.add('border-bottom-medium');
+                    }
                     if (!hasA) {
                         tdA.textContent = '-';
                         tdA.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2855,6 +2981,12 @@ DST: 22. 지티테크`;
 
                     const tdB = document.createElement('td');
                     tdB.style.textAlign = 'right';
+                    tdB.classList.add('month-cell');
+                    if (isGroupLast) {
+                        tdB.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdB.classList.add('border-bottom-medium');
+                    }
                     if (!hasB) {
                         tdB.textContent = '-';
                         tdB.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2869,6 +3001,12 @@ DST: 22. 지티테크`;
                     const tdDiff = document.createElement('td');
                     tdDiff.style.textAlign = 'right';
                     tdDiff.style.fontWeight = 'bold';
+                    tdDiff.classList.add('month-cell');
+                    if (isGroupLast) {
+                        tdDiff.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdDiff.classList.add('border-bottom-medium');
+                    }
                     if (!hasA || !hasB) {
                         tdDiff.textContent = '-';
                         tdDiff.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2897,13 +3035,25 @@ DST: 22. 지티테크`;
                 tdTotValA.textContent = rowSumA > 0 ? rowSumA.toLocaleString() : '-';
                 tdTotValA.style.textAlign = 'right';
                 tdTotValA.style.fontWeight = '500';
-                tdTotValA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+                tdTotValA.classList.add('month-start-cell');
+                tdTotValA.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdTotValA.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdTotValA.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdTotValA);
 
                 const tdTotValB = document.createElement('td');
                 tdTotValB.textContent = rowSumB > 0 ? rowSumB.toLocaleString() : '-';
                 tdTotValB.style.textAlign = 'right';
                 tdTotValB.style.fontWeight = '500';
+                tdTotValB.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdTotValB.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdTotValB.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdTotValB);
 
                 const tdTotValDiff = document.createElement('td');
@@ -2924,6 +3074,12 @@ DST: 22. 지티테크`;
                 }
                 tdTotValDiff.style.textAlign = 'right';
                 tdTotValDiff.style.fontWeight = 'bold';
+                tdTotValDiff.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdTotValDiff.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdTotValDiff.classList.add('border-bottom-medium');
+                }
                 tr.appendChild(tdTotValDiff);
 
                 summaryBody.appendChild(tr);
@@ -2966,7 +3122,8 @@ DST: 22. 지티테크`;
 
                     const tdTotalA = document.createElement('td');
                     tdTotalA.style.textAlign = 'right';
-                    tdTotalA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+                    tdTotalA.classList.add('month-start-cell');
+                    tdTotalA.classList.add('month-cell');
                     if (!hasA) {
                         tdTotalA.textContent = '-';
                         tdTotalA.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2978,6 +3135,7 @@ DST: 22. 지티테크`;
 
                     const tdTotalB = document.createElement('td');
                     tdTotalB.style.textAlign = 'right';
+                    tdTotalB.classList.add('month-cell');
                     if (!hasB) {
                         tdTotalB.textContent = '-';
                         tdTotalB.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -2990,6 +3148,7 @@ DST: 22. 지티테크`;
                     const tdTotalDiff = document.createElement('td');
                     tdTotalDiff.style.textAlign = 'right';
                     tdTotalDiff.style.fontWeight = 'bold';
+                    tdTotalDiff.classList.add('month-cell');
                     if (!hasA || !hasB) {
                         tdTotalDiff.textContent = '-';
                         tdTotalDiff.style.background = 'rgba(0, 0, 0, 0.1)';
@@ -3017,13 +3176,15 @@ DST: 22. 지티테크`;
                 tdGrandA.textContent = grandSumA > 0 ? grandSumA.toLocaleString() : '-';
                 tdGrandA.style.textAlign = 'right';
                 tdGrandA.style.color = 'var(--success)';
-                tdGrandA.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+                tdGrandA.classList.add('month-start-cell');
+                tdGrandA.classList.add('total-cell');
                 trTotal.appendChild(tdGrandA);
 
                 const tdGrandB = document.createElement('td');
                 tdGrandB.textContent = grandSumB > 0 ? grandSumB.toLocaleString() : '-';
                 tdGrandB.style.textAlign = 'right';
                 tdGrandB.style.color = 'var(--success)';
+                tdGrandB.classList.add('total-cell');
                 trTotal.appendChild(tdGrandB);
 
                 const tdGrandDiff = document.createElement('td');
@@ -3044,6 +3205,7 @@ DST: 22. 지티테크`;
                 }
                 tdGrandDiff.style.textAlign = 'right';
                 tdGrandDiff.style.fontWeight = 'bold';
+                tdGrandDiff.classList.add('total-cell');
                 trTotal.appendChild(tdGrandDiff);
 
                 summaryBody.appendChild(trTotal);
@@ -3878,6 +4040,7 @@ DST: 22. 지티테크`;
             setInterval(sendHeartbeat, 3000);
 
             extractBtn.disabled = true;
+            updateThemeButton(localStorage.getItem('mps_theme') || 'dark');
             loadSiteMaster();
             loadUserPreferences();
             initCellSelection();
@@ -4046,6 +4209,7 @@ DST: 22. 지티테크`;
 
                         if (isChangedModel) {
                             ws[key].s.font.color = { rgb: "EA580C" }; // 진한 주황색 (Dark Orange)
+                            ws[key].s.font.bold = false;
                         }
                     }
                 });
