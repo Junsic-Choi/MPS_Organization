@@ -3952,7 +3952,14 @@ DST: 22. 지티테크`;
                         }
                     };
 
-                    const val = ws[key].v;
+                    let val = ws[key].v;
+                    let isChangedModel = false;
+                    if (typeof val === 'string' && val.includes('●')) {
+                        val = val.replace('●', '').trim();
+                        ws[key].v = val;
+                        if (ws[key].w !== undefined) ws[key].w = val;
+                        isChangedModel = true;
+                    }
                     const isHeader = rowNum === 1 || (window.compareMode && rowNum === 2);
                     const isTotalRow = rowNum === maxRow && maxRow > 2;
 
@@ -4028,6 +4035,10 @@ DST: 22. 지티테크`;
                             } else {
                                 ws[key].s.alignment.horizontal = "left";
                             }
+                        }
+
+                        if (isChangedModel) {
+                            ws[key].s.font.color = { rgb: "EA580C" }; // 진한 주황색 (Dark Orange)
                         }
                     }
                 });
