@@ -152,6 +152,16 @@ app.post('/api/preferences', (req, res) => {
     }
 });
 
+// Heartbeat state
+let lastHeartbeat = Date.now();
+let hasReceivedHeartbeat = false;
+
+app.post('/api/heartbeat', (req, res) => {
+    lastHeartbeat = Date.now();
+    hasReceivedHeartbeat = true;
+    res.sendStatus(200);
+});
+
 // 서버 종료 API
 app.post('/api/shutdown', (req, res) => {
     console.log('[api] Shutdown requested. Exiting...');
@@ -209,3 +219,23 @@ setInterval(() => {
         process.exit(1);
     }
 }, 60000);
+
+// Auto-shutdown if no heartbeat is received
+const HEARTBEAT_TIMEOUT = 12000; // 12 seconds
+const GRACE_PERIOD = 60000; // 60 seconds grace period on startup
+const startupTime = Date.now();
+
+setInterval(() => {
+    const now = Date.now();
+    if (hasReceivedHeartbeat) {
+        if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
+            console.log('[AUTO-SHUTDOWN] No heartbeat received for 12 seconds. All dashboard pages closed. Shutting down...');
+            process.exit(0);
+        }
+    } else {
+        if (now - startupTime > GRACE_PERIOD) {
+            console.log('[AUTO-SHUTDOWN] No client connected within grace period. Shutting down...');
+            process.exit(0);
+        }
+    }
+}, 5000);

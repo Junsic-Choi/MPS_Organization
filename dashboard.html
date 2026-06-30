@@ -3870,6 +3870,13 @@ DST: 22. 지티테크`;
 
 
         window.addEventListener('DOMContentLoaded', () => {
+            // Heartbeat system to keep server alive
+            function sendHeartbeat() {
+                fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+            }
+            sendHeartbeat();
+            setInterval(sendHeartbeat, 3000);
+
             extractBtn.disabled = true;
             loadSiteMaster();
             loadUserPreferences();
