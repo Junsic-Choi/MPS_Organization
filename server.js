@@ -198,13 +198,6 @@ function broadcastLog(msg) {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`MPS Server LIVE on Port ${PORT}`);
-    
-    // Automatically open browser on startup
-    const url = `http://localhost:${PORT}`;
-    const startCmd = process.platform === 'win32' ? 'start ""' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-    exec(`${startCmd} "${url}"`, (err) => {
-        if (err) console.error('Failed to open browser:', err);
-    });
 });
 
 server.on('error', (err) => {

@@ -15,6 +15,10 @@ timeout /t 1 /nobreak >nul
 
 wscript.exe run_dashboard_silent.vbs
 
+echo [INFO] 브라우저를 통해 대시보드를 엽니다...
+timeout /t 1 /nobreak >nul
+start http://localhost:8890
+
 echo [SUCCESS] 서버가 백그라운드에서 정상적으로 실행되었습니다.
-timeout /t 2 >nul
+timeout /t 1 >nul
 exit
