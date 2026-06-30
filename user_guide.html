@@ -168,10 +168,10 @@
     <div class="header">
         <div>
             <h1>MPS 생산계획 대시보드</h1>
-            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 1.1rem;">신규 기능 및 개선사항 사용자 가이드</p>
+            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 1.1rem;">신규 기능 및 사용 가이드</p>
         </div>
         <div class="meta">
-            <div>배포 버전: v3.3 - Personalization</div>
+            <div>배포 버전: v3.3 - 사용자 맞춤 버전</div>
             <div>작성일자: 2026년 6월 30일</div>
         </div>
     </div>
@@ -179,29 +179,30 @@
     <!-- Section 1 -->
     <div class="section">
         <div class="section-title">1. 개요</div>
-        <p>본 문서는 MPS 생산계획 대시보드(v3.3)의 주요 기능 변경 및 새로 추가된 <strong>사용자 열 개인화 설정(Column Personalization)</strong> 기능에 대한 이해를 돕기 위한 사용자 가이드입니다.</p>
+        <p>본 문서는 MPS 생산계획 대시보드(v3.3)에 새롭게 추가된 <strong>사용자 화면 맞춤 설정(원하는 열 골라보기)</strong> 기능과 사용 방법들을 컴퓨터 용어 없이 쉽게 이해할 수 있도록 정리한 가이드입니다.</p>
         <div class="highlight-box">
             <h4>핵심 업데이트 내용 요약</h4>
             <ul class="bullet-list" style="margin-bottom: 0;">
-                <li><strong>계획 데이터 비교 분석의 Delta(Δ) 계산 규칙 수정</strong>: 공통 계획 수립 기간이 아닌 경우 Delta 계산에서 자동 제외되어 사용자의 불필요한 혼선을 제거했습니다.</li>
-                <li><strong>테이블 조회 열 개인화(On/Off) 및 영구 보존 기능 탑재</strong>: 사용자가 보고 싶은 열만 선택하여 화면을 구성할 수 있으며, 재접속 시에도 브라우저 캐시 및 서버 로컬 파일에 안전하게 보존됩니다.</li>
-                <li><strong>맞춤형 엑셀 출력 동기화</strong>: 화면에서 숨겨진 열은 엑셀 파일로 추출할 때도 자동으로 필터링되어 출력됩니다.</li>
+                <li><strong>수량 차이(변동량) 계산 방식 개선</strong>: 비교 대상 계획표의 기간이 다를 때, 겹치지 않는 달은 불필요한 계산을 제외하여 혼동을 방지합니다.</li>
+                <li><strong>내가 원하는 열만 선택해서 보기 (영구 기억)</strong>: 보고 싶은 열만 선택해서 볼 수 있으며, 프로그램을 종료했다가 다시 실행하더라도 설정한 상태가 그대로 유지됩니다.</li>
+                <li><strong>화면 상태 그대로 엑셀 저장</strong>: 화면에서 숨겨놓은 열은 엑셀 파일로 저장할 때도 자동으로 제외되어 깨끗하게 저장됩니다.</li>
+                <li><strong>SAP 주문 상세 정보 결합 기능 탑재</strong>: 주문번호, 시작일, 고객명 등을 편리하게 합쳐서 분석할 수 있습니다.</li>
             </ul>
         </div>
     </div>
 
     <!-- Section 2 -->
     <div class="section">
-        <div class="section-title">2. 계획 비교 분석의 Delta(Δ) 계산 방식 개선</div>
-        <p>서로 계획 수립 기간(Planning Window)이 다른 두 MPS 파일(예: April~September vs May~October)을 비교할 때, 겹치지 않는 외곽 기간(4월 및 10월)에 대해 무리하게 변경량이 산출되는 문제를 수정했습니다.</p>
+        <div class="section-title">2. 계획 비교 시 수량 차이(변동량) 계산 방식 수정</div>
+        <p>서로 계획 기간(달)이 다른 두 생산 계획표(예: 4월~9월 계획표 vs 5월~10월 계획표)를 불러와 서로 비교할 때, 겹치지 않는 바깥 기간(4월 및 10월)은 서로 비교할 수 없으므로 무리한 계산을 방지하도록 수정했습니다.</p>
         <ul class="bullet-list">
-            <li><strong>비겹침 기간(4월, 10월 등)</strong>: 한쪽 파일에만 계획 정보가 존재하는 기간은 실질적인 비교 대상이 아니므로, Delta(Δ) 열에 수치를 산출하지 않고 회색 음영의 대시(<code>-</code>) 마스킹 처리하여 보존합니다.</li>
-            <li><strong>겹침 기간(5월 ~ 9월)</strong>: 양쪽 파일 모두에 계획 기간이 존재할 경우, 한 파일에서 수량이 <code>0</code> 혹은 없는(<code>-</code>) 상태로 바뀌더라도 변동치(예: <code>-2</code> 또는 <code>+1</code>)를 정상적으로 도출하고 직관적인 색상 하이라이트(녹색/적색)를 표시합니다.</li>
+            <li><strong>겹치지 않는 달 (4월, 10월 등)</strong>: 한쪽에만 계획 정보가 존재하는 달은 계산을 건너뛰고, 회색 바탕에 대시(<code>-</code>) 기호로 보기 좋게 가려서 표시합니다.</li>
+            <li><strong>공통으로 겹치는 달 (5월 ~ 9월)</strong>: 양쪽 계획표에 모두 들어있는 기간은 계획 수량이 변경되거나 0으로 바뀔 때 변동치(예: <code>-2</code> 또는 <code>+1</code>)를 정확하게 보여주고 초록/빨강 색상으로 변동을 강조합니다.</li>
         </ul>
         
         <div class="image-container">
             <img src="comparison_delta_overlapping_fixed.png" alt="Delta Calculation Reverted Layout">
-            <div class="image-caption">그림 1. 4월과 10월 등 공통되지 않은 계획 기간은 Delta 열에 마스킹(-) 및 음영 처리된 화면</div>
+            <div class="image-caption">그림 1. 4월과 10월 등 공통되지 않은 계획 기간은 차이 계산을 제외하고 회색(-)으로 표시한 화면</div>
         </div>
     </div>
 
@@ -209,59 +210,61 @@
 
     <!-- Section 3 -->
     <div class="section">
-        <div class="section-title">3. 사용자 정의 조회 열 개인화(Personalization)</div>
-        <p>생산 실적 매칭 결과 화면에서 보고 싶은 정보만 선별하여 볼 수 있도록 테이블 열의 표시 여부를 제어하는 개인화 기능이 추가되었습니다.</p>
+        <div class="section-title">3. 나만의 화면 설정 (원하는 열 선택해서 보기)</div>
+        <p>화면에 표시되는 여러 가지 열(기종분류, RPM, 모델코드 등) 중 불필요한 항목은 숨기고 꼭 필요한 정보만 골라 볼 수 있도록 화면 설정 기능이 추가되었습니다.</p>
         
         <div class="highlight-box">
-            <h4>동작 메커니즘 및 편의성</h4>
-            <p style="margin-bottom: 0;">대시보드 프로그램이 실행되는 로컬 디렉토리에 <strong><code>preferences.json</code></strong> 파일이 자동으로 생성되어 사용자의 열 상태를 저장합니다. 따라서 컴퓨터를 껐다 켜거나, 다른 웹 브라우저로 접속하거나, 브라우저의 전체 캐시를 삭제하더라도 개인 맞춤 설정이 영구적으로 보존됩니다.</p>
+            <h4>설정 보존 기능</h4>
+            <p style="margin-bottom: 0;">내가 설정한 체크박스 정보는 프로그램 실행 폴더 내에 자동으로 기록됩니다. 따라서 <strong>창을 끄거나, 웹 브라우저 기록을 지우거나, 컴퓨터를 재부팅하더라도 나만의 설정이 영구적으로 기억</strong>됩니다.</p>
         </div>
 
         <ul class="bullet-list">
-            <li><strong>설정 활성화</strong>: 화면 우측 상단의 <span class="badge-blue">⚙️ 열 설정</span> 버튼을 클릭하면 전체 열 목록 체크박스 드롭다운이 나타납니다.</li>
-            <li><strong>열 숨기기/보이기</strong>: 체크박스를 클릭해 체크를 지우면 화면에서 해당 열이 즉시 사라집니다. 다시 체크하면 해당 열이 본래 순서대로 즉각 복원됩니다.</li>
-            <li><strong>기능 초기화</strong>: 드롭다운 우측 상단의 <u>초기화</u> 링크를 클릭하면 즉시 모든 열이 표시되는 기본 상태로 초기화됩니다.</li>
-            <li><strong>자동 엑셀 내보내기 동기화</strong>: 사용자가 열 설정을 통해 필요한 칼럼만 노출시킨 상태에서 <span class="badge-green">📥 엑셀 내보내기</span>를 수행하면, 숨겨진 열들을 제외하고 화면에 보이는 칼럼들만 깨끗하게 엑셀 시트로 출력됩니다.</li>
+            <li><strong>설정 켜기</strong>: 화면 우측 상단의 <span class="badge-blue">⚙️ 열 설정</span> 버튼을 누르면 체크박스 선택 메뉴가 펼쳐집니다.</li>
+            <li><strong>숨기기 및 보이기</strong>: 체크박스를 해제하면 해당 열이 화면에서 즉시 사라집니다. 다시 체크하면 원래 자리로 깨끗하게 되돌아옵니다.</li>
+            <li><strong>초기화</strong>: 처음 상태로 모든 열을 다 띄우고 싶다면 우측 상단의 <u>초기화</u> 버튼을 누르면 원상복구됩니다.</li>
+            <li><strong>화면 그대로 엑셀 저장</strong>: 화면에서 숨겨놓은 항목들은 <span class="badge-green">📥 엑셀 내보내기</span> 버튼을 누를 때 엑셀 시트에서도 자동으로 제외되어 깔끔하게 출력됩니다.</li>
         </ul>
 
         <div class="image-container">
             <img src="personalization_dropdown_active.png" alt="Personalization Dropdown Menu">
-            <div class="image-caption">그림 2. ⚙️ 열 설정 버튼 클릭 시 활성화되는 선택 드롭다운 체크 리스트</div>
+            <div class="image-caption">그림 2. ⚙️ 열 설정 버튼 클릭 시 활성화되는 선택 항목 리스트</div>
         </div>
 
         <div class="image-container">
             <img src="compact_table_view.png" alt="Personalization Hidden Columns View">
-            <div class="image-caption">그림 3. 불필요한 열을 숨겼을 때 화면에 맞춰 자동으로 열 크기가 조절된 모습 (좌우 스크롤바가 생성되지 않음)</div>
+            <div class="image-caption">그림 3. 불필요한 열을 숨겼을 때 화면에 맞춰 자동으로 크기가 조절된 모습 (가로 스크롤바가 생기지 않음)</div>
         </div>
     </div>
 
+    <div class="page-break"></div>
+
     <!-- Section 4 -->
     <div class="section">
-        <div class="section-title">4. SAP 상세 정보(S/O) 결합 기능 가이드</div>
-        <p>생산 실적 매칭 결과에 주문번호, Sales Doc, 생산 시작일, 고객명 등 상세 정보를 결합하기 위해 SAP ERP 시스템에서 추출한 상세 정보 데이터를 결합하는 기능을 지원합니다.</p>
+        <div class="section-title">4. SAP 상세 정보(주문번호/시작일) 결합 방법</div>
+        <p>생산 실적 결과에 주문번호, Sales Doc(계약서번호), 생산 시작일, 고객명 등 상세 정보를 결합하여 합쳐진 결과를 조회할 수 있습니다.</p>
         
         <div class="highlight-box">
-            <h4>ERP 데이터 조회 및 추출 방법</h4>
+            <h4>SAP 데이터 조회 및 다운로드</h4>
             <ul class="bullet-list" style="margin-bottom: 0;">
-                <li><strong>사용 T-Code</strong>: SAP ERP 시스템에서 <strong><code>ZPPM6680</code></strong> 또는 <strong><code>ZPPM6681</code></strong> 트랜잭션 코드를 사용하여 필요한 기간의 생산 상세 내역을 조회합니다.</li>
-                <li><strong>추출 파일 포맷</strong>: 조회된 화면에서 데이터를 <strong>HTML 웹 보관파일 형식(<code>.mhtml</code> 또는 <code>.html</code>)</strong>으로 파일 시스템에 내보냅니다. (이 시스템은 유연한 파싱 엔진을 탑재하고 있어 파일의 레이아웃 형식이나 칼럼 순서에 구애받지 않고 자동으로 데이터를 파싱 및 병합합니다.)</li>
+                <li><strong>SAP 화면 코드</strong>: SAP ERP 시스템 검색창에 <strong><code>ZPPM6680</code></strong> 또는 <strong><code>ZPPM6681</code></strong>을 입력하여 실행하고 조회합니다.</li>
+                <li><strong>파일 저장 포맷</strong>: 조회 결과 화면에서 데이터를 <strong>HTML 웹 페이지 파일 형식(<code>.mhtml</code> 또는 <code>.html</code>)</strong>으로 내보내어 내 컴퓨터에 저장합니다. (저장 시 다운로드된 열의 순서나 모양에 관계없이 프로그램이 자동으로 분석하여 결합하므로, 편하게 다운로드하시면 됩니다.)</li>
             </ul>
         </div>
 
         <ul class="bullet-list">
-            <li><strong>1842(성주) 결합</strong>: 성주 사업장에 해당하는 생산 데이터를 전용으로 매칭 및 결합하고자 할 때 사용합니다.</li>
-            <li><strong>1840(남산+) 결합</strong>: 성주 사업장을 포함하여 남산 사업장 등 <strong>모든 Site(생산처)의 데이터 결합 및 매칭을 통합 지원</strong>합니다. 성주 이외의 다른 생산처 데이터를 분석하거나 전체 공장의 데이터를 결합해야 할 경우 이 버튼을 통해 업로드하여 진행합니다.</li>
-            <li><strong>결합 실행</strong>: 두 업로드 칸에 각각 알맞은 MHTML 파일을 지정한 뒤 우측의 <span class="badge-blue">결합 실행</span> 버튼을 누르면 즉시 테이블 칼럼에 상세 정보(Sales Doc, 시작일, 고객명 등)가 바인딩됩니다.</li>
+            <li><strong>1842(성주) 결합</strong>: 성주 사업장에 해당하는 파일만 별도로 등록하여 결합할 때 사용합니다.</li>
+            <li><strong>1840(남산+) 결합</strong>: <strong>성주 사업장을 제외한 남산 등 나머지 모든 생산처</strong>의 데이터를 결합하거나 전체 공장의 데이터를 결합하여 비교하고 싶을 때 사용합니다.</li>
+            <li><strong>결합 실행</strong>: 두 항목에 맞추어 MHTML 파일을 각각 선택한 다음 우측의 파란색 <strong>결합 실행</strong> 버튼을 클릭하면 즉시 화면에 정보가 병합되어 나타납니다.</li>
         </ul>
     </div>
 
     <!-- Section 5 -->
     <div class="section">
-        <div class="section-title">5. 실행 방법 및 유의사항</div>
+        <div class="section-title">5. 프로그램 실행 방법 및 주의사항</div>
         <ul class="bullet-list">
-            <li><strong>프로그램 실행</strong>: 제공된 압축파일(<code>mps_dashboard.zip</code>)의 압축을 풀고 <code>대시보드_실행.bat</code> 또는 <code>1.배경실행_대시보드.bat</code> 파일을 더블클릭하면 백그라운드 서버가 구동되며 웹 페이지가 자동으로 실행됩니다.</li>
-            <li><strong>서버 종료</strong>: 웹 브라우저 우측 상단의 <span class="badge-blue">● 서버 종료</span> 버튼을 누르면 백그라운드 서버가 안전하게 차단됩니다.</li>
-            <li><strong>설정 초기화 오류 시</strong>: 실행 폴더 내에 생성된 <code>preferences.json</code> 파일을 직접 휴지통에 버리고 페이지를 새로고침하면 모든 개인 설정이 즉시 공장 초기화됩니다.</li>
+            <li><strong>프로그램 실행</strong>: 압축을 푼 폴더 내에서 <strong><code>대시보드_실행.bat</code></strong> 파일을 더블클릭하면 프로그램 서버가 켜지며 인터넷 창이 자동으로 열립니다.</li>
+            <li><strong>서버 종료</strong>: 사용을 다 마치면 인터넷 화면 우측 상단의 <span class="badge-blue">🔴 서버 종료</span> 버튼을 누르면 서버 프로그램이 안전하게 차단됩니다.</li>
+            <li><strong>최초 실행 시 연결 대기</strong>: 컴퓨터 사양에 따라 프로그램 서버가 켜지는 속도보다 인터넷 창이 열리는 속도가 더 빠르면 일시적으로 "오류 발생" 문구가 뜰 수 있습니다. 프로그램이 작동을 시작하면 자동으로 재연결을 시도하므로, 새로고침을 누르지 마시고 약 2~3초간 대기하면 정상 화면으로 전환됩니다.</li>
         </ul>
     </div>
 
