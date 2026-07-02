@@ -993,7 +993,7 @@
         </div>
 
         <!-- Summary Data Grid (Summary Tab) -->
-        <div class="table-container" id="summary-container" style="display: none;">
+        <div id="summary-container" style="display: none;">
             <!-- Comparison Controls Card -->
             <div id="compare-controls" style="display: flex; gap: 1rem; align-items: center; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; margin-bottom: 1.5rem; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 200px;">
@@ -1038,12 +1038,14 @@
                 </div>
             </div>
             
-            <table id="summary-table" style="width: 100%; min-width: unset;">
-                <thead id="summary-head">
-                    <!-- Dynamic header row will be appended here -->
-                </thead>
-                <tbody id="summary-body"></tbody>
-            </table>
+            <div class="table-container" id="summary-table-wrapper" style="display: block;">
+                <table id="summary-table" style="width: 100%; min-width: unset;">
+                    <thead id="summary-head">
+                        <!-- Dynamic header row will be appended here -->
+                    </thead>
+                    <tbody id="summary-body"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Dual Panel Data Grid (Unused Pool Tab) -->
