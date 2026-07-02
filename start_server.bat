@@ -4,9 +4,8 @@ setlocal
 cd /d "%~dp0"
 
 echo [1/2] MPS 대시보드를 준비 중입니다...
-
 :: 기존 노드 프로세스 정리 (8890 포트 점유 방지)
-taskkill /F /IM node.exe /T 2>NUL
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8890 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 
 echo [2/2] 서버가 8890 포트에서 백그라운드 가공을 시작합니다.
 echo.

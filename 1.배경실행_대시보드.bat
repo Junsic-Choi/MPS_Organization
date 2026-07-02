@@ -1,8 +1,7 @@
 @echo off
 cd /d "%~dp0"
-rem Background Server Start
 taskkill /f /im mps_dashboard_app.exe >nul 2>&1
-taskkill /f /im node.exe >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8890 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 ping 127.0.0.1 -n 2 >nul
 
 where node >nul 2>&1
