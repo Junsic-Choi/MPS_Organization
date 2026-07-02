@@ -876,6 +876,13 @@
                 </div>
             </div>
             <div class="filter-group">
+                <label>기종 (Model)</label>
+                <div class="multiselect-container" id="multiselect-model-container">
+                    <div class="select-custom multiselect-trigger" id="model-trigger" onclick="toggleDropdown('model')">전체보기</div>
+                    <div class="multiselect-options" id="model-options"></div>
+                </div>
+            </div>
+            <div class="filter-group">
                 <label>월 (Month)</label>
                 <div class="multiselect-container" id="multiselect-month-container">
                     <div class="select-custom multiselect-trigger" id="month-trigger" onclick="toggleDropdown('month')">전체보기</div>
@@ -1104,6 +1111,8 @@
             selectedSites: [],
             groups: [],
             selectedGroups: [],
+            models: [],
+            selectedModels: [],
             months: [],
             selectedMonths: [],
             divisions: ['TC', 'MC'],
@@ -1134,6 +1143,7 @@
 
         let lastSelectedSites = [];
         let lastSelectedDivisions = ['TC', 'MC'];
+        let lastSelectedGroups = [];
 
         const tabSystem = document.getElementById('tab-system');
         const actionArea = document.getElementById('action-area');
@@ -1810,6 +1820,7 @@ DST: 22. 지티테크`;
             activeFilters.divisions = ['TC', 'MC'];
             activeFilters.selectedDivisions = ['TC', 'MC'];
             lastSelectedDivisions = ['TC', 'MC'];
+            lastSelectedGroups = [];
 
             renderMultiselectOptions('site', activeFilters.sites);
             renderMultiselectOptions('month', activeFilters.months);
@@ -1908,6 +1919,45 @@ DST: 22. 지티테크`;
             lastSelectedDivisions = [...activeFilters.selectedDivisions];
 
             renderMultiselectOptions('group', activeFilters.groups);
+            updateModelOptions();
+        }
+
+        function updateModelOptions() {
+            let activeData;
+            if (window.compareMode) {
+                activeData = [...window.compareRawA, ...window.compareRawB];
+            } else {
+                activeData = [...rawData, ...unusedData];
+            }
+
+            const validModels = new Set();
+            activeData.forEach(row => {
+                const site = row['Site'] || '';
+                const group = row['Group'];
+                const div = getDivision(group);
+                const model = row['Model'] || row['UnmappedModel'] || '';
+                if (model) {
+                    if (activeFilters.selectedSites.includes(site) && 
+                        activeFilters.selectedDivisions.includes(div) && 
+                        activeFilters.selectedGroups.includes(group)) {
+                        validModels.add(model);
+                    }
+                }
+            });
+            const sortedModels = Array.from(validModels).sort();
+
+            const groupsChanged = JSON.stringify(activeFilters.selectedGroups) !== JSON.stringify(lastSelectedGroups);
+            
+            if (groupsChanged || lastSelectedGroups.length === 0) {
+                activeFilters.selectedModels = [...sortedModels];
+            } else {
+                activeFilters.selectedModels = activeFilters.selectedModels.filter(m => sortedModels.includes(m));
+            }
+
+            activeFilters.models = sortedModels;
+            lastSelectedGroups = [...activeFilters.selectedGroups];
+
+            renderMultiselectOptions('model', activeFilters.models);
         }
 
         function renderMultiselectOptions(type, items) {
@@ -1925,7 +1975,7 @@ DST: 22. 지티테크`;
             allCheckbox.type = 'checkbox';
             allCheckbox.id = `${type}-select-all`;
             
-            const selectedList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : activeFilters.selectedMonths));
+            const selectedList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
             const isAllSelected = items.length > 0 && items.every(item => selectedList.includes(item));
             allCheckbox.checked = isAllSelected;
             
@@ -1955,7 +2005,7 @@ DST: 22. 지티테크`;
 
                 checkbox.addEventListener('change', () => {
                     const isChecked = checkbox.checked;
-                    let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : activeFilters.selectedMonths));
+                    let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
                     
                     if (isChecked) {
                         if (!currentList.includes(item)) currentList.push(item);
@@ -1969,6 +2019,8 @@ DST: 22. 지티테크`;
 
                     if (type === 'site' || type === 'division') {
                         updateGroupOptions();
+                    } else if (type === 'group') {
+                        updateModelOptions();
                     }
 
                     applyFilters();
@@ -1978,7 +2030,7 @@ DST: 22. 지티테크`;
             // Select All toggler
             allCheckbox.addEventListener('change', () => {
                 const isChecked = allCheckbox.checked;
-                let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : activeFilters.selectedMonths));
+                let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
                 
                 currentList.length = 0;
                 if (isChecked) {
@@ -1995,6 +2047,8 @@ DST: 22. 지티테크`;
 
                 if (type === 'site' || type === 'division') {
                     updateGroupOptions();
+                } else if (type === 'group') {
+                    updateModelOptions();
                 }
 
                 applyFilters();
@@ -2007,8 +2061,8 @@ DST: 22. 지티테크`;
             const trigger = document.getElementById(`${type}-trigger`);
             if (!trigger) return;
 
-            const allItems = type === 'site' ? activeFilters.sites : (type === 'group' ? activeFilters.groups : (type === 'division' ? activeFilters.divisions : activeFilters.months));
-            const selectedItems = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : activeFilters.selectedMonths));
+            const allItems = type === 'site' ? activeFilters.sites : (type === 'group' ? activeFilters.groups : (type === 'division' ? activeFilters.divisions : (type === 'model' ? activeFilters.models : activeFilters.months)));
+            const selectedItems = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
 
             if (selectedItems.length === 0) {
                 trigger.textContent = '선택 없음';
@@ -2120,6 +2174,9 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
+                const rowModel = row['Model'] || row['UnmappedModel'] || '';
+                const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
+
                 // 검색 대상 컬럼 통합 (미매칭 데이터는 필드명이 다름)
                 const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
                 const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
@@ -2130,7 +2187,7 @@ DST: 22. 지티테크`;
                                    product.includes(searchVal) ||
                                    code.includes(searchVal);
                 
-                return matchSite && matchGroup && matchMonth && matchDivision && matchSearch;
+                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
             });
 
             // 정렬 적용
@@ -2474,6 +2531,9 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
+                const rowModel = row['Model'] || row['UnmappedModel'] || '';
+                const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
+
                 const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
                 const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
                 const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
@@ -2483,7 +2543,7 @@ DST: 22. 지티테크`;
                                    product.includes(searchVal) ||
                                    code.includes(searchVal);
                 
-                return matchSite && matchGroup && matchMonth && matchDivision && matchSearch;
+                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
             });
         }
 
