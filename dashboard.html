@@ -992,15 +992,21 @@
                     <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 .MHTML 파일을 올려 기종별 상세 정보를 결합합니다. (Sales Doc, 시작일 포함)</div>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <div class="sap-upload-box">
-                        <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-bottom:4px;">1842(성주)</label>
+                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1842(성주)</label>
                         <input type="file" id="sap-1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1842')">
-                        <button onclick="document.getElementById('sap-1842').click()" class="btn-small" id="btn-1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="document.getElementById('sap-1842').click()" class="btn-small" id="btn-1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                            <button onclick="cancelSapFile('1842')" class="btn-small" id="btn-cancel-1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        </div>
                     </div>
-                    <div class="sap-upload-box">
-                        <label for="sap-1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-bottom:4px;">1840(남산+)</label>
+                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <label for="sap-1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1840(남산+)</label>
                         <input type="file" id="sap-1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1840')">
-                        <button onclick="document.getElementById('sap-1840').click()" class="btn-small" id="btn-1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="document.getElementById('sap-1840').click()" class="btn-small" id="btn-1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                            <button onclick="cancelSapFile('1840')" class="btn-small" id="btn-cancel-1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        </div>
                     </div>
                     <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
                 </div>
@@ -1756,6 +1762,15 @@ DST: 22. 지티테크`;
                 
                 rawData = result.finalResults || [];
                 unusedData = (result.unusedData || []).map(row => ({ ...row, isUnmapped: true }));
+
+                // 만약 서버에서 로드되었거나 사용자가 등록한 SAP 데이터가 있으면 자동으로 결합 수행
+                const hasSap = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
+                if (hasSap) {
+                    console.log('[Auto-Join] Automatically joining SAP details...');
+                    const joined = performSapJoin(rawData, unusedData, sapData);
+                    rawData = joined.rawData;
+                    unusedData = joined.unusedData;
+                }
                 window.masterPlanPool = result.masterPlanPool || []; // 전체 계획 데이터
                 window.masterPlan = result.masterPlan || null; 
                 window.masterModels = result.masterModelsByGroup || null;
@@ -1773,10 +1788,7 @@ DST: 22. 지티테크`;
                 populateFilters();
                 applyFilters();
                 
-                // SAP 결합 수량 업데이트 (S/O 시리얼이 있는 항목)
-                const sapCount = rawData.filter(r => r.Serial || r.SalesDoc || (r.Product && r.Product.includes('결합'))).length;
-                const sapEl = document.getElementById('sap-rows');
-                if (sapEl) sapEl.textContent = sapCount;
+
 
                 // SAP 결합 섹션 표시
                 document.getElementById('sap-join-section').style.display = 'flex';
@@ -1800,6 +1812,7 @@ DST: 22. 지티테크`;
 
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
+            loadSavedSapFiles(); // 서버에 저장된 SAP 데이터 로드
         });
 
 
@@ -2638,8 +2651,27 @@ DST: 22. 지티테크`;
                 if (!resB.ok) throw new Error(`${fileB} 분석 실패`);
                 const dataB = await resB.json();
 
-                window.compareRawA = [...(dataA.finalResults || []), ...(dataA.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
-                window.compareRawB = [...(dataB.finalResults || []), ...(dataB.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
+                const rawA = [...(dataA.finalResults || []), ...(dataA.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
+                const rawB = [...(dataB.finalResults || []), ...(dataB.unusedData || []).map(r => ({ ...r, isUnmapped: true }))];
+
+                // 만약 서버에 저장되어 있거나 사용자가 등록한 SAP 데이터가 있으면 비교 데이터에도 자동 결합 수행
+                const hasSapCompare = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
+                if (hasSapCompare) {
+                    console.log('[Auto-Join Comparison] Automatically joining SAP details for comparison...');
+                    
+                    const rawListA = rawA.filter(r => !r.isUnmapped);
+                    const unusedListA = rawA.filter(r => r.isUnmapped);
+                    const joinedA = performSapJoin(rawListA, unusedListA, sapData);
+                    window.compareRawA = [...joinedA.rawData, ...joinedA.unusedData];
+
+                    const rawListB = rawB.filter(r => !r.isUnmapped);
+                    const unusedListB = rawB.filter(r => r.isUnmapped);
+                    const joinedB = performSapJoin(rawListB, unusedListB, sapData);
+                    window.compareRawB = [...joinedB.rawData, ...joinedB.unusedData];
+                } else {
+                    window.compareRawA = rawA;
+                    window.compareRawB = rawB;
+                }
                 window.compareMode = true;
 
                 populateFilters();
@@ -2856,28 +2888,73 @@ DST: 22. 지티테크`;
             let totalQtyB = 0;
             let changedModelsCount = 0;
             const modelChanges = {};
+            const modelChangedSerials = {}; // model -> Set of changed serials
 
+            // Get all unique model names in rowList
+            const allModels = new Set();
             rowList.forEach(item => {
-                let modelHasDiff = false;
-                let rowSumA = 0;
-                let rowSumB = 0;
+                if (item.model) allModels.add(item.model);
+            });
 
-                targetMonths.forEach(month => {
-                    const qtyA = item.monthlyQtyA[month] || 0;
-                    const qtyB = item.monthlyQtyB[month] || 0;
-                    rowSumA += qtyA;
-                    rowSumB += qtyB;
-                    if (qtyA !== qtyB) {
-                        modelHasDiff = true;
-                    }
+            allModels.forEach(modelName => {
+                const modelA = filteredA.filter(row => {
+                    const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
+                    return rowModel === modelName;
+                });
+                const modelB = filteredB.filter(row => {
+                    const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
+                    return rowModel === modelName;
                 });
 
+                targetMonths.forEach(month => {
+                    const monthA = modelA.filter(row => row.Month === month);
+                    const monthB = modelB.filter(row => row.Month === month);
+
+                    const countsA = {};
+                    monthA.forEach(row => {
+                        const prodName = row.Product || row.ProductName || '-';
+                        const serial = row.Serial || '';
+                        const key = `${prodName}||${serial}`;
+                        countsA[key] = (countsA[key] || 0) + (parseInt(row.Qty) || 1);
+                    });
+
+                    const countsB = {};
+                    monthB.forEach(row => {
+                        const prodName = row.Product || row.ProductName || '-';
+                        const serial = row.Serial || '';
+                        const key = `${prodName}||${serial}`;
+                        countsB[key] = (countsB[key] || 0) + (parseInt(row.Qty) || 1);
+                    });
+
+                    const allKeys = new Set([...Object.keys(countsA), ...Object.keys(countsB)]);
+                    allKeys.forEach(key => {
+                        const cntA = countsA[key] || 0;
+                        const cntB = countsB[key] || 0;
+                        if (cntA !== cntB) {
+                            modelChanges[modelName] = true;
+                            const parts = key.split('||');
+                            const serial = parts[1];
+                            if (serial) {
+                                if (!modelChangedSerials[modelName]) {
+                                    modelChangedSerials[modelName] = new Set();
+                                }
+                                modelChangedSerials[modelName].add(serial);
+                            }
+                        }
+                    });
+                });
+            });
+
+            // Calculate total quantities for A and B stats cards
+            rowList.forEach(item => {
+                let rowSumA = 0;
+                let rowSumB = 0;
+                targetMonths.forEach(month => {
+                    rowSumA += item.monthlyQtyA[month] || 0;
+                    rowSumB += item.monthlyQtyB[month] || 0;
+                });
                 totalQtyA += rowSumA;
                 totalQtyB += rowSumB;
-
-                if (modelHasDiff) {
-                    modelChanges[item.model] = true;
-                }
             });
 
             // Count unique changed models
@@ -3034,11 +3111,18 @@ DST: 22. 지티테크`;
                         dot.innerHTML = '● ';
                         dot.style.color = '#f59e0b';
                         dot.style.marginRight = '6px';
-                        dot.title = '더블 클릭하여 변동 상세 내역 보기';
+                        
+                        const serialsSet = modelChangedSerials[item.model];
+                        const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
+                        const titleText = serialsList 
+                            ? `더블 클릭하여 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
+                            : '더블 클릭하여 변동 상세 내역 보기';
+                        
+                        dot.title = titleText;
                         tdModel.prepend(dot);
                         
                         tdModel.style.cursor = 'pointer';
-                        tdModel.title = '더블 클릭하여 변동 상세 내역 보기';
+                        tdModel.title = titleText;
                         tdModel.addEventListener('dblclick', () => {
                             showCompareDetail(item.model);
                         });
@@ -3338,12 +3422,22 @@ DST: 22. 지티테크`;
             });
 
             // Get unique months from both lists
-            const months = new Set();
-            modelA.forEach(row => { if (row.Month) months.add(row.Month); });
-            modelB.forEach(row => { if (row.Month) months.add(row.Month); });
+            const monthsA = new Set();
+            listA.forEach(row => { if (row.Month) monthsA.add(row.Month); });
+            const monthsB = new Set();
+            listB.forEach(row => { if (row.Month) monthsB.add(row.Month); });
 
+            const intersectionOnly = document.getElementById('compare-intersection-only') && document.getElementById('compare-intersection-only').checked;
             const getMonthNum = (m) => parseInt(m.replace(/[^0-9]/g, '')) || 0;
-            const sortedMonths = Array.from(months).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+            const sortedMonthsA = Array.from(monthsA).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+
+            let targetMonths = [];
+            if (intersectionOnly) {
+                targetMonths = sortedMonthsA.filter(m => monthsB.has(m));
+            } else {
+                const allMonths = new Set([...monthsA, ...monthsB]);
+                targetMonths = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+            }
 
             const modal = document.getElementById('compare-detail-overlay');
             const titleEl = document.getElementById('compare-detail-title');
@@ -3354,7 +3448,7 @@ DST: 22. 지티테크`;
 
             let hasAnyChange = false;
 
-            sortedMonths.forEach(month => {
+            targetMonths.forEach(month => {
                 const monthA = modelA.filter(row => row.Month === month);
                 const monthB = modelB.filter(row => row.Month === month);
 
@@ -3572,19 +3666,99 @@ DST: 22. 지티테크`;
         // ========== SAP MHTML Detail Join Logic ==========
         let sapData = { '1842': [], '1840': [] };
 
+        async function loadSavedSapFiles() {
+            try {
+                for (const type of ['1842', '1840']) {
+                    const res = await fetch(`/api/load-sap/${type}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.exists && data.content) {
+                            const parsed = parseSapMhtml(data.content, false);
+                            sapData[type] = parsed;
+                            
+                            const btn = document.getElementById(`btn-${type}`);
+                            if (btn) {
+                                btn.textContent = `✅ 서버 저장됨 (${type})`;
+                                btn.style.background = 'var(--success)';
+                                btn.style.color = 'white';
+                            }
+                            const cancelBtn = document.getElementById(`btn-cancel-${type}`);
+                            if (cancelBtn) {
+                                cancelBtn.style.display = 'inline-block';
+                            }
+                        }
+                    }
+                }
+                checkJoinReady();
+            } catch (err) {
+                console.error('Failed to load saved SAP files from server:', err);
+            }
+        }
+
+        async function uploadSapToServer(file, type) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('type', type);
+                const res = await fetch('/api/upload-sap', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) {
+                    console.error('Failed to save SAP file on server');
+                } else {
+                    console.log('Successfully saved SAP file on server');
+                }
+            } catch (err) {
+                console.error('Error uploading SAP file to server:', err);
+            }
+        }
+
+        async function cancelSapFile(type) {
+            sapData[type] = [];
+            document.getElementById(`sap-${type}`).value = '';
+            const btn = document.getElementById(`btn-${type}`);
+            if (btn) {
+                btn.textContent = '파일 선택';
+                btn.style.background = 'var(--surface-hover)';
+                btn.style.color = 'var(--text-primary)';
+            }
+            const cancelBtn = document.getElementById(`btn-cancel-${type}`);
+            if (cancelBtn) {
+                cancelBtn.style.display = 'none';
+            }
+            
+            try {
+                await fetch('/api/clear-sap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type })
+                });
+            } catch (err) {
+                console.error('Error clearing SAP file from server:', err);
+            }
+            checkJoinReady();
+        }
+
         function handleSapFile(input, type) {
             const file = input.files[0];
             if (!file) return;
             
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 const content = e.target.result;
-                const parsed = parseSapMhtml(content);
+                const parsed = parseSapMhtml(content, true);
                 sapData[type] = parsed;
                 document.getElementById(`btn-${type}`).textContent = `✅ ${file.name.substring(0, 10)}...`;
                 document.getElementById(`btn-${type}`).style.background = 'var(--success)';
                 document.getElementById(`btn-${type}`).style.color = 'white';
                 
+                const cancelBtn = document.getElementById(`btn-cancel-${type}`);
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'inline-block';
+                }
+
+                await uploadSapToServer(file, type);
                 checkJoinReady();
             };
             reader.readAsText(file);
@@ -3596,7 +3770,7 @@ DST: 22. 지티테크`;
             document.getElementById('join-btn').disabled = !hasData;
         }
 
-        function parseSapMhtml(mhtml) {
+        function parseSapMhtml(mhtml, showAlert = true) {
             // 1. HTML 부분만 정교하게 추출 (태그 기준)
             let html = mhtml;
             const lowerMhtml = mhtml.toLowerCase();
@@ -3624,14 +3798,14 @@ DST: 22. 지티테크`;
                             targetTable = t;
                         }
                     });
-                    return extractFromTable(targetTable);
+                    return extractFromTable(targetTable, showAlert);
                 }
                 return [];
             }
-            return extractFromTable(table);
+            return extractFromTable(table, showAlert);
         }
 
-        function extractFromTable(table) {
+        function extractFromTable(table, showAlert = true) {
             const rows = Array.from(table.querySelectorAll('tr'));
             if (rows.length < 2) return [];
 
@@ -3712,8 +3886,12 @@ DST: 22. 지티테크`;
             return data;
         }
 
-        function joinSapDetails() {
-            if (!confirm('현재 분석 결과에 SAP 상세 정보를 결합하시겠습니까?\n모든 데이터가 수량 단위에서 시리얼 단위(1:1)로 전환됩니다.')) return;
+        function performSapJoin(rawList, unusedList, sapDataForJoin) {
+            // Create a copy of the SAP records to track which have been matched for this specific join run
+            const sapDataCopy = {
+                '1842': (sapDataForJoin['1842'] || []).map(s => ({ ...s, Used: false })),
+                '1840': (sapDataForJoin['1840'] || []).map(s => ({ ...s, Used: false }))
+            };
 
             const normalizeMaterialForComparison = (mat) => {
                 if (!mat) return '';
@@ -3730,47 +3908,32 @@ DST: 22. 지티테크`;
             const newRawData = [];
             const newUnusedData = [];
 
-            // 1. Matched Data 처리 (rawData)
-            rawData.forEach(row => {
+            // 1. Matched Data 처리
+            rawList.forEach(row => {
                 const qty = parseInt(row.Qty) || 0;
-                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
+                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapDataCopy['1842'] : sapDataCopy['1840'];
                 
-                // Optimize: precompute variables and filter candidates outside the qty loop
                 const mpsProduct = (row.Product || '').trim();
                 const mpsModelKey = getMatchKey(row.Model);
                 const rowCodeUpper = row.Code ? row.Code.trim().toUpperCase() : '';
                 const rowModel = row.Model;
 
-                // Filter candidates by Month and version criteria once per row
                 const candidates = sourceSap.filter(s => {
                     if (s.Month !== row.Month) return false;
-                    
-                    // 성주 사업장의 경우 버전이 없거나 PL코드(I...)가 들어가므로 버전 매칭은 생략함
                     const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
                     const isPlCode = rowCodeUpper.startsWith('I');
-                    if (isSeongju || isPlCode) {
-                        return true;
-                    }
-                    
-                    // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
+                    if (isSeongju || isPlCode) return true;
                     return (!s.Ver || !rowCodeUpper) || (s.Ver.trim().toUpperCase() === rowCodeUpper);
                 });
                 
                 for (let i = 0; i < qty; i++) {
-                    // Find first unused matching candidate in the filtered subset
                     const sapMatch = candidates.find(s => {
                         if (s.Used) return false;
-                        
                         const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
                         const normSapMaterial = normalizeMaterialForComparison(s.Material);
-
-                        // 두 자재 코드가 모두 존재할 경우 국가 식별 알파벳을 제외하고 나머지가 일치해야 함
                         if (normSapMaterial && normMpsProduct) {
-                            if (normSapMaterial !== normMpsProduct) {
-                                return false;
-                            }
+                            if (normSapMaterial !== normMpsProduct) return false;
                         }
-                        
                         const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
                         const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
                         return isMaterialMatch || isModelMatch;
@@ -3790,7 +3953,6 @@ DST: 22. 지티테크`;
                             newRow.Product = prodStr + ' (🔗결합)';
                         }
                         
-                        // 1840 규칙: 기존 Site 규칙에 없는 Ver은 '남산'으로 처리
                         if (row.Site !== '성주' && sapMatch.Ver) {
                             let foundSite = null;
                             const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
@@ -3801,53 +3963,39 @@ DST: 22. 지티테크`;
                                     break;
                                 }
                             }
-                            if (!foundSite) newRow.Site = '남산'; // 미정의 Ver은 남산
+                            if (!foundSite) newRow.Site = '남산';
                         }
                     }
                     newRawData.push(newRow);
                 }
             });
 
-            // 2. Unmapped Data 처리 (unusedData)
-            unusedData.forEach(row => {
+            // 2. Unmapped Data 처리
+            unusedList.forEach(row => {
                 const qty = parseInt(row.Qty) || 0;
-                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapData['1842'] : sapData['1840'];
+                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapDataCopy['1842'] : sapDataCopy['1840'];
                 
-                // Optimize: precompute variables and filter candidates outside the qty loop
                 const mpsProduct = (row.ProductName || '').trim();
                 const mpsModelKey = getMatchKey(row.UnmappedModel);
                 const rowModelCodeUpper = row.ModelCode ? row.ModelCode.trim().toUpperCase() : '';
                 const rowUnmappedModel = row.UnmappedModel;
 
-                // Filter candidates by Month and version criteria once per row
                 const candidates = sourceSap.filter(s => {
                     if (s.Month !== row.Month) return false;
-                    
-                    // 성주 사업장의 경우 버전이 없거나 PL코드(I...)가 들어가므로 버전 매칭은 생략함
                     const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
                     const isPlCode = rowModelCodeUpper.startsWith('I');
-                    if (isSeongju || isPlCode) {
-                        return true;
-                    }
-                    
-                    // 버전 매칭 체크 (두 버전 코드가 존재할 경우 반드시 일치해야 함)
+                    if (isSeongju || isPlCode) return true;
                     return (!s.Ver || !rowModelCodeUpper) || (s.Ver.trim().toUpperCase() === rowModelCodeUpper);
                 });
                 
                 for (let i = 0; i < qty; i++) {
                     const sapMatch = candidates.find(s => {
                         if (s.Used) return false;
-                        
                         const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
                         const normSapMaterial = normalizeMaterialForComparison(s.Material);
-
-                        // 두 자재 코드가 모두 존재할 경우 국가 식별 알파벳을 제외하고 나머지가 일치해야 함
                         if (normSapMaterial && normMpsProduct) {
-                            if (normSapMaterial !== normMpsProduct) {
-                                return false;
-                            }
+                            if (normSapMaterial !== normMpsProduct) return false;
                         }
-                        
                         const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
                         const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
                         return isMaterialMatch || isModelMatch;
@@ -3867,7 +4015,6 @@ DST: 22. 지티테크`;
                             newRow.ProductName = prodNameStr + ' (🔗결합)';
                         }
                         
-                        // 1840 규칙 적용
                         if (row.Site !== '성주' && sapMatch.Ver) {
                             let foundSite = null;
                             const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
@@ -3885,11 +4032,24 @@ DST: 22. 지티테크`;
                 }
             });
 
-            rawData = newRawData;
-            unusedData = newUnusedData;
+            return { rawData: newRawData, unusedData: newUnusedData };
+        }
+
+        function joinSapDetails(isAuto = false) {
+            if (!isAuto) {
+                if (!confirm('현재 분석 결과에 SAP 상세 정보를 결합하시겠습니까?\n모든 데이터가 수량 단위에서 시리얼 단위(1:1)로 전환됩니다.')) return;
+            }
+
+            const joined = performSapJoin(rawData, unusedData, sapData);
+            rawData = joined.rawData;
+            unusedData = joined.unusedData;
+
+            if (!isAuto) {
+                alert('결합이 완료되었습니다. 테이블 컬럼이 확장되었습니다.');
+            }
             
-            // 헤더 업데이트를 위해 테이블 다시 그리기
-            alert('결합이 완료되었습니다. 테이블 컬럼이 확장되었습니다.');
+
+
             populateFilters();
             applyFilters();
         }

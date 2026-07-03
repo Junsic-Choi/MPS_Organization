@@ -152,6 +152,69 @@ app.post('/api/preferences', (req, res) => {
     }
 });
 
+// SAP 파일 업로드 API (덮어쓰기)
+app.post('/api/upload-sap', upload.single('file'), (req, res) => {
+    try {
+        const { type } = req.body;
+        if (!type || !['1842', '1840'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: '업로드된 파일이 없습니다.' });
+        }
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const savePath = path.join(uploadDir, `sap_${type}.mhtml`);
+        fs.writeFileSync(savePath, req.file.buffer);
+        console.log(`[sap-upload] Saved sap_${type}.mhtml to server`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[sap-upload] Failed to save SAP file:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// SAP 파일 삭제 API
+app.post('/api/clear-sap', (req, res) => {
+    try {
+        const { type } = req.body;
+        if (!type || !['1842', '1840'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        }
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const savePath = path.join(uploadDir, `sap_${type}.mhtml`);
+        if (fs.existsSync(savePath)) {
+            fs.unlinkSync(savePath);
+            console.log(`[sap-clear] Deleted sap_${type}.mhtml`);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[sap-clear] Failed to clear SAP file:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// SAP 파일 로드 API
+app.get('/api/load-sap/:type', (req, res) => {
+    try {
+        const { type } = req.params;
+        if (!['1842', '1840'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        }
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const filePath = path.join(uploadDir, `sap_${type}.mhtml`);
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const stats = fs.statSync(filePath);
+            res.json({ success: true, exists: true, content, mtime: stats.mtime });
+        } else {
+            res.json({ success: true, exists: false });
+        }
+    } catch (err) {
+        console.error('[sap-load] Failed to load SAP file:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Heartbeat state
 let lastHeartbeat = Date.now();
 let hasReceivedHeartbeat = false;
@@ -214,7 +277,7 @@ setInterval(() => {
 }, 60000);
 
 // Auto-shutdown if no heartbeat is received
-const HEARTBEAT_TIMEOUT = 12000; // 12 seconds
+const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
 const GRACE_PERIOD = 60000; // 60 seconds grace period on startup
 const startupTime = Date.now();
 
@@ -222,7 +285,7 @@ setInterval(() => {
     const now = Date.now();
     if (hasReceivedHeartbeat) {
         if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
-            console.log('[AUTO-SHUTDOWN] No heartbeat received for 12 seconds. All dashboard pages closed. Shutting down...');
+            console.log('[AUTO-SHUTDOWN] No heartbeat received for 60 seconds. All dashboard pages closed. Shutting down...');
             process.exit(0);
         }
     } else {
