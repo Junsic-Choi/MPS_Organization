@@ -3766,19 +3766,34 @@ DST: 22. 지티테크`;
 
 
         function checkJoinReady() {
-            const hasData = sapData['1842'].length > 0 || sapData['1840'].length > 0;
-            document.getElementById('join-btn').disabled = !hasData;
+            const hasData = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
+            const btn = document.getElementById('join-btn');
+            if (btn) {
+                btn.disabled = !hasData;
+                btn.style.opacity = hasData ? '1' : '0.5';
+                btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
+            }
+        }
+
+        function decodeQuotedPrintable(str) {
+            if (!str) return '';
+            return str
+                .replace(/=\r?\n/g, '')
+                .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
         }
 
         function parseSapMhtml(mhtml, showAlert = true) {
+            // Decode Quoted-Printable format first
+            const decoded = decodeQuotedPrintable(mhtml || '');
+            
             // 1. HTML 부분만 정교하게 추출 (태그 기준)
-            let html = mhtml;
-            const lowerMhtml = mhtml.toLowerCase();
+            let html = decoded;
+            const lowerMhtml = decoded.toLowerCase();
             const htmlStart = lowerMhtml.indexOf('<html');
             const htmlEnd = lowerMhtml.lastIndexOf('</html>');
             
             if (htmlStart !== -1 && htmlEnd !== -1) {
-                html = mhtml.substring(htmlStart, htmlEnd + 7);
+                html = decoded.substring(htmlStart, htmlEnd + 7);
             }
 
             const parser = new DOMParser();
@@ -3893,143 +3908,241 @@ DST: 22. 지티테크`;
                 '1840': (sapDataForJoin['1840'] || []).map(s => ({ ...s, Used: false }))
             };
 
-            const normalizeMaterialForComparison = (mat) => {
-                if (!mat) return '';
-                let s = mat.toString().trim().toUpperCase();
-                const parts = s.split('-');
-                if (parts.length > 1) {
-                    const lastIdx = parts.length - 1;
-                    parts[lastIdx] = parts[lastIdx].replace(/[A-Z]/g, '');
-                    return parts.join('-');
+            const isSuffixCompatible = (mpsProd, sapMat) => {
+                if (!mpsProd || !sapMat) return false;
+                const mpsParts = mpsProd.toString().trim().split('-');
+                const sapParts = sapMat.toString().trim().split('-');
+                if (mpsParts.length > 1 && sapParts.length > 1) {
+                    for (let i = 0; i < mpsParts.length - 1; i++) {
+                        if (mpsParts[i].toUpperCase() !== sapParts[i].toUpperCase()) return false;
+                    }
+                    const mpsLast = mpsParts[mpsParts.length - 1].toUpperCase();
+                    const sapLast = sapParts[sapParts.length - 1].toUpperCase();
+                    
+                    const mpsLetterMatch = mpsLast.match(/[A-Z]+/g);
+                    const sapLetterMatch = sapLast.match(/[A-Z]+/g);
+                    
+                    const mpsLetter = mpsLetterMatch ? mpsLetterMatch[0] : '';
+                    const sapLetter = sapLetterMatch ? sapLetterMatch[0] : '';
+                    
+                    const mpsDigits = mpsLast.replace(/[A-Z]/g, '');
+                    const sapDigits = sapLast.replace(/[A-Z]/g, '');
+                    
+                    if (mpsDigits !== sapDigits) return false;
+                    if (mpsLetter && sapLetter) {
+                        return mpsLetter === sapLetter;
+                    }
+                    return true;
                 }
-                return s;
+                return mpsProd.toString().trim().toUpperCase() === sapMat.toString().trim().toUpperCase();
             };
 
-            const newRawData = [];
-            const newUnusedData = [];
-
-            // 1. Matched Data 처리
+            // We will first expand all rows in rawList and unusedList into 1-qty items
+            const expandedRaw = [];
             rawList.forEach(row => {
                 const qty = parseInt(row.Qty) || 0;
-                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapDataCopy['1842'] : sapDataCopy['1840'];
-                
-                const mpsProduct = (row.Product || '').trim();
-                const mpsModelKey = getMatchKey(row.Model);
-                const rowCodeUpper = row.Code ? row.Code.trim().toUpperCase() : '';
-                const rowModel = row.Model;
+                for (let i = 0; i < qty; i++) {
+                    expandedRaw.push({
+                        originalRow: row,
+                        matchedSap: null
+                    });
+                }
+            });
 
-                const candidates = sourceSap.filter(s => {
+            const expandedUnused = [];
+            unusedList.forEach(row => {
+                const qty = parseInt(row.Qty) || 0;
+                for (let i = 0; i < qty; i++) {
+                    expandedUnused.push({
+                        originalRow: row,
+                        matchedSap: null
+                    });
+                }
+            });
+
+            // Helper function to get candidates from SAP data
+            const getSapCandidates = (row, sapCopy) => {
+                const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842 || (!row.Site.includes('남산') && !row.Site.includes('1840'));
+                const sourceSap = isSeongju ? sapCopy['1842'] : sapCopy['1840'];
+                const rowCodeUpper = (row.Code || row.ModelCode || '').toString().trim().toUpperCase();
+                
+                return sourceSap.filter(s => {
                     if (s.Month !== row.Month) return false;
-                    const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
                     const isPlCode = rowCodeUpper.startsWith('I');
                     if (isSeongju || isPlCode) return true;
                     return (!s.Ver || !rowCodeUpper) || (s.Ver.trim().toUpperCase() === rowCodeUpper);
                 });
+            };
+
+            // --- PASS 1: Exact matches for Matched Data ---
+            expandedRaw.forEach(item => {
+                const row = item.originalRow;
+                const mpsProduct = (row.Product || '').trim();
+                const mpsModelKey = getMatchKey(row.Model);
+                const rowModel = row.Model;
                 
-                for (let i = 0; i < qty; i++) {
-                    const sapMatch = candidates.find(s => {
-                        if (s.Used) return false;
-                        const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
-                        const normSapMaterial = normalizeMaterialForComparison(s.Material);
-                        if (normSapMaterial && normMpsProduct) {
-                            if (normSapMaterial !== normMpsProduct) return false;
-                        }
-                        const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
-                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
-                        return isMaterialMatch || isModelMatch;
-                    });
+                if (!mpsProduct) return;
+
+                const candidates = getSapCandidates(row, sapDataCopy);
+                const sapMatch = candidates.find(s => {
+                    if (s.Used) return false;
+                    if (!s.Material) return false;
                     
-                    const newRow = { ...row, Qty: 1 };
-                    if (sapMatch) {
-                        sapMatch.Used = true;
-                        newRow.Customer = sapMatch.Customer;
-                        newRow.Serial = sapMatch.Serial;
-                        newRow.OrderNum = sapMatch.Order;
-                        newRow.SalesDoc = sapMatch.SalesDoc;
-                        newRow.StartDate = sapMatch.StartDate;
-                        
-                        const prodStr = newRow.Product || '';
-                        if (!prodStr.includes('(🔗결합)')) {
-                            newRow.Product = prodStr + ' (🔗결합)';
-                        }
-                        
-                        if (row.Site !== '성주' && sapMatch.Ver) {
-                            let foundSite = null;
-                            const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
-                            for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
-                                const cleanPrefix = verPrefix.trim().toUpperCase();
-                                if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
-                                    foundSite = siteName;
-                                    break;
-                                }
-                            }
-                            if (!foundSite) newRow.Site = '남산';
-                        }
-                    }
-                    newRawData.push(newRow);
+                    // Exact check
+                    if (s.Material.trim().toUpperCase() !== mpsProduct.toUpperCase()) return false;
+                    
+                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
+                    return isModelMatch;
+                });
+
+                if (sapMatch) {
+                    sapMatch.Used = true;
+                    item.matchedSap = sapMatch;
                 }
             });
 
-            // 2. Unmapped Data 처리
-            unusedList.forEach(row => {
-                const qty = parseInt(row.Qty) || 0;
-                const sourceSap = (row.Site === '성주' || row.Site.includes('성주')) ? sapDataCopy['1842'] : sapDataCopy['1840'];
-                
+            // --- PASS 1: Exact matches for Unused (Unmapped) Data ---
+            expandedUnused.forEach(item => {
+                const row = item.originalRow;
                 const mpsProduct = (row.ProductName || '').trim();
                 const mpsModelKey = getMatchKey(row.UnmappedModel);
-                const rowModelCodeUpper = row.ModelCode ? row.ModelCode.trim().toUpperCase() : '';
+                const rowUnmappedModel = row.UnmappedModel;
+                
+                if (!mpsProduct) return;
+
+                const candidates = getSapCandidates(row, sapDataCopy);
+                const sapMatch = candidates.find(s => {
+                    if (s.Used) return false;
+                    if (!s.Material) return false;
+                    
+                    // Exact check
+                    if (s.Material.trim().toUpperCase() !== mpsProduct.toUpperCase()) return false;
+                    
+                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
+                    return isModelMatch;
+                });
+
+                if (sapMatch) {
+                    sapMatch.Used = true;
+                    item.matchedSap = sapMatch;
+                }
+            });
+
+            // --- PASS 2: Suffix-compatible matches for remaining unmatched Matched Data ---
+            expandedRaw.forEach(item => {
+                if (item.matchedSap) return; // Already matched in Pass 1
+
+                const row = item.originalRow;
+                const mpsProduct = (row.Product || '').trim();
+                const mpsModelKey = getMatchKey(row.Model);
+                const rowModel = row.Model;
+
+                const candidates = getSapCandidates(row, sapDataCopy);
+                const sapMatch = candidates.find(s => {
+                    if (s.Used) return false;
+                    
+                    const isMaterialMatch = isSuffixCompatible(mpsProduct, s.Material);
+                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
+                    return isMaterialMatch || isModelMatch;
+                });
+
+                if (sapMatch) {
+                    sapMatch.Used = true;
+                    item.matchedSap = sapMatch;
+                }
+            });
+
+            // --- PASS 2: Suffix-compatible matches for remaining unmatched Unused Data ---
+            expandedUnused.forEach(item => {
+                if (item.matchedSap) return; // Already matched in Pass 1
+
+                const row = item.originalRow;
+                const mpsProduct = (row.ProductName || '').trim();
+                const mpsModelKey = getMatchKey(row.UnmappedModel);
                 const rowUnmappedModel = row.UnmappedModel;
 
-                const candidates = sourceSap.filter(s => {
-                    if (s.Month !== row.Month) return false;
-                    const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
-                    const isPlCode = rowModelCodeUpper.startsWith('I');
-                    if (isSeongju || isPlCode) return true;
-                    return (!s.Ver || !rowModelCodeUpper) || (s.Ver.trim().toUpperCase() === rowModelCodeUpper);
-                });
-                
-                for (let i = 0; i < qty; i++) {
-                    const sapMatch = candidates.find(s => {
-                        if (s.Used) return false;
-                        const normMpsProduct = normalizeMaterialForComparison(mpsProduct);
-                        const normSapMaterial = normalizeMaterialForComparison(s.Material);
-                        if (normSapMaterial && normMpsProduct) {
-                            if (normSapMaterial !== normMpsProduct) return false;
-                        }
-                        const isMaterialMatch = normSapMaterial && normSapMaterial === normMpsProduct;
-                        const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
-                        return isMaterialMatch || isModelMatch;
-                    });
+                const candidates = getSapCandidates(row, sapDataCopy);
+                const sapMatch = candidates.find(s => {
+                    if (s.Used) return false;
                     
-                    const newRow = { ...row, Qty: 1 };
-                    if (sapMatch) {
-                        sapMatch.Used = true;
-                        newRow.Customer = sapMatch.Customer;
-                        newRow.Serial = sapMatch.Serial;
-                        newRow.OrderNum = sapMatch.Order;
-                        newRow.SalesDoc = sapMatch.SalesDoc;
-                        newRow.StartDate = sapMatch.StartDate;
-                        
-                        const prodNameStr = newRow.ProductName || '';
-                        if (!prodNameStr.includes('(🔗결합)')) {
-                            newRow.ProductName = prodNameStr + ' (🔗결합)';
-                        }
-                        
-                        if (row.Site !== '성주' && sapMatch.Ver) {
-                            let foundSite = null;
-                            const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
-                            for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
-                                const cleanPrefix = verPrefix.trim().toUpperCase();
-                                if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
-                                    foundSite = siteName;
-                                    break;
-                                }
-                            }
-                            if (!foundSite) newRow.Site = '남산';
-                        }
-                    }
-                    newUnusedData.push(newRow);
+                    const isMaterialMatch = isSuffixCompatible(mpsProduct, s.Material);
+                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
+                    return isMaterialMatch || isModelMatch;
+                });
+
+                if (sapMatch) {
+                    sapMatch.Used = true;
+                    item.matchedSap = sapMatch;
                 }
+            });
+
+            // Now reconstruct newRawData and newUnusedData
+            const newRawData = [];
+            expandedRaw.forEach(item => {
+                const row = item.originalRow;
+                const sapMatch = item.matchedSap;
+                const newRow = { ...row, Qty: 1 };
+                
+                if (sapMatch) {
+                    newRow.Customer = sapMatch.Customer;
+                    newRow.Serial = sapMatch.Serial;
+                    newRow.OrderNum = sapMatch.Order;
+                    newRow.SalesDoc = sapMatch.SalesDoc;
+                    newRow.StartDate = sapMatch.StartDate;
+                    
+                    const prodStr = newRow.Product || '';
+                    if (!prodStr.includes('(🔗결합)')) {
+                        newRow.Product = prodStr + ' (🔗결합)';
+                    }
+                    
+                    if (row.Site !== '성주' && sapMatch.Ver) {
+                        let foundSite = null;
+                        const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
+                        for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
+                            const cleanPrefix = verPrefix.trim().toUpperCase();
+                            if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
+                                foundSite = siteName;
+                                break;
+                            }
+                        }
+                        if (!foundSite) newRow.Site = '남산';
+                    }
+                }
+                newRawData.push(newRow);
+            });
+
+            const newUnusedData = [];
+            expandedUnused.forEach(item => {
+                const row = item.originalRow;
+                const sapMatch = item.matchedSap;
+                const newRow = { ...row, Qty: 1 };
+                
+                if (sapMatch) {
+                    newRow.Customer = sapMatch.Customer;
+                    newRow.Serial = sapMatch.Serial;
+                    newRow.OrderNum = sapMatch.Order;
+                    newRow.SalesDoc = sapMatch.SalesDoc;
+                    newRow.StartDate = sapMatch.StartDate;
+                    
+                    const prodNameStr = newRow.ProductName || '';
+                    if (!prodNameStr.includes('(🔗결합)')) {
+                        newRow.ProductName = prodNameStr + ' (🔗결합)';
+                    }
+                    
+                    if (row.Site !== '성주' && sapMatch.Ver) {
+                        let foundSite = null;
+                        const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
+                        for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
+                            const cleanPrefix = verPrefix.trim().toUpperCase();
+                            if (cleanPrefix && cleanVer.startsWith(cleanPrefix)) {
+                                foundSite = siteName;
+                                break;
+                            }
+                        }
+                        if (!foundSite) newRow.Site = '남산';
+                    }
+                }
+                newUnusedData.push(newRow);
             });
 
             return { rawData: newRawData, unusedData: newUnusedData };
