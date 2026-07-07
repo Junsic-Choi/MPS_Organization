@@ -4628,6 +4628,7 @@ DST: 22. 지티테크`;
 
             const mainTbody = document.getElementById('table-body');
             const summaryTbody = document.getElementById('summary-body');
+            const pivotTbody = document.getElementById('pivot-body');
 
             if (mainTbody) {
                 mainTbody.addEventListener('mousedown', (e) => handleMouseDown(e, 'data-table', 'table-body'));
@@ -4635,9 +4636,13 @@ DST: 22. 지티테크`;
             if (summaryTbody) {
                 summaryTbody.addEventListener('mousedown', (e) => handleMouseDown(e, 'summary-table', 'summary-body'));
             }
+            if (pivotTbody) {
+                pivotTbody.addEventListener('mousedown', (e) => handleMouseDown(e, 'pivot-table', 'pivot-body'));
+            }
 
             document.getElementById('data-table')?.addEventListener('mousemove', handleMouseMove);
             document.getElementById('summary-table')?.addEventListener('mousemove', handleMouseMove);
+            document.getElementById('pivot-table')?.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mousemove', handleGlobalMouseMove);
 
             document.addEventListener('mouseup', () => {
