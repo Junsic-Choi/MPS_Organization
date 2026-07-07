@@ -277,15 +277,24 @@ setInterval(() => {
 }, 60000);
 
 // Auto-shutdown if no heartbeat is received
-const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
-const GRACE_PERIOD = 60000; // 60 seconds grace period on startup
+const HEARTBEAT_TIMEOUT = 600000; // 10 minutes (prevents shutdown from aggressive browser background throttling)
+const GRACE_PERIOD = 120000; // 2 minutes grace period on startup
 const startupTime = Date.now();
+let lastCheckTime = Date.now();
 
 setInterval(() => {
     const now = Date.now();
+    
+    // Sleep/wake detection: if the loop was suspended and more than 15 seconds passed (normally 5 seconds)
+    if (now - lastCheckTime > 15000) {
+        console.log('[SYSTEM] Sleep/wake detected. Resetting heartbeat timer to prevent premature shutdown.');
+        lastHeartbeat = now;
+    }
+    lastCheckTime = now;
+    
     if (hasReceivedHeartbeat) {
         if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
-            console.log('[AUTO-SHUTDOWN] No heartbeat received for 60 seconds. All dashboard pages closed. Shutting down...');
+            console.log('[AUTO-SHUTDOWN] No heartbeat received for 10 minutes. All dashboard pages closed. Shutting down...');
             process.exit(0);
         }
     } else {
