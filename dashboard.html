@@ -951,7 +951,8 @@
         <div class="tab-system" id="tab-system" style="display: none;">
             <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
             <button class="tab-btn" id="tab-summary" style="margin-left: auto;">📈 요약 대시보드</button>
-            <button class="tab-btn" id="tab-master">⚙️ 사이트 마스터</button>
+            <button class="tab-btn" id="tab-pivot" style="margin-left: 0.5rem;">🧩 나만의 피벗테이블</button>
+            <button class="tab-btn" id="tab-master" style="margin-left: 0.5rem;">⚙️ 사이트 마스터</button>
         </div>
 
         <!-- Stats -->
@@ -1082,6 +1083,84 @@
                     </thead>
                     <tbody id="summary-body"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Custom Pivot Table Container -->
+        <div id="pivot-container" style="display: none; flex-direction: column; gap: 1.5rem; width: 100%;">
+            <div style="display: flex; gap: 1.5rem; align-items: stretch; flex-wrap: wrap; width: 100%;">
+                <!-- Pivot Config Panel -->
+                <div style="flex: 0 0 320px; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div>
+                        <div style="font-weight: 700; font-size: 1rem; color: var(--accent-color); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                            🧩 피벗 설정 (Pivot Config)
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">원하는 차원을 선택하여 피벗 테이블을 구성하세요.</div>
+                    </div>
+                    
+                    <!-- Row Dimensions -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">행(Row) 분류 기준 (중복 가능)</div>
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem; padding-left: 4px;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="pivot-row-group" checked onchange="updatePivot()"> 기종분류 (Group)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="pivot-row-site" checked onchange="updatePivot()"> 생산처 (Site)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="pivot-row-model" checked onchange="updatePivot()"> 기종/그룹 (Model)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Column Dimensions -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">열(Column) 분류 기준</div>
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem; padding-left: 4px;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="pivot-col-month" checked onchange="updatePivot()"> 월별 개별 분류 (Month)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Source Selector (Visible only in compare mode) -->
+                    <div id="pivot-source-section" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">데이터 소스 (Data Source)</div>
+                        <select id="pivot-data-source" onchange="updatePivot()" style="background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.4rem; border-radius: 6px; font-size: 0.85rem; width: 100%;">
+                            <option value="A">파일 A 계획 (기준)</option>
+                            <option value="B" selected>파일 B 계획 (대비)</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Model Group Setup -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>📦 기종 그룹 관리</span>
+                            <button onclick="openCreateGroupModal()" style="background: var(--accent-color); color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">+ 추가</button>
+                        </div>
+                        <div id="pivot-group-list" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 150px; overflow-y: auto; padding-right: 4px;">
+                            <!-- Group list items dynamically inserted -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pivot Table Area -->
+                <div style="flex: 1; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; min-width: 500px; overflow-x: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary);" id="pivot-table-title">📊 Custom Pivot Table</div>
+                        <button onclick="exportToExcel()" class="btn" style="background: #16a34a; color: white; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem 1rem;">
+                            📥 엑셀 내보내기
+                        </button>
+                    </div>
+                    
+                    <div class="table-container" style="border: 1px solid var(--border-color); border-radius: 8px; overflow-x: auto; margin-top: 0.5rem;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                            <thead id="pivot-head"></thead>
+                            <tbody id="pivot-body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2146,6 +2225,9 @@ DST: 22. 지티테크`;
             currentTab = tabId;
             tabMain.classList.toggle('active', tabId === 'main');
             if (tabSummary) tabSummary.classList.toggle('active', tabId === 'summary');
+            const tabPivot = document.getElementById('tab-pivot');
+            if (tabPivot) tabPivot.classList.toggle('active', tabId === 'pivot');
+            
             if (tabId === 'summary') {
                 populateCompareSelects();
             }
@@ -2164,6 +2246,8 @@ DST: 22. 지티테크`;
 
         tabMain.addEventListener('click', () => switchTab('main'));
         if (tabSummary) tabSummary.addEventListener('click', () => switchTab('summary'));
+        const tabPivot = document.getElementById('tab-pivot');
+        if (tabPivot) tabPivot.addEventListener('click', () => switchTab('pivot'));
 
         document.getElementById('tab-master').onclick = function(e) {
             e.preventDefault();
@@ -2267,13 +2351,28 @@ DST: 22. 지티테크`;
                 copySalesDocBtn.style.display = sapCount > 0 ? 'flex' : 'none';
             }
 
-            if (currentTab === 'summary') {
+            if (currentTab === 'pivot') {
+                const tableContainer = document.getElementById('table-container');
+                const summaryContainer = document.getElementById('summary-container');
+                const dualContainer = document.getElementById('dual-container');
+                const pivotContainer = document.getElementById('pivot-container');
+                
+                tableContainer.style.display = 'none';
+                summaryContainer.style.display = 'none';
+                dualContainer.style.display = 'none';
+                if (pivotContainer) pivotContainer.style.display = 'flex';
+                updatePivot();
+            } else if (currentTab === 'summary') {
+                const pivotContainer = document.getElementById('pivot-container');
+                if (pivotContainer) pivotContainer.style.display = 'none';
                 if (window.compareMode) {
                     applyComparisonFilters();
                 } else {
                     renderSummaryTable();
                 }
             } else {
+                const pivotContainer = document.getElementById('pivot-container');
+                if (pivotContainer) pivotContainer.style.display = 'none';
                 renderTable();
             }
         }
@@ -4679,6 +4778,8 @@ DST: 22. 지티테크`;
             
             if (tabMain) tabMain.classList.toggle('active', currentTab === 'main');
             if (tabSummary) tabSummary.classList.toggle('active', currentTab === 'summary');
+            const tabPivot = document.getElementById('tab-pivot');
+            if (tabPivot) tabPivot.classList.toggle('active', currentTab === 'pivot');
             
             // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택 및 자동 실행
             fetchSavedMpsFiles().then(() => {
@@ -4715,6 +4816,60 @@ DST: 22. 지티테크`;
                             String(now.getHours()).padStart(2, '0') + 
                             String(now.getMinutes()).padStart(2, '0') + 
                             String(now.getSeconds()).padStart(2, '0');
+
+            if (currentTab === 'pivot') {
+                const table = document.getElementById('pivot-table');
+                if (!table) {
+                    alert("내보낼 피벗 데이터가 없습니다.");
+                    return;
+                }
+                const ws = XLSX.utils.table_to_sheet(table);
+
+                // Apply styling to sheet cells
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    
+                    ws[key].s = {
+                        font: { name: "맑은 고딕", sz: 10 },
+                        alignment: { vertical: "center", horizontal: "center" },
+                        border: {
+                            top: { style: "thin", color: { rgb: "CBD5E1" } },
+                            bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+                            left: { style: "thin", color: { rgb: "CBD5E1" } },
+                            right: { style: "thin", color: { rgb: "CBD5E1" } }
+                        }
+                    };
+
+                    const val = ws[key].v;
+                    const cellRef = key;
+                    const rowNum = parseInt(cellRef.replace(/[^0-9]/g, '')) || 0;
+
+                    if (rowNum === 1) {
+                        ws[key].s.fill = {
+                            fgColor: { rgb: "F1F5F9" }
+                        };
+                        ws[key].s.font.bold = true;
+                    }
+                });
+
+                // Auto-fit column widths
+                const colWidths = {};
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    const colLetter = key.replace(/[0-9]/g, '');
+                    const val = ws[key].v;
+                    const strLen = val ? val.toString().length : 0;
+                    colWidths[colLetter] = Math.max(colWidths[colLetter] || 10, strLen + 4);
+                });
+                ws['!cols'] = Object.keys(colWidths).map(col => ({ wch: Math.min(colWidths[col], 40) }));
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "나만의 피벗테이블");
+                
+                const filename = `MPS_Pivot_${dateStr}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                return;
+            }
 
             if (currentTab === 'summary') {
                 const table = document.getElementById('summary-table');
@@ -5032,10 +5187,474 @@ DST: 22. 지티테크`;
             const filename = `MPS_Matching_${dateStr}.xlsx`;
             XLSX.writeFile(wb, filename);
         }
+
+        // ========== Pivot Table Implementation ==========
+        // Default groups
+        const defaultGroups = [
+            {
+                name: "P700 스핀들 공유",
+                models: ["P700M 3축 A60", "P700", "P700LM", "P700XL"]
+            }
+        ];
+
+        // Initialize custom groups
+        let storedGroups = localStorage.getItem('mps_custom_model_groups');
+        if (storedGroups) {
+            window.pivotCustomGroups = JSON.parse(storedGroups);
+        } else {
+            window.pivotCustomGroups = defaultGroups;
+            localStorage.setItem('mps_custom_model_groups', JSON.stringify(defaultGroups));
+        }
+
+        function renderPivotGroupList() {
+            const list = document.getElementById('pivot-group-list');
+            if (!list) return;
+            list.innerHTML = '';
+            
+            window.pivotCustomGroups.forEach((g, idx) => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.background = 'var(--surface-hover)';
+                item.style.padding = '0.4rem 0.6rem';
+                item.style.borderRadius = '6px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.fontSize = '0.85rem';
+                
+                const textSpan = document.createElement('span');
+                textSpan.style.fontWeight = '500';
+                textSpan.style.color = 'var(--text-primary)';
+                textSpan.title = g.models.join(', ');
+                textSpan.textContent = `${g.name} (${g.models.length}개)`;
+                
+                const delBtn = document.createElement('span');
+                delBtn.style.cursor = 'pointer';
+                delBtn.style.color = 'var(--danger)';
+                delBtn.style.fontWeight = 'bold';
+                delBtn.style.fontSize = '0.8rem';
+                delBtn.textContent = '삭제';
+                delBtn.onclick = () => {
+                    window.pivotCustomGroups.splice(idx, 1);
+                    localStorage.setItem('mps_custom_model_groups', JSON.stringify(window.pivotCustomGroups));
+                    renderPivotGroupList();
+                    updatePivot();
+                };
+                
+                item.appendChild(textSpan);
+                item.appendChild(delBtn);
+                list.appendChild(item);
+            });
+        }
+
+        function getUniqueModels() {
+            const modelsSet = new Set();
+            const addModels = (data) => {
+                if (!data) return;
+                data.forEach(row => {
+                    const m = row.isUnmapped ? (row['UnmappedModel'] || row['Model']) : row.Model;
+                    if (m) modelsSet.add(m);
+                });
+            };
+            if (window.compareMode) {
+                addModels(window.compareRawA);
+                addModels(window.compareRawB);
+            } else {
+                addModels(rawData);
+            }
+            return Array.from(modelsSet).sort((a, b) => a.localeCompare(b, 'ko'));
+        }
+
+        function openCreateGroupModal() {
+            const modal = document.getElementById('pivot-group-modal');
+            const nameInput = document.getElementById('new-group-name');
+            nameInput.value = '';
+            
+            const models = getUniqueModels();
+            const container = document.getElementById('group-models-checkboxes');
+            container.innerHTML = '';
+            
+            models.forEach(m => {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.gap = '0.4rem';
+                label.style.fontSize = '0.85rem';
+                label.style.cursor = 'pointer';
+                label.className = 'group-model-item';
+                
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = m;
+                
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(m));
+                container.appendChild(label);
+            });
+            
+            modal.style.display = 'flex';
+        }
+
+        function filterGroupModels() {
+            const query = document.getElementById('group-model-search').value.toLowerCase();
+            const items = document.querySelectorAll('.group-model-item');
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(query) ? 'flex' : 'none';
+            });
+        }
+
+        function closeCreateGroupModal() {
+            document.getElementById('pivot-group-modal').style.display = 'none';
+        }
+
+        function saveCustomGroup() {
+            const nameInput = document.getElementById('new-group-name');
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert('그룹명을 입력하세요.');
+                return;
+            }
+            
+            const checkboxes = document.querySelectorAll('#group-models-checkboxes input[type="checkbox"]:checked');
+            const selectedModels = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (selectedModels.length === 0) {
+                alert('최소 한 개 이상의 기종을 선택하세요.');
+                return;
+            }
+            
+            window.pivotCustomGroups.push({
+                name: name,
+                models: selectedModels
+            });
+            localStorage.setItem('mps_custom_model_groups', JSON.stringify(window.pivotCustomGroups));
+            
+            closeCreateGroupModal();
+            renderPivotGroupList();
+            updatePivot();
+        }
+
+        function getFilteredPivotData(data) {
+            if (!data) return [];
+            const searchVal = searchModel.value.toLowerCase();
+            const unmappedOnly = checkUnmapped.checked;
+            
+            return data.filter(row => {
+                if (unmappedOnly && !row.isUnmapped) return false;
+
+                const matchSite = activeFilters.selectedSites.includes(row['Site'] || '') || (!row['Site'] && activeFilters.selectedSites.length === activeFilters.sites.length);
+                const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
+                const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
+                const division = getDivision(row['Group']);
+                const matchDivision = activeFilters.selectedDivisions.includes(division);
+                
+                const rowModel = row['Model'] || row['UnmappedModel'] || '';
+                const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
+
+                const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
+                const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
+                const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
+
+                const matchSearch = !searchVal || 
+                                   model.includes(searchVal) ||
+                                   product.includes(searchVal) ||
+                                   code.includes(searchVal);
+                
+                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
+            });
+        }
+
+        function getRowKeyData(row, customGroups) {
+            const division = getDivision(row.Group) || '기타';
+            const group = row.Group || '-';
+            const model = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
+            const site = row.Site || '-';
+            const month = row.Month || '-';
+            
+            let modelGroup = model;
+            for (const g of customGroups) {
+                if (g.models.includes(model)) {
+                    modelGroup = g.name;
+                    break;
+                }
+            }
+            
+            return { division, group, site, model: modelGroup, month, qty: parseInt(row.Qty) || 0 };
+        }
+
+        function updatePivot() {
+            let sourceData = [];
+            if (window.compareMode) {
+                const sourceVal = document.getElementById('pivot-data-source').value;
+                const rawDataToUse = sourceVal === 'A' ? (window.compareRawA || []) : (window.compareRawB || []);
+                sourceData = getFilteredPivotData(rawDataToUse);
+                document.getElementById('pivot-source-section').style.display = 'flex';
+            } else {
+                sourceData = filteredData;
+                document.getElementById('pivot-source-section').style.display = 'none';
+            }
+            
+            const titleEl = document.getElementById('pivot-table-title');
+            if (titleEl) {
+                if (window.compareMode) {
+                    const sourceVal = document.getElementById('pivot-data-source').value;
+                    const fileName = sourceVal === 'A' ? (document.getElementById('compare-file-a') ? document.getElementById('compare-file-a').value : '파일 A') : (document.getElementById('compare-file-b') ? document.getElementById('compare-file-b').value : '파일 B');
+                    titleEl.textContent = `📊 피벗테이블 - ${fileName}`;
+                } else {
+                    titleEl.textContent = `📊 피벗테이블 - 현재 계획 데이터`;
+                }
+            }
+            
+            const rowGroupChecked = document.getElementById('pivot-row-group').checked;
+            const rowSiteChecked = document.getElementById('pivot-row-site').checked;
+            const rowModelChecked = document.getElementById('pivot-row-model').checked;
+            const colMonthChecked = document.getElementById('pivot-col-month').checked;
+            
+            const activeRowDims = [];
+            if (rowGroupChecked) activeRowDims.push({ key: 'group', label: '기종분류' });
+            if (rowSiteChecked) activeRowDims.push({ key: 'site', label: '생산처' });
+            if (rowModelChecked) activeRowDims.push({ key: 'model', label: '기종/그룹' });
+            
+            const monthsSet = new Set();
+            if (colMonthChecked) {
+                sourceData.forEach(row => {
+                    if (row.Month) monthsSet.add(row.Month);
+                });
+            }
+            const getMonthNum = (m) => parseInt(m.replace(/[^0-9]/g, '')) || 0;
+            const sortedMonths = Array.from(monthsSet).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+            
+            const pivotCache = {};
+            sourceData.forEach(row => {
+                const data = getRowKeyData(row, window.pivotCustomGroups);
+                const keyParts = activeRowDims.map(d => data[d.key]);
+                const keyStr = keyParts.join('||') || '전체';
+                
+                if (!pivotCache[keyStr]) {
+                    pivotCache[keyStr] = {
+                        dims: {},
+                        monthlyData: {}
+                    };
+                    activeRowDims.forEach(d => {
+                        pivotCache[keyStr].dims[d.key] = data[d.key];
+                    });
+                }
+                
+                const mKey = colMonthChecked ? data.month : '합계';
+                if (!pivotCache[keyStr].monthlyData[mKey]) {
+                    pivotCache[keyStr].monthlyData[mKey] = 0;
+                }
+                pivotCache[keyStr].monthlyData[mKey] += data.qty;
+            });
+            
+            const pivotRows = Object.values(pivotCache);
+            
+            pivotRows.sort((a, b) => {
+                for (const d of activeRowDims) {
+                    const valA = a.dims[d.key] || '';
+                    const valB = b.dims[d.key] || '';
+                    const comp = valA.localeCompare(valB, 'ko');
+                    if (comp !== 0) return comp;
+                }
+                return 0;
+            });
+            
+            // Spans calculation
+            for (let dIndex = 0; dIndex < activeRowDims.length; dIndex++) {
+                const dimKey = activeRowDims[dIndex].key;
+                let i = 0;
+                while (i < pivotRows.length) {
+                    let j = i;
+                    while (j < pivotRows.length) {
+                        let match = true;
+                        for (let k = 0; k <= dIndex; k++) {
+                            const dk = activeRowDims[k].key;
+                            if (pivotRows[j].dims[dk] !== pivotRows[i].dims[dk]) {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (!match) break;
+                        j++;
+                    }
+                    const span = j - i;
+                    if (!pivotRows[i].spans) pivotRows[i].spans = {};
+                    pivotRows[i].spans[dimKey] = span;
+                    for (let m = i + 1; m < j; m++) {
+                        if (!pivotRows[m].spans) pivotRows[m].spans = {};
+                        pivotRows[m].spans[dimKey] = 0;
+                    }
+                    i = j;
+                }
+            }
+            
+            const thead = document.getElementById('pivot-head');
+            thead.innerHTML = '';
+            const trHead = document.createElement('tr');
+            
+            if (activeRowDims.length === 0) {
+                const th = document.createElement('th');
+                th.textContent = '구분';
+                th.style.textAlign = 'center';
+                trHead.appendChild(th);
+            } else {
+                activeRowDims.forEach(d => {
+                    const th = document.createElement('th');
+                    th.textContent = d.label;
+                    th.style.textAlign = 'center';
+                    trHead.appendChild(th);
+                });
+            }
+            
+            if (colMonthChecked) {
+                sortedMonths.forEach(m => {
+                    const th = document.createElement('th');
+                    th.textContent = m;
+                    th.style.textAlign = 'center';
+                    trHead.appendChild(th);
+                });
+            }
+            
+            const thTotal = document.createElement('th');
+            thTotal.textContent = '합계';
+            thTotal.style.textAlign = 'center';
+            trHead.appendChild(thTotal);
+            thead.appendChild(trHead);
+            
+            const tbody = document.getElementById('pivot-body');
+            tbody.innerHTML = '';
+            
+            const monthTotals = {};
+            sortedMonths.forEach(m => { monthTotals[m] = 0; });
+            let grandTotal = 0;
+            
+            if (pivotRows.length === 0) {
+                const trEmpty = document.createElement('tr');
+                const tdEmpty = document.createElement('td');
+                tdEmpty.colSpan = (activeRowDims.length || 1) + sortedMonths.length + 1;
+                tdEmpty.textContent = '조건에 일치하는 데이터가 없습니다.';
+                tdEmpty.style.textAlign = 'center';
+                tdEmpty.style.padding = '2rem';
+                tdEmpty.style.color = 'var(--text-secondary)';
+                trEmpty.appendChild(tdEmpty);
+                tbody.appendChild(trEmpty);
+                return;
+            }
+            
+            pivotRows.forEach(rowItem => {
+                const tr = document.createElement('tr');
+                
+                if (activeRowDims.length === 0) {
+                    const td = document.createElement('td');
+                    td.textContent = '전체';
+                    td.style.textAlign = 'center';
+                    tr.appendChild(td);
+                } else {
+                    activeRowDims.forEach(d => {
+                        const span = rowItem.spans[d.key];
+                        if (span === 0) return;
+                        const td = document.createElement('td');
+                        td.textContent = rowItem.dims[d.key] || '-';
+                        td.style.textAlign = 'center';
+                        td.rowSpan = span;
+                        td.style.verticalAlign = 'middle';
+                        tr.appendChild(td);
+                    });
+                }
+                
+                let rowSum = 0;
+                if (colMonthChecked) {
+                    sortedMonths.forEach(m => {
+                        const val = rowItem.monthlyData[m] || 0;
+                        rowSum += val;
+                        monthTotals[m] += val;
+                        
+                        const td = document.createElement('td');
+                        td.textContent = val > 0 ? val.toLocaleString() : '-';
+                        td.style.textAlign = 'center';
+                        tr.appendChild(td);
+                    });
+                } else {
+                    rowSum = rowItem.monthlyData['합계'] || 0;
+                }
+                
+                grandTotal += rowSum;
+                
+                const tdTotal = document.createElement('td');
+                tdTotal.textContent = rowSum > 0 ? rowSum.toLocaleString() : '-';
+                tdTotal.style.textAlign = 'center';
+                tdTotal.style.fontWeight = 'bold';
+                tr.appendChild(tdTotal);
+                
+                tbody.appendChild(tr);
+            });
+            
+            const trGrand = document.createElement('tr');
+            trGrand.style.fontWeight = 'bold';
+            trGrand.style.background = 'rgba(59, 130, 246, 0.08)';
+            
+            const tdLabel = document.createElement('td');
+            tdLabel.colSpan = activeRowDims.length || 1;
+            tdLabel.textContent = '총합계';
+            tdLabel.style.textAlign = 'center';
+            trGrand.appendChild(tdLabel);
+            
+            if (colMonthChecked) {
+                sortedMonths.forEach(m => {
+                    const val = monthTotals[m];
+                    const td = document.createElement('td');
+                    td.textContent = val > 0 ? val.toLocaleString() : '-';
+                    td.style.textAlign = 'center';
+                    trGrand.appendChild(td);
+                });
+            }
+            
+            const tdGrandTotal = document.createElement('td');
+            tdGrandTotal.textContent = grandTotal > 0 ? grandTotal.toLocaleString() : '-';
+            tdGrandTotal.style.textAlign = 'center';
+            trGrand.appendChild(tdGrandTotal);
+            
+            tbody.appendChild(trGrand);
+        }
+
+        setTimeout(() => {
+            renderPivotGroupList();
+        }, 1000);
+
     </script>
     <style>
-        #data-table, #summary-table {
+        #data-table, #summary-table, #pivot-table {
             user-select: none;
+        }
+        #pivot-table th {
+            background-color: var(--surface-hover);
+            color: var(--text-primary);
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            padding: 0.8rem 1.2rem;
+            font-size: 0.9rem;
+        }
+        #pivot-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.8rem 1.2rem;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+        #pivot-table tr:hover {
+            background-color: var(--surface-hover);
+        }
+        .group-model-item {
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .group-model-item:hover {
+            background: var(--surface-hover);
         }
         td.selected-cell {
             background-color: rgba(59, 130, 246, 0.15) !important;
@@ -5067,5 +5686,33 @@ DST: 22. 지티테크`;
             color: var(--primary);
         }
     </style>
+    <!-- Custom Group Modal -->
+    <div id="pivot-group-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 16px; width: 450px; max-width: 90%; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+            <div style="padding: 1.2rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary);">📦 신규 기종 그룹 생성</span>
+                <span onclick="closeCreateGroupModal()" style="cursor: pointer; font-size: 1.25rem; color: var(--text-secondary);">&times;</span>
+            </div>
+            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; max-height: 450px;">
+                <div>
+                    <label for="new-group-name" style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">그룹명</label>
+                    <input type="text" id="new-group-name" placeholder="예: P700 스핀들 공유" style="background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.6rem; border-radius: 6px; width: 100%; font-size: 0.9rem;">
+                </div>
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">대상 기종 선택</label>
+                        <input type="text" id="group-model-search" oninput="filterGroupModels()" placeholder="검색..." style="background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; width: 120px;">
+                    </div>
+                    <div id="group-models-checkboxes" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; background: var(--surface-hover);">
+                        <!-- Checkboxes dynamically inserted -->
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 0 0 16px 16px;">
+                <button onclick="closeCreateGroupModal()" class="btn" style="background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.5rem 1.2rem;">취소</button>
+                <button onclick="saveCustomGroup()" class="btn" style="background: var(--accent-color); color: white; padding: 0.5rem 1.2rem;">저장</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
