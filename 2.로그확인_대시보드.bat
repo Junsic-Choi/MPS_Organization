@@ -6,5 +6,9 @@ ping 127.0.0.1 -n 2 >nul
 echo [INFO] Starting MPS Server in Terminal Mode...
 echo [INFO] 브라우저를 통해 대시보드를 엽니다...
 start http://localhost:8890
-node server.js
+if exist node.exe (
+    node.exe server.js
+) else (
+    node server.js
+)
 pause

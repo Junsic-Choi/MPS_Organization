@@ -13,18 +13,23 @@ taskkill /f /im mps_dashboard_app.exe >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8890 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 ping 127.0.0.1 -n 2 >nul
 
-where node >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [INFO] Node.js가 감지되어 백그라운드로 안전하게 실행합니다.
-    powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'server.js' -WindowStyle Hidden"
+if exist node.exe (
+    echo [INFO] 내장 Node.js [node.exe] 를 감지하여 백그라운드로 안전하게 실행합니다.
+    powershell -Command "Start-Process -FilePath '.\node.exe' -ArgumentList 'server.js' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
 ) else (
-    if exist mps_dashboard_app.exe (
-        echo [WARNING] Node.js가 없어 mps_dashboard_app.exe를 실행합니다.
-        powershell -Command "Start-Process -FilePath 'mps_dashboard_app.exe' -WindowStyle Hidden"
+    where node >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo [INFO] 시스템 Node.js가 감지되어 백그라운드로 안전하게 실행합니다.
+        powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'server.js' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
     ) else (
-        echo [ERROR] 실행 가능한 서버 파일이 없습니다. (node 또는 mps_dashboard_app.exe 필요)
-        pause
-        exit
+        if exist mps_dashboard_app.exe (
+            echo [WARNING] Node.js가 없어 mps_dashboard_app.exe를 실행합니다.
+            powershell -Command "Start-Process -FilePath 'mps_dashboard_app.exe' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+        ) else (
+            echo [ERROR] 실행 가능한 서버 파일이 없습니다. [node.exe, node 또는 mps_dashboard_app.exe 필요]
+            pause
+            exit
+        )
     )
 )
 
