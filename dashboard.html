@@ -2732,7 +2732,22 @@ DST: 22. 지티테크`;
                 targetMonths = sortedMonthsA.filter(m => monthsB.has(m));
             } else {
                 const allMonths = new Set([...monthsA, ...monthsB]);
-                targetMonths = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                const sortedAll = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                const sortedB = Array.from(monthsB).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                if (sortedB.length > 0) {
+                    const minBNum = getMonthNum(sortedB[0]);
+                    targetMonths = sortedAll.filter(m => {
+                        // A에만 있고 B에는 없는 과거 월(삭제로 뜬 경우)은 분석에서 제외
+                        if (monthsA.has(m) && !monthsB.has(m)) {
+                            if (getMonthNum(m) < minBNum) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                } else {
+                    targetMonths = sortedAll;
+                }
             }
 
             const tr1 = document.createElement('tr');
@@ -3436,7 +3451,22 @@ DST: 22. 지티테크`;
                 targetMonths = sortedMonthsA.filter(m => monthsB.has(m));
             } else {
                 const allMonths = new Set([...monthsA, ...monthsB]);
-                targetMonths = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                const sortedAll = Array.from(allMonths).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                const sortedB = Array.from(monthsB).sort((a, b) => getMonthNum(a) - getMonthNum(b));
+                if (sortedB.length > 0) {
+                    const minBNum = getMonthNum(sortedB[0]);
+                    targetMonths = sortedAll.filter(m => {
+                        // A에만 있고 B에는 없는 과거 월(삭제로 뜬 경우)은 분석에서 제외
+                        if (monthsA.has(m) && !monthsB.has(m)) {
+                            if (getMonthNum(m) < minBNum) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                } else {
+                    targetMonths = sortedAll;
+                }
             }
 
             const modal = document.getElementById('compare-detail-overlay');
