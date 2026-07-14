@@ -2377,6 +2377,46 @@ DST: 22. 지티테크`;
             }
         }
 
+        function moveRow(index, direction, type) {
+            if (type === 'summary') {
+                const rows = window.currentSummaryRows;
+                if (!rows) return;
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= rows.length) return;
+                
+                const temp = rows[index];
+                rows[index] = rows[newIndex];
+                rows[newIndex] = temp;
+                
+                renderSummaryTable();
+            } else if (type === 'comparison') {
+                const rows = window.currentComparisonRows;
+                if (!rows) return;
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= rows.length) return;
+                
+                const temp = rows[index];
+                rows[index] = rows[newIndex];
+                rows[newIndex] = temp;
+                
+                applyComparisonFilters();
+            } else if (type === 'pivot') {
+                const rows = window.currentPivotRows;
+                if (!rows) return;
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= rows.length) return;
+                
+                const temp = rows[index];
+                rows[index] = rows[newIndex];
+                rows[newIndex] = temp;
+                
+                updatePivot();
+            }
+            if (typeof clearCellSelection === 'function') {
+                clearCellSelection();
+            }
+        }
+
         function renderSummaryTable() {
             const tableContainer = document.getElementById('table-container');
             const summaryContainer = document.getElementById('summary-container');
@@ -2407,6 +2447,13 @@ DST: 22. 지티테크`;
             
             // 2. Build header row
             const trHead = document.createElement('tr');
+
+            // Move column header
+            const thMove = document.createElement('th');
+            thMove.textContent = '순서';
+            thMove.style.textAlign = 'center';
+            thMove.style.width = '60px';
+            trHead.appendChild(thMove);
             
             const thDiv = document.createElement('th');
             thDiv.textContent = '구분';
@@ -2477,7 +2524,7 @@ DST: 22. 지티테크`;
                 pivotData[rowKey].monthlyQty[month] += qty;
             });
             
-            const rowList = Object.values(pivotData);
+            let rowList = Object.values(pivotData);
             
             // 4. Sort rowList by division -> group -> model -> site
             rowList.sort((a, b) => {
@@ -2492,6 +2539,15 @@ DST: 22. 지티테크`;
                 
                 return a.site.localeCompare(b.site, 'ko');
             });
+
+            // Keep custom sorting if row keys are the same
+            const currentKeys = rowList.map(item => `${item.division}||${item.group}||${item.model}||${item.site}`).join('##');
+            if (window.lastSummaryKeys === currentKeys && window.currentSummaryRows) {
+                rowList = window.currentSummaryRows;
+            } else {
+                window.currentSummaryRows = rowList;
+                window.lastSummaryKeys = currentKeys;
+            }
             
             // 5. Calculate rowspans for cell merging
             let i = 0;
@@ -2550,6 +2606,45 @@ DST: 22. 지티테크`;
                 const nextItem = isLastRow ? null : rowList[idx + 1];
                 const isGroupLast = isLastRow || (nextItem && nextItem.grpSpan > 0);
                 const isModelLast = isLastRow || (nextItem && nextItem.modelSpan > 0);
+
+                // Move buttons cell (Sort column)
+                const tdSort = document.createElement('td');
+                tdSort.style.textAlign = 'center';
+                tdSort.style.verticalAlign = 'middle';
+                
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = 'flex';
+                btnContainer.style.gap = '4px';
+                btnContainer.style.justifyContent = 'center';
+                
+                const btnUp = document.createElement('button');
+                btnUp.className = 'row-move-btn';
+                btnUp.textContent = '▲';
+                btnUp.title = '위로 이동';
+                btnUp.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, -1, 'summary');
+                };
+                
+                const btnDown = document.createElement('button');
+                btnDown.className = 'row-move-btn';
+                btnDown.textContent = '▼';
+                btnDown.title = '아래로 이동';
+                btnDown.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, 1, 'summary');
+                };
+                
+                btnContainer.appendChild(btnUp);
+                btnContainer.appendChild(btnDown);
+                tdSort.appendChild(btnContainer);
+                
+                if (isGroupLast) {
+                    tdSort.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdSort.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdSort);
                 
                 // Division Cell (with rowspan if applicable)
                 if (item.divSpan > 0) {
@@ -2850,6 +2945,14 @@ DST: 22. 지티테크`;
             }
 
             const tr1 = document.createElement('tr');
+
+            // Move header cell
+            const thSort = document.createElement('th');
+            thSort.textContent = '순서';
+            thSort.rowSpan = 2;
+            thSort.style.textAlign = 'center';
+            thSort.style.width = '60px';
+            tr1.appendChild(thSort);
             
             const thDiv = document.createElement('th');
             thDiv.textContent = '구분';
@@ -3124,6 +3227,15 @@ DST: 22. 지티테크`;
                 return a.site.localeCompare(b.site, 'ko');
             });
 
+            // Keep custom sorting if comparison row keys are the same
+            const currentKeys = displayRowList.map(item => `${item.division}||${item.group}||${item.model}||${item.site}`).join('##');
+            if (window.lastComparisonKeys === currentKeys && window.currentComparisonRows) {
+                displayRowList = window.currentComparisonRows;
+            } else {
+                window.currentComparisonRows = displayRowList;
+                window.lastComparisonKeys = currentKeys;
+            }
+
             let i = 0;
             while (i < displayRowList.length) {
                 let j = i;
@@ -3178,6 +3290,45 @@ DST: 22. 지티테크`;
                 const nextItem = isLastRow ? null : displayRowList[idx + 1];
                 const isGroupLast = isLastRow || (nextItem && nextItem.grpSpan > 0);
                 const isModelLast = isLastRow || (nextItem && nextItem.modelSpan > 0);
+
+                // Move buttons cell
+                const tdSort = document.createElement('td');
+                tdSort.style.textAlign = 'center';
+                tdSort.style.verticalAlign = 'middle';
+                
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = 'flex';
+                btnContainer.style.gap = '4px';
+                btnContainer.style.justifyContent = 'center';
+                
+                const btnUp = document.createElement('button');
+                btnUp.className = 'row-move-btn';
+                btnUp.textContent = '▲';
+                btnUp.title = '위로 이동';
+                btnUp.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, -1, 'comparison');
+                };
+                
+                const btnDown = document.createElement('button');
+                btnDown.className = 'row-move-btn';
+                btnDown.textContent = '▼';
+                btnDown.title = '아래로 이동';
+                btnDown.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, 1, 'comparison');
+                };
+                
+                btnContainer.appendChild(btnUp);
+                btnContainer.appendChild(btnDown);
+                tdSort.appendChild(btnContainer);
+                
+                if (isGroupLast) {
+                    tdSort.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdSort.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdSort);
 
                 if (item.divSpan > 0) {
                     const tdDiv = document.createElement('td');
@@ -3404,7 +3555,7 @@ DST: 22. 지티테크`;
                 
                 const tdLabel = document.createElement('td');
                 tdLabel.textContent = '합계';
-                tdLabel.colSpan = 4;
+                tdLabel.colSpan = 5;
                 tdLabel.style.textAlign = 'center';
                 tdLabel.style.background = 'var(--surface-hover)';
                 trTotal.appendChild(tdLabel);
@@ -4529,16 +4680,13 @@ DST: 22. 지티테크`;
                 const td = e.target.closest('td');
                 if (!td) return;
 
-                e.preventDefault();
+                if (e.target.closest('.row-move-btn')) {
+                    return;
+                }
 
                 const table = document.getElementById(tableId);
                 const tbody = document.getElementById(tbodyId);
                 if (!table || !tbody) return;
-
-                clearCellSelection();
-
-                activeSelectTable = table;
-                activeSelectTbody = tbody;
 
                 const grid = getTableGrid(tbody);
                 let rowIndex = -1;
@@ -4553,6 +4701,16 @@ DST: 22. 지티테크`;
                     }
                 }
 
+                const minAllowedCol = (tableId === 'summary-table' || tableId === 'pivot-table') ? 1 : 0;
+                if (colIndex < minAllowedCol) {
+                    return;
+                }
+
+                clearCellSelection();
+
+                activeSelectTable = table;
+                activeSelectTbody = tbody;
+
                 if (rowIndex !== -1 && colIndex !== -1) {
                     isSelecting = true;
                     startCell = { rowIndex, colIndex };
@@ -4564,7 +4722,7 @@ DST: 22. 지티테크`;
             };
 
             const handleMouseMove = (e) => {
-                if (!isSelecting || !activeSelectTbody) return;
+                if (!isSelecting || !activeSelectTbody || !activeSelectTable) return;
                 lastMouseCoords = { x: e.clientX, y: e.clientY };
 
                 const td = e.target.closest('td');
@@ -4584,7 +4742,8 @@ DST: 22. 지티테크`;
                 }
 
                 if (rowIndex !== -1 && colIndex !== -1) {
-                    endCell = { rowIndex, colIndex };
+                    const minAllowedCol = (activeSelectTable.id === 'summary-table' || activeSelectTable.id === 'pivot-table') ? 1 : 0;
+                    endCell = { rowIndex, colIndex: Math.max(minAllowedCol, colIndex) };
                     updateSelectionVisuals();
                 }
             };
@@ -4657,14 +4816,53 @@ DST: 22. 지티테크`;
             });
 
             document.addEventListener('keydown', (e) => {
+                const activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                    return;
+                }
+
+                const isArrowKey = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
+                if (isArrowKey && activeSelectTbody && activeSelectTable && startCell.rowIndex !== -1) {
+                    e.preventDefault();
+                    const grid = getTableGrid(activeSelectTbody);
+                    const maxRows = grid.length;
+                    const maxCols = maxRows > 0 ? grid[0].length : 0;
+                    if (maxRows === 0 || maxCols === 0) return;
+
+                    const minAllowedCol = (activeSelectTable.id === 'summary-table' || activeSelectTable.id === 'pivot-table') ? 1 : 0;
+
+                    // Moving target cell
+                    let target = e.shiftKey ? { ...endCell } : { ...startCell };
+
+                    if (e.key === 'ArrowUp') {
+                        target.rowIndex = Math.max(0, target.rowIndex - 1);
+                    } else if (e.key === 'ArrowDown') {
+                        target.rowIndex = Math.min(maxRows - 1, target.rowIndex + 1);
+                    } else if (e.key === 'ArrowLeft') {
+                        target.colIndex = Math.max(minAllowedCol, target.colIndex - 1);
+                    } else if (e.key === 'ArrowRight') {
+                        target.colIndex = Math.min(maxCols - 1, target.colIndex + 1);
+                    }
+
+                    if (e.shiftKey) {
+                        endCell = target;
+                    } else {
+                        startCell = target;
+                        endCell = { ...target };
+                    }
+                    updateSelectionVisuals();
+                    
+                    // Scroll target cell into view
+                    const targetCell = grid[target.rowIndex][target.colIndex];
+                    if (targetCell) {
+                        targetCell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                    }
+                    return;
+                }
+
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
                     const selectedCells = document.querySelectorAll('td.selected-cell');
                     if (selectedCells.length === 0) return;
-
-                    const activeEl = document.activeElement;
-                    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-                        return;
-                    }
 
                     e.preventDefault();
 
@@ -5537,7 +5735,7 @@ DST: 22. 지티테크`;
                 pivotCache[keyStr].monthlyData[mKey] += data.qty;
             });
             
-            const pivotRows = Object.values(pivotCache);
+            let pivotRows = Object.values(pivotCache);
             
             pivotRows.sort((a, b) => {
                 for (const d of activeRowDims) {
@@ -5548,6 +5746,18 @@ DST: 22. 지티테크`;
                 }
                 return 0;
             });
+
+            // Keep custom sorting if pivot row keys are the same
+            const currentKeys = pivotRows.map(rowItem => {
+                return activeRowDims.map(d => rowItem.dims[d.key]).join('||');
+            }).join('##');
+
+            if (window.lastPivotKeys === currentKeys && window.currentPivotRows) {
+                pivotRows = window.currentPivotRows;
+            } else {
+                window.currentPivotRows = pivotRows;
+                window.lastPivotKeys = currentKeys;
+            }
             
             // Spans calculation
             for (let dIndex = 0; dIndex < activeRowDims.length; dIndex++) {
@@ -5581,6 +5791,13 @@ DST: 22. 지티테크`;
             const thead = document.getElementById('pivot-head');
             thead.innerHTML = '';
             const trHead = document.createElement('tr');
+            
+            // Move header
+            const thMove = document.createElement('th');
+            thMove.textContent = '순서';
+            thMove.style.textAlign = 'center';
+            thMove.style.width = '60px';
+            trHead.appendChild(thMove);
             
             if (activeRowDims.length === 0) {
                 const th = document.createElement('th');
@@ -5621,7 +5838,7 @@ DST: 22. 지티테크`;
             if (pivotRows.length === 0) {
                 const trEmpty = document.createElement('tr');
                 const tdEmpty = document.createElement('td');
-                tdEmpty.colSpan = (activeRowDims.length || 1) + sortedMonths.length + 1;
+                tdEmpty.colSpan = (activeRowDims.length || 1) + sortedMonths.length + 2;
                 tdEmpty.textContent = '조건에 일치하는 데이터가 없습니다.';
                 tdEmpty.style.textAlign = 'center';
                 tdEmpty.style.padding = '2rem';
@@ -5631,8 +5848,41 @@ DST: 22. 지티테크`;
                 return;
             }
             
-            pivotRows.forEach(rowItem => {
+            pivotRows.forEach((rowItem, idx) => {
                 const tr = document.createElement('tr');
+
+                // Move button cell
+                const tdSort = document.createElement('td');
+                tdSort.style.textAlign = 'center';
+                tdSort.style.verticalAlign = 'middle';
+                
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = 'flex';
+                btnContainer.style.gap = '4px';
+                btnContainer.style.justifyContent = 'center';
+                
+                const btnUp = document.createElement('button');
+                btnUp.className = 'row-move-btn';
+                btnUp.textContent = '▲';
+                btnUp.title = '위로 이동';
+                btnUp.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, -1, 'pivot');
+                };
+                
+                const btnDown = document.createElement('button');
+                btnDown.className = 'row-move-btn';
+                btnDown.textContent = '▼';
+                btnDown.title = '아래로 이동';
+                btnDown.onclick = (e) => {
+                    e.stopPropagation();
+                    moveRow(idx, 1, 'pivot');
+                };
+                
+                btnContainer.appendChild(btnUp);
+                btnContainer.appendChild(btnDown);
+                tdSort.appendChild(btnContainer);
+                tr.appendChild(tdSort);
                 
                 if (activeRowDims.length === 0) {
                     const td = document.createElement('td');
@@ -5684,7 +5934,7 @@ DST: 22. 지티테크`;
             trGrand.style.background = 'rgba(59, 130, 246, 0.08)';
             
             const tdLabel = document.createElement('td');
-            tdLabel.colSpan = activeRowDims.length || 1;
+            tdLabel.colSpan = (activeRowDims.length || 1) + 1;
             tdLabel.textContent = '총합계';
             tdLabel.style.textAlign = 'center';
             trGrand.appendChild(tdLabel);
@@ -5749,6 +5999,25 @@ DST: 22. 지티테크`;
             background-color: rgba(59, 130, 246, 0.15) !important;
             outline: 1.5px solid #3b82f6;
             outline-offset: -1.5px;
+        }
+        .row-move-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.65rem;
+            transition: all 0.2s;
+        }
+        .row-move-btn:hover {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
         }
         .sap-upload-box {
             display: flex;
