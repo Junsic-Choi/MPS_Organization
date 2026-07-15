@@ -156,8 +156,8 @@ app.post('/api/preferences', (req, res) => {
 app.post('/api/upload-sap', upload.single('file'), (req, res) => {
     try {
         const { type } = req.body;
-        if (!type || !['1842', '1840'].includes(type)) {
-            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        if (!type || !['1842', '1840', 'component'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842, 1840 또는 component)을 지정해주세요.' });
         }
         if (!req.file) {
             return res.status(400).json({ success: false, error: '업로드된 파일이 없습니다.' });
@@ -177,8 +177,8 @@ app.post('/api/upload-sap', upload.single('file'), (req, res) => {
 app.post('/api/clear-sap', (req, res) => {
     try {
         const { type } = req.body;
-        if (!type || !['1842', '1840'].includes(type)) {
-            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        if (!type || !['1842', '1840', 'component'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842, 1840 또는 component)을 지정해주세요.' });
         }
         const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
         const savePath = path.join(uploadDir, `sap_${type}.mhtml`);
@@ -197,8 +197,8 @@ app.post('/api/clear-sap', (req, res) => {
 app.get('/api/load-sap/:type', (req, res) => {
     try {
         const { type } = req.params;
-        if (!['1842', '1840'].includes(type)) {
-            return res.status(400).json({ success: false, error: '올바른 타입(1842 또는 1840)을 지정해주세요.' });
+        if (!['1842', '1840', 'component'].includes(type)) {
+            return res.status(400).json({ success: false, error: '올바른 타입(1842, 1840 또는 component)을 지정해주세요.' });
         }
         const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
         const filePath = path.join(uploadDir, `sap_${type}.mhtml`);

@@ -952,6 +952,7 @@
             <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
             <button class="tab-btn" id="tab-summary" style="margin-left: auto;">📈 요약 대시보드</button>
             <button class="tab-btn" id="tab-pivot" style="margin-left: 0.5rem;">🧩 나만의 피벗테이블</button>
+            <button class="tab-btn" id="tab-component" style="margin-left: 0.5rem; display: none;">🔩 가공품 소요 현황</button>
             <button class="tab-btn" id="tab-master" style="margin-left: 0.5rem;">⚙️ 사이트 마스터</button>
         </div>
 
@@ -989,8 +990,8 @@
             </div>
             <div id="sap-join-section" style="width: 100%; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none; margin-top: 1rem;">
                 <div style="flex: 1;">
-                    <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">🔗 SAP 상세 정보(S/O) 결합</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 .MHTML 파일을 올려 기종별 상세 정보를 결합합니다. (Sales Doc, 시작일 포함)</div>
+                    <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">🔗 SAP 상세 정보 및 가공품 소요 결합</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 1842/1840 및 component .MHTML 파일을 결합합니다. (가공품 파일은 선택사항)</div>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                     <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
@@ -1009,10 +1010,17 @@
                             <button onclick="cancelSapFile('1840')" class="btn-small" id="btn-cancel-1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
                         </div>
                     </div>
+                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <label for="sap-component" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(선택)</label>
+                        <input type="file" id="sap-component" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component')">
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="document.getElementById('sap-component').click()" class="btn-small" id="btn-component" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                            <button onclick="cancelSapFile('component')" class="btn-small" id="btn-cancel-component" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        </div>
+                    </div>
                     <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
                 </div>
             </div>
-        </div>
 
         <!-- Standard Data Grid (Main Tab) -->
         <div class="table-container" id="table-container">
@@ -1171,6 +1179,58 @@
                     <thead id="head-left"></thead>
                     <tbody id="body-left"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Component Requirement Container -->
+        <div id="component-container" style="display: none; flex-direction: column; gap: 1.5rem; width: 100%;">
+            <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; overflow-x: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary);">🔩 가공품 소요 현황 (Component Requirements)</div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button onclick="exportComponentToExcel()" class="btn" style="background: #16a34a; color: white; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem 1rem;">
+                            📥 엑셀 내보내기
+                        </button>
+                    </div>
+                </div>
+                <div id="component-count-sub" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: -0.5rem;"></div>
+                <div class="table-container active" style="border: 1px solid var(--border-color); border-radius: 8px; overflow-x: auto; margin-top: 0.5rem; display: block;">
+                    <table id="component-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; text-align: center;">순서</th>
+                                <th>생산월</th>
+                                <th>기종</th>
+                                <th>완제품 품번 (Parent Mat.)</th>
+                                <th>Sales Doc</th>
+                                <th>시리얼번호</th>
+                                <th>가공품 품번 (Component)</th>
+                                <th>가공품명 (Description)</th>
+                                <th style="text-align: right;">소요량 (Qty)</th>
+                                <th style="text-align: center;">구분</th>
+                            </tr>
+                        </thead>
+                        <tbody id="component-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Item Detail Modal (including BOM/Component list) -->
+        <div id="item-detail-overlay" class="master-editor-overlay" onclick="if(event.target === this) closeItemDetail()" style="display: none;">
+            <div id="item-detail-modal" class="master-editor" style="max-width: 750px; min-height: unset; max-height: 85vh; display: flex; flex-direction: column; padding: 0;" onclick="event.stopPropagation()">
+                <div class="master-header" style="padding: 1.5rem 1.5rem 1rem 1.5rem; margin-bottom: 0; border-bottom: 1px solid var(--border-color);">
+                    <div class="master-title" id="item-detail-title">🔍 상세 생산 정보 및 가공품 소요(BOM)</div>
+                    <span class="master-close-btn" onclick="closeItemDetail()" style="line-height: 1;">×</span>
+                </div>
+                
+                <div id="item-detail-body" style="padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.5rem; font-size: 0.95rem; line-height: 1.5;">
+                    <!-- Content dynamically inserted -->
+                </div>
+
+                <div class="master-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; background: rgba(0,0,0,0.05); border-radius: 0 0 16px 16px; margin-top: 0;">
+                    <button class="btn" onclick="closeItemDetail()" style="padding: 0.6rem 1.5rem; background: var(--accent-color); color: white;">닫기</button>
+                </div>
             </div>
         </div>
     </main>
@@ -2227,6 +2287,8 @@ DST: 22. 지티테크`;
             if (tabSummary) tabSummary.classList.toggle('active', tabId === 'summary');
             const tabPivot = document.getElementById('tab-pivot');
             if (tabPivot) tabPivot.classList.toggle('active', tabId === 'pivot');
+            const tabComp = document.getElementById('tab-component');
+            if (tabComp) tabComp.classList.toggle('active', tabId === 'component');
             
             if (tabId === 'summary') {
                 populateCompareSelects();
@@ -2248,6 +2310,8 @@ DST: 22. 지티테크`;
         if (tabSummary) tabSummary.addEventListener('click', () => switchTab('summary'));
         const tabPivot = document.getElementById('tab-pivot');
         if (tabPivot) tabPivot.addEventListener('click', () => switchTab('pivot'));
+        const tabComp = document.getElementById('tab-component');
+        if (tabComp) tabComp.addEventListener('click', () => switchTab('component'));
 
         document.getElementById('tab-master').onclick = function(e) {
             e.preventDefault();
@@ -2279,7 +2343,7 @@ DST: 22. 지티테크`;
         }
 
         function applyFilters() {
-            const searchVal = searchModel.value.toLowerCase();
+            const searchVal = searchModel.value.toLowerCase().trim();
             const unmappedOnly = checkUnmapped.checked;
 
             // 전체 데이터 (매칭 + 미매칭) 통합
@@ -2303,10 +2367,23 @@ DST: 22. 지티테크`;
                 const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
                 const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
 
+                let hasComponentSearchMatch = false;
+                if (searchVal && sapData['component'] && sapData['component'].length > 0 && !row.isUnmapped) {
+                    let comps = [];
+                    if (row.Serial && row.Serial !== '-') comps = compBySerial[row.Serial] || [];
+                    if (comps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') comps = compBySalesDoc[row.SalesDoc] || [];
+                    
+                    hasComponentSearchMatch = comps.some(c => 
+                        (c.Component && c.Component.toLowerCase().includes(searchVal)) ||
+                        (c.CompDesc && c.CompDesc.toLowerCase().includes(searchVal))
+                    );
+                }
+
                 const matchSearch = !searchVal || 
                                    model.includes(searchVal) ||
                                    product.includes(searchVal) ||
-                                   code.includes(searchVal);
+                                   code.includes(searchVal) ||
+                                   hasComponentSearchMatch;
                 
                 return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
             });
@@ -2356,23 +2433,39 @@ DST: 22. 지티테크`;
                 const summaryContainer = document.getElementById('summary-container');
                 const dualContainer = document.getElementById('dual-container');
                 const pivotContainer = document.getElementById('pivot-container');
+                const componentContainer = document.getElementById('component-container');
                 
                 tableContainer.style.display = 'none';
                 summaryContainer.style.display = 'none';
                 dualContainer.style.display = 'none';
+                if (componentContainer) componentContainer.style.display = 'none';
                 if (pivotContainer) pivotContainer.style.display = 'flex';
                 updatePivot();
             } else if (currentTab === 'summary') {
                 const pivotContainer = document.getElementById('pivot-container');
                 if (pivotContainer) pivotContainer.style.display = 'none';
+                const componentContainer = document.getElementById('component-container');
+                if (componentContainer) componentContainer.style.display = 'none';
                 if (window.compareMode) {
                     applyComparisonFilters();
                 } else {
                     renderSummaryTable();
                 }
+            } else if (currentTab === 'component') {
+                const pivotContainer = document.getElementById('pivot-container');
+                if (pivotContainer) pivotContainer.style.display = 'none';
+                const tableContainer = document.getElementById('table-container');
+                if (tableContainer) tableContainer.style.display = 'none';
+                const summaryContainer = document.getElementById('summary-container');
+                if (summaryContainer) summaryContainer.style.display = 'none';
+                const componentContainer = document.getElementById('component-container');
+                if (componentContainer) componentContainer.style.display = 'flex';
+                renderComponentTable();
             } else {
                 const pivotContainer = document.getElementById('pivot-container');
                 if (pivotContainer) pivotContainer.style.display = 'none';
+                const componentContainer = document.getElementById('component-container');
+                if (componentContainer) componentContainer.style.display = 'none';
                 renderTable();
             }
         }
@@ -3930,6 +4023,10 @@ DST: 22. 지티테크`;
             for (let i = 0; i < limit; i++) {
                 const row = filteredData[i];
                 const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.addEventListener('dblclick', () => {
+                    showItemDetail(row);
+                });
                 
                 // 미매칭 항목은 배경색으로 구분
                 if (row.isUnmapped) {
@@ -3960,21 +4057,39 @@ DST: 22. 지티테크`;
         }
 
         // ========== SAP MHTML Detail Join Logic ==========
-        let sapData = { '1842': [], '1840': [] };
+        let sapData = { '1842': [], '1840': [], 'component': [] };
+        let compBySerial = {};
+        let compBySalesDoc = {};
+
+        function rebuildComponentIndex() {
+            compBySerial = {};
+            compBySalesDoc = {};
+            const components = sapData['component'] || [];
+            components.forEach(c => {
+                if (c.Serial && c.Serial !== '-') {
+                    if (!compBySerial[c.Serial]) compBySerial[c.Serial] = [];
+                    compBySerial[c.Serial].push(c);
+                }
+                if (c.SalesDoc && c.SalesDoc !== '-') {
+                    if (!compBySalesDoc[c.SalesDoc]) compBySalesDoc[c.SalesDoc] = [];
+                    compBySalesDoc[c.SalesDoc].push(c);
+                }
+            });
+        }
 
         async function loadSavedSapFiles() {
             try {
-                for (const type of ['1842', '1840']) {
+                for (const type of ['1842', '1840', 'component']) {
                     const res = await fetch(`/api/load-sap/${type}`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.exists && data.content) {
-                            const parsed = parseSapMhtml(data.content, false);
+                            const parsed = parseSapMhtml(data.content, false, type);
                             sapData[type] = parsed;
                             
                             const btn = document.getElementById(`btn-${type}`);
                             if (btn) {
-                                btn.textContent = `✅ 서버 저장됨 (${type})`;
+                                btn.textContent = `✅ 서버 저장됨 (${type === 'component' ? '가공품' : type})`;
                                 btn.style.background = 'var(--success)';
                                 btn.style.color = 'white';
                             }
@@ -3985,6 +4100,7 @@ DST: 22. 지티테크`;
                         }
                     }
                 }
+                rebuildComponentIndex();
                 checkJoinReady();
             } catch (err) {
                 console.error('Failed to load saved SAP files from server:', err);
@@ -4012,6 +4128,9 @@ DST: 22. 지티테크`;
 
         async function cancelSapFile(type) {
             sapData[type] = [];
+            if (type === 'component') {
+                rebuildComponentIndex();
+            }
             document.getElementById(`sap-${type}`).value = '';
             const btn = document.getElementById(`btn-${type}`);
             if (btn) {
@@ -4043,8 +4162,11 @@ DST: 22. 지티테크`;
             const reader = new FileReader();
             reader.onload = async function(e) {
                 const content = e.target.result;
-                const parsed = parseSapMhtml(content, true);
+                const parsed = parseSapMhtml(content, true, type);
                 sapData[type] = parsed;
+                if (type === 'component') {
+                    rebuildComponentIndex();
+                }
                 document.getElementById(`btn-${type}`).textContent = `✅ ${file.name.substring(0, 10)}...`;
                 document.getElementById(`btn-${type}`).style.background = 'var(--success)';
                 document.getElementById(`btn-${type}`).style.color = 'white';
@@ -4060,7 +4182,6 @@ DST: 22. 지티테크`;
             reader.readAsText(file);
         }
 
-
         function checkJoinReady() {
             const hasData = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
             const btn = document.getElementById('join-btn');
@@ -4068,6 +4189,11 @@ DST: 22. 지티테크`;
                 btn.disabled = !hasData;
                 btn.style.opacity = hasData ? '1' : '0.5';
                 btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
+            }
+            const hasComponent = sapData['component'] && sapData['component'].length > 0;
+            const tabComp = document.getElementById('tab-component');
+            if (tabComp) {
+                tabComp.style.display = hasComponent ? 'inline-block' : 'none';
             }
         }
 
@@ -4078,7 +4204,7 @@ DST: 22. 지티테크`;
                 .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
         }
 
-        function parseSapMhtml(mhtml, showAlert = true) {
+        function parseSapMhtml(mhtml, showAlert = true, type = null) {
             // Decode Quoted-Printable format first
             const decoded = decodeQuotedPrintable(mhtml || '');
             
@@ -4094,26 +4220,100 @@ DST: 22. 지티테크`;
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            const table = doc.querySelector('table');
             
-            if (!table) {
-                // 테이블을 못 찾은 경우 시트형 데이터 스캔
-                const allTables = doc.querySelectorAll('table');
-                if (allTables.length > 0) {
-                    // 데이터가 가장 많을 것 같은 테이블 선택
-                    let maxRows = 0;
-                    let targetTable = allTables[0];
-                    allTables.forEach(t => {
-                        if (t.rows.length > maxRows) {
-                            maxRows = t.rows.length;
-                            targetTable = t;
-                        }
-                    });
-                    return extractFromTable(targetTable, showAlert);
-                }
-                return [];
+            // Find target table
+            const allTables = doc.querySelectorAll('table');
+            let targetTable = null;
+            if (allTables.length > 0) {
+                let maxRows = 0;
+                allTables.forEach(t => {
+                    if (t.rows.length > maxRows) {
+                        maxRows = t.rows.length;
+                        targetTable = t;
+                    }
+                });
             }
-            return extractFromTable(table, showAlert);
+            
+            if (!targetTable) return [];
+            
+            if (type === 'component') {
+                return extractComponentFromTable(targetTable, showAlert);
+            } else {
+                return extractFromTable(targetTable, showAlert);
+            }
+        }
+
+        function extractComponentFromTable(table, showAlert = true) {
+            const rows = Array.from(table.querySelectorAll('tr'));
+            if (rows.length < 2) return [];
+
+            // Find header
+            let headerRow = rows[0];
+            let headerCells = Array.from(headerRow.querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+            
+            if (!headerCells.some(c => c.includes('COMPONENT') || c.includes('COMP.DESC.'))) {
+                for(let i=1; i<Math.min(10, rows.length); i++) {
+                    const cells = Array.from(rows[i].querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+                    if (cells.some(c => c.includes('COMPONENT') || c.includes('COMP.DESC.'))) {
+                        headerRow = rows[i];
+                        headerCells = cells;
+                        break;
+                    }
+                }
+            }
+
+            const findIdx = (keywords) => {
+                let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                if (idx !== -1) return idx;
+                return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+            };
+
+            const mapping = {
+                mon: findIdx(['PROD.MONTH', 'PROD.MON', '생산월', 'MONTH']),
+                salesDoc: findIdx(['S/O ORDER', 'SALES DOC', '판매문서', 'SALESDOC']),
+                serial: findIdx(['SERIAL NO', 'SERIALNO', '시리얼']),
+                order: findIdx(['ORDER', '오더']),
+                component: findIdx(['COMPONENT', '하위자재', '부품']),
+                compDesc: findIdx(['COMP.DESC.', 'COMP.DESC', '자재명', '부품명']),
+                qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
+                parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
+                reqDate: findIdx(['REQUIREMENT DATE', '소요예정일'])
+            };
+
+            const data = [];
+            const startIndex = rows.indexOf(headerRow) + 1;
+            
+            for (let i = startIndex; i < rows.length; i++) {
+                const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
+                if (cells.length < 5) continue;
+
+                const monVal = cells[mapping.mon] || ''; 
+                let mNum = null;
+                const dateDigits = monVal.replace(/[^0-9]/g, '');
+                if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));
+                else if (dateDigits.length >= 1) mNum = parseInt(dateDigits);
+
+                if (!mNum || mNum > 12) continue;
+
+                data.push({
+                    Month: mNum + '월',
+                    SalesDoc: cells[mapping.salesDoc] || '',
+                    Serial: cells[mapping.serial] || '',
+                    Order: cells[mapping.order] || '',
+                    Component: cells[mapping.component] || '',
+                    CompDesc: cells[mapping.compDesc] || '',
+                    Qty: parseFloat(cells[mapping.qty]) || 0,
+                    ParentMat: cells[mapping.parentMat] || '',
+                    ReqDate: cells[mapping.reqDate] || ''
+                });
+            }
+            
+            if (data.length > 0) {
+                if (showAlert) alert(`✅ SAP 가공품 소요 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다.`);
+            } else {
+                if (showAlert) alert(`⚠️ 데이터를 찾지 못했습니다. 컬럼 헤더(Component, S/O Order 등)가 포함되어 있는지 확인해주세요.`);
+            }
+            return data;
         }
 
         function extractFromTable(table, showAlert = true) {
@@ -4190,12 +4390,13 @@ DST: 22. 지티테크`;
             }
             
             if (data.length > 0) {
-                alert(`✅ SAP 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다.`);
+                if (showAlert) alert(`✅ SAP 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다.`);
             } else {
-                alert(`⚠️ 데이터를 찾지 못했습니다. 컬럼 헤더(Prod.Mon, Material Description 등)가 포함되어 있는지 확인해주세요.`);
+                if (showAlert) alert(`⚠️ 데이터를 찾지 못했습니다. 컬럼 헤더(Prod.Mon, Material Description 등)가 포함되어 있는지 확인해주세요.`);
             }
             return data;
         }
+
 
         function performSapJoin(rawList, unusedList, sapDataForJoin) {
             // Create a copy of the SAP records to track which have been matched for this specific join run
@@ -5955,6 +6156,322 @@ DST: 22. 지티테크`;
             trGrand.appendChild(tdGrandTotal);
             
             tbody.appendChild(trGrand);
+        }
+
+        // ========== SAP Component Requirement (BOM) & Pilot Production Logic ==========
+
+        function getMonthOrder(monthStr) {
+            if (!monthStr) return 999;
+            const num = parseInt(monthStr.replace(/[^0-9]/g, ''));
+            return num || 999;
+        }
+
+        function isInitialProduction(model, month) {
+            if (!model || !month) return false;
+            if (!window.masterPlanPool || window.masterPlanPool.length === 0) return false;
+            
+            const targetMonthOrder = getMonthOrder(month);
+            const modelKey = getMatchKey(model);
+            
+            // Check if there are any plans for the same model in prior months
+            const hasPriorPlan = window.masterPlanPool.some(p => {
+                if (getMatchKey(p.Model) !== modelKey) return false;
+                return getMonthOrder(p.Month) < targetMonthOrder;
+            });
+            
+            return !hasPriorPlan;
+        }
+
+        function getModelForComponent(compRow) {
+            if (!compRow) return '';
+            
+            // 1. Try matching by Serial No
+            if (compRow.Serial && compRow.Serial !== '-') {
+                const match = rawData.find(r => r.Serial === compRow.Serial);
+                if (match) return match.Model;
+            }
+            // 2. Try matching by Sales Doc
+            if (compRow.SalesDoc && compRow.SalesDoc !== '-') {
+                const match = rawData.find(r => r.SalesDoc === compRow.SalesDoc);
+                if (match) return match.Model;
+            }
+            // 3. Fallback to extracting from ParentMat
+            if (compRow.ParentMat) {
+                return getMatchKey(compRow.ParentMat);
+            }
+            return '';
+        }
+
+        function renderComponentTable() {
+            const tbody = document.getElementById('component-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const components = sapData['component'] || [];
+            if (components.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">가공품 소요 데이터가 없습니다. component.MHTML 파일을 먼저 올려주세요.</td></tr>';
+                const subEl = document.getElementById('component-count-sub');
+                if (subEl) subEl.textContent = '';
+                return;
+            }
+            
+            const searchVal = searchModel.value.toLowerCase().trim();
+            const filteredComps = [];
+            
+            filteredData.forEach(r => {
+                if (r.isUnmapped) return; // Skip unmapped rows to avoid incorrect components
+                
+                let matched = [];
+                if (r.Serial && r.Serial !== '-') {
+                    matched = compBySerial[r.Serial] || [];
+                }
+                if (matched.length === 0 && r.SalesDoc && r.SalesDoc !== '-') {
+                    matched = compBySalesDoc[r.SalesDoc] || [];
+                }
+                
+                matched.forEach(c => {
+                    const model = r.Model || '';
+                    const isPilot = isInitialProduction(model, r.Month);
+                    
+                    if (searchVal) {
+                        const modelLower = model.toLowerCase();
+                        const compLower = (c.Component || '').toLowerCase();
+                        const descLower = (c.CompDesc || '').toLowerCase();
+                        const parentLower = (c.ParentMat || '').toLowerCase();
+                        
+                        const matchSearch = modelLower.includes(searchVal) ||
+                                           compLower.includes(searchVal) ||
+                                           descLower.includes(searchVal) ||
+                                           parentLower.includes(searchVal);
+                        if (!matchSearch) return;
+                    }
+                    
+                    filteredComps.push({
+                        ...c,
+                        Model: model,
+                        IsPilot: isPilot,
+                        ParentRow: r
+                    });
+                });
+            });
+            
+            const subEl = document.getElementById('component-count-sub');
+            if (subEl) {
+                if (filteredComps.length > 2000) {
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 (상위 2,000건만 표시 중, 전체 데이터는 엑셀 내보내기를 이용해 주세요)`;
+                    subEl.style.color = 'var(--warning)';
+                } else {
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건`;
+                    subEl.style.color = 'var(--text-secondary)';
+                }
+            }
+            
+            if (filteredComps.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">필터링된 결과가 없습니다.</td></tr>';
+                return;
+            }
+            
+            const limit = Math.min(filteredComps.length, 2000);
+            for (let idx = 0; idx < limit; idx++) {
+                const c = filteredComps[idx];
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.addEventListener('dblclick', () => {
+                    if (c.ParentRow) {
+                        showItemDetail(c.ParentRow);
+                    }
+                });
+                
+                const tdIdx = document.createElement('td');
+                tdIdx.textContent = idx + 1;
+                tdIdx.style.textAlign = 'center';
+                tr.appendChild(tdIdx);
+                
+                const tdMonth = document.createElement('td');
+                tdMonth.textContent = c.Month;
+                tr.appendChild(tdMonth);
+                
+                const tdModel = document.createElement('td');
+                tdModel.textContent = c.Model || '-';
+                tr.appendChild(tdModel);
+                
+                const tdParent = document.createElement('td');
+                tdParent.textContent = c.ParentMat || '-';
+                tr.appendChild(tdParent);
+                
+                const tdSalesDoc = document.createElement('td');
+                tdSalesDoc.textContent = c.SalesDoc || '-';
+                tr.appendChild(tdSalesDoc);
+                
+                const tdSerial = document.createElement('td');
+                tdSerial.textContent = c.Serial || '-';
+                tr.appendChild(tdSerial);
+                
+                const tdComp = document.createElement('td');
+                tdComp.textContent = c.Component || '-';
+                tdComp.style.fontFamily = 'monospace';
+                tr.appendChild(tdComp);
+                
+                const tdDesc = document.createElement('td');
+                tdDesc.textContent = c.CompDesc || '-';
+                tr.appendChild(tdDesc);
+                
+                const tdQty = document.createElement('td');
+                tdQty.textContent = c.Qty.toLocaleString();
+                tdQty.style.textAlign = 'right';
+                tdQty.style.fontWeight = 'bold';
+                tr.appendChild(tdQty);
+                
+                const tdPilot = document.createElement('td');
+                tdPilot.style.textAlign = 'center';
+                if (c.IsPilot) {
+                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">초도품</span>';
+                } else {
+                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">양산품</span>';
+                }
+                tr.appendChild(tdPilot);
+                
+                tbody.appendChild(tr);
+            }
+        }
+
+        function showItemDetail(row) {
+            const overlay = document.getElementById('item-detail-overlay');
+            const titleEl = document.getElementById('item-detail-title');
+            const bodyEl = document.getElementById('item-detail-body');
+            
+            if (!overlay || !bodyEl) return;
+            
+            const isPilot = isInitialProduction(row.Model, row.Month);
+            
+            titleEl.innerHTML = `🔍 <b>[${row.Model || '기종 불명'}]</b> 상세 정보 및 BOM 내역`;
+            bodyEl.innerHTML = '';
+            
+            const infoSection = document.createElement('div');
+            infoSection.style.display = 'grid';
+            infoSection.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+            infoSection.style.gap = '1rem';
+            infoSection.style.background = 'var(--surface-hover)';
+            infoSection.style.padding = '1.2rem';
+            infoSection.style.borderRadius = '8px';
+            infoSection.style.border = '1px solid var(--border-color)';
+            
+            const fields = [
+                { label: '생산월', val: row.Month || '-' },
+                { label: '생산처 (Site)', val: row.Site || '-' },
+                { label: '기종분류', val: row.Group || '-' },
+                { label: '기종 (Model)', val: row.Model || '-' },
+                { label: '품명 (Product)', val: row.Product || row.ProductName || '-' },
+                { label: '주문번호 (Order)', val: row.OrderNum || '-' },
+                { label: 'Sales Doc', val: row.SalesDoc || '-' },
+                { label: '시리얼번호 (Serial)', val: row.Serial || '-' },
+                { label: '시작일', val: row.StartDate || '-' },
+                { label: '고객명', val: row.Customer || '-' },
+                { label: '구분', val: isPilot ? '<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight:600;">초도품</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-weight:600;">양산품</span>' }
+            ];
+            
+            fields.forEach(f => {
+                const itemDiv = document.createElement('div');
+                itemDiv.innerHTML = `
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight:600; text-transform:uppercase;">${f.label}</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-weight:500; margin-top: 2px;">${f.val}</div>
+                `;
+                infoSection.appendChild(itemDiv);
+            });
+            bodyEl.appendChild(infoSection);
+            
+            const bomTitle = document.createElement('h3');
+            bomTitle.textContent = '🔩 하위 가공품 소요 (BOM) 내역';
+            bomTitle.style.fontSize = '1.05rem';
+            bomTitle.style.fontWeight = '600';
+            bomTitle.style.marginTop = '0.5rem';
+            bomTitle.style.color = 'var(--accent-color)';
+            bodyEl.appendChild(bomTitle);
+            
+            let matchedComps = [];
+            if (!row.isUnmapped) {
+                if (row.Serial && row.Serial !== '-') {
+                    matchedComps = compBySerial[row.Serial] || [];
+                }
+                if (matchedComps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') {
+                    matchedComps = compBySalesDoc[row.SalesDoc] || [];
+                }
+            }
+            
+            if (matchedComps.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.style.textAlign = 'center';
+                emptyDiv.style.padding = '2rem';
+                emptyDiv.style.color = 'var(--text-secondary)';
+                emptyDiv.style.background = 'rgba(255,255,255,0.01)';
+                emptyDiv.style.border = '1px dashed var(--border-color)';
+                emptyDiv.style.borderRadius = '8px';
+                emptyDiv.textContent = '매칭된 하위 가공품(BOM) 내역이 없습니다.';
+                bodyEl.appendChild(emptyDiv);
+            } else {
+                const bomTableWrapper = document.createElement('div');
+                bomTableWrapper.className = 'table-container active';
+                bomTableWrapper.style.border = '1px solid var(--border-color)';
+                bomTableWrapper.style.borderRadius = '8px';
+                bomTableWrapper.style.maxHeight = '300px';
+                bomTableWrapper.style.overflowY = 'auto';
+                
+                const bomTable = document.createElement('table');
+                bomTable.style.width = '100%';
+                bomTable.style.borderCollapse = 'collapse';
+                
+                bomTable.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; text-align: left;">가공품 품번</th>
+                            <th style="padding: 0.5rem; text-align: left;">가공품명</th>
+                            <th style="padding: 0.5rem; text-align: right; width: 100px;">소요량</th>
+                            <th style="padding: 0.5rem; text-align: left; width: 120px;">소요예정일</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                `;
+                
+                const bomTbody = bomTable.querySelector('tbody');
+                const aggregated = {};
+                matchedComps.forEach(c => {
+                    const key = `${c.Component}||${c.CompDesc}`;
+                    if (!aggregated[key]) {
+                        aggregated[key] = { ...c, Qty: 0 };
+                    }
+                    aggregated[key].Qty += c.Qty;
+                });
+                
+                Object.values(aggregated).forEach(c => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="padding: 0.6rem 0.8rem; font-family: monospace;">${c.Component}</td>
+                        <td style="padding: 0.6rem 0.8rem;">${c.CompDesc}</td>
+                        <td style="padding: 0.6rem 0.8rem; text-align: right; font-weight: bold; color: var(--success);">${c.Qty.toLocaleString()}</td>
+                        <td style="padding: 0.6rem 0.8rem; color: var(--text-secondary);">${c.ReqDate || '-'}</td>
+                    `;
+                    bomTbody.appendChild(tr);
+                });
+                
+                bomTableWrapper.appendChild(bomTable);
+                bodyEl.appendChild(bomTableWrapper);
+            }
+            
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeItemDetail() {
+            document.getElementById('item-detail-overlay').style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        function exportComponentToExcel() {
+            const table = document.getElementById('component-table');
+            if (!table) return;
+            const wb = XLSX.utils.table_to_book(table, { sheet: "가공품 소요 현황" });
+            XLSX.writeFile(wb, `가공품_소요_현황_${new Date().toISOString().slice(0, 10)}.xlsx`);
         }
 
         setTimeout(() => {
