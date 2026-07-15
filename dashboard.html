@@ -1194,6 +1194,25 @@
                     </div>
                 </div>
                 <div id="component-count-sub" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: -0.5rem;"></div>
+                
+                <!-- Local Filter Control Panel -->
+                <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: var(--surface-hover); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
+                        <input type="checkbox" id="filter-comp-sq" onchange="renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        초도품(SQ)만 보기
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
+                        <input type="checkbox" id="filter-comp-no-history" onchange="renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        시스템 생산 이력X만 보기
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">가공품 품명 필터:</span>
+                        <select id="filter-comp-material" onchange="renderComponentTable()" style="padding: 0.4rem 2rem 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--input-bg); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; outline: none; min-width: 240px; max-width: 360px;">
+                            <option value="">전체보기</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="table-container active" style="border: 1px solid var(--border-color); border-radius: 8px; overflow-x: auto; margin-top: 0.5rem; display: block;">
                     <table id="component-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
                         <thead>
@@ -1211,6 +1230,13 @@
                             </tr>
                         </thead>
                         <tbody id="component-body"></tbody>
+                        <tfoot id="component-foot">
+                            <tr style="font-weight: bold; background: var(--surface-hover); border-top: 2px solid var(--border-color);">
+                                <td colspan="8" style="text-align: center; padding: 0.75rem 1rem; color: var(--text-primary);">조회된 총 소요량 합계</td>
+                                <td id="component-total-qty" style="text-align: right; padding: 0.75rem 1rem; font-weight: 800; font-size: 1rem; color: var(--accent-color);">0</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -2460,6 +2486,7 @@ DST: 22. 지티테크`;
                 if (summaryContainer) summaryContainer.style.display = 'none';
                 const componentContainer = document.getElementById('component-container');
                 if (componentContainer) componentContainer.style.display = 'flex';
+                rebuildComponentMaterialDropdown();
                 renderComponentTable();
             } else {
                 const pivotContainer = document.getElementById('pivot-container');
@@ -4060,10 +4087,12 @@ DST: 22. 지티테크`;
         let sapData = { '1842': [], '1840': [], 'component': [] };
         let compBySerial = {};
         let compBySalesDoc = {};
+        let compMinMonthOrder = {};
 
         function rebuildComponentIndex() {
             compBySerial = {};
             compBySalesDoc = {};
+            compMinMonthOrder = {};
             const components = sapData['component'] || [];
             components.forEach(c => {
                 if (c.Serial && c.Serial !== '-') {
@@ -4073,6 +4102,12 @@ DST: 22. 지티테크`;
                 if (c.SalesDoc && c.SalesDoc !== '-') {
                     if (!compBySalesDoc[c.SalesDoc]) compBySalesDoc[c.SalesDoc] = [];
                     compBySalesDoc[c.SalesDoc].push(c);
+                }
+                if (c.Component) {
+                    const mOrder = getMonthOrder(c.Month);
+                    if (compMinMonthOrder[c.Component] === undefined || mOrder < compMinMonthOrder[c.Component]) {
+                        compMinMonthOrder[c.Component] = mOrder;
+                    }
                 }
             });
         }
@@ -4277,7 +4312,8 @@ DST: 22. 지티테크`;
                 compDesc: findIdx(['COMP.DESC.', 'COMP.DESC', '자재명', '부품명']),
                 qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
                 parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
-                reqDate: findIdx(['REQUIREMENT DATE', '소요예정일'])
+                reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
+                sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬'])
             };
 
             const data = [];
@@ -4304,7 +4340,8 @@ DST: 22. 지티테크`;
                     CompDesc: cells[mapping.compDesc] || '',
                     Qty: parseFloat(cells[mapping.qty]) || 0,
                     ParentMat: cells[mapping.parentMat] || '',
-                    ReqDate: cells[mapping.reqDate] || ''
+                    ReqDate: cells[mapping.reqDate] || '',
+                    SortString: cells[mapping.sortString] || ''
                 });
             }
             
@@ -6202,6 +6239,57 @@ DST: 22. 지티테크`;
             return '';
         }
 
+        function isInitialComponent(componentCode, monthStr) {
+            if (!componentCode || !monthStr) return false;
+            const targetOrder = getMonthOrder(monthStr);
+            const minOrder = compMinMonthOrder[componentCode];
+            if (minOrder === undefined) return true;
+            return minOrder >= targetOrder;
+        }
+
+        function rebuildComponentMaterialDropdown() {
+            const select = document.getElementById('filter-comp-material');
+            if (!select) return;
+            
+            const currentVal = select.value;
+            
+            // Gather components from filteredData
+            const uniqueMap = new Map();
+            filteredData.forEach(r => {
+                if (r.isUnmapped) return;
+                let matched = [];
+                if (r.Serial && r.Serial !== '-') {
+                    matched = compBySerial[r.Serial] || [];
+                }
+                if (matched.length === 0 && r.SalesDoc && r.SalesDoc !== '-') {
+                    matched = compBySalesDoc[r.SalesDoc] || [];
+                }
+                
+                matched.forEach(c => {
+                    if (c.Component) {
+                        uniqueMap.set(c.Component, c.CompDesc || '');
+                    }
+                });
+            });
+            
+            const sortedKeys = Array.from(uniqueMap.keys()).sort();
+            
+            select.innerHTML = '<option value="">전체보기</option>';
+            sortedKeys.forEach(comp => {
+                const desc = uniqueMap.get(comp);
+                const opt = document.createElement('option');
+                opt.value = comp;
+                opt.textContent = `${comp} (${desc})`;
+                select.appendChild(opt);
+            });
+            
+            if (uniqueMap.has(currentVal)) {
+                select.value = currentVal;
+            } else {
+                select.value = '';
+            }
+        }
+
         function renderComponentTable() {
             const tbody = document.getElementById('component-body');
             if (!tbody) return;
@@ -6212,10 +6300,16 @@ DST: 22. 지티테크`;
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">가공품 소요 데이터가 없습니다. component.MHTML 파일을 먼저 올려주세요.</td></tr>';
                 const subEl = document.getElementById('component-count-sub');
                 if (subEl) subEl.textContent = '';
+                const totalQtyEl = document.getElementById('component-total-qty');
+                if (totalQtyEl) totalQtyEl.textContent = '0';
                 return;
             }
             
             const searchVal = searchModel.value.toLowerCase().trim();
+            const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
+            const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            const compMaterialFilter = document.getElementById('filter-comp-material')?.value;
+            
             const filteredComps = [];
             
             filteredData.forEach(r => {
@@ -6231,7 +6325,13 @@ DST: 22. 지티테크`;
                 
                 matched.forEach(c => {
                     const model = r.Model || '';
-                    const isPilot = isInitialProduction(model, r.Month);
+                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
+                    const isNoHistory = isInitialComponent(c.Component, c.Month);
+                    
+                    // Apply local filters
+                    if (showSqOnly && !isSq) return;
+                    if (showNoHistoryOnly && !isNoHistory) return;
+                    if (compMaterialFilter && c.Component !== compMaterialFilter) return;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
@@ -6249,11 +6349,23 @@ DST: 22. 지티테크`;
                     filteredComps.push({
                         ...c,
                         Model: model,
-                        IsPilot: isPilot,
+                        IsSq: isSq,
+                        IsNoHistory: isNoHistory,
                         ParentRow: r
                     });
                 });
             });
+            
+            // Calculate total quantity sum
+            let totalQty = 0;
+            filteredComps.forEach(c => {
+                totalQty += c.Qty;
+            });
+            
+            const totalQtyEl = document.getElementById('component-total-qty');
+            if (totalQtyEl) {
+                totalQtyEl.textContent = totalQty.toLocaleString();
+            }
             
             const subEl = document.getElementById('component-count-sub');
             if (subEl) {
@@ -6324,8 +6436,10 @@ DST: 22. 지티테크`;
                 
                 const tdPilot = document.createElement('td');
                 tdPilot.style.textAlign = 'center';
-                if (c.IsPilot) {
-                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">초도품</span>';
+                if (c.IsSq) {
+                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">초도품(SQ)</span>';
+                } else if (c.IsNoHistory) {
+                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">시스템 생산 이력X</span>';
                 } else {
                     tdPilot.innerHTML = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">양산품</span>';
                 }
@@ -6468,10 +6582,88 @@ DST: 22. 지티테크`;
         }
 
         function exportComponentToExcel() {
-            const table = document.getElementById('component-table');
-            if (!table) return;
-            const wb = XLSX.utils.table_to_book(table, { sheet: "가공품 소요 현황" });
-            XLSX.writeFile(wb, `가공품_소요_현황_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            if (!sapData['component'] || sapData['component'].length === 0) {
+                alert("내보낼 가공품 소요 데이터가 없습니다.");
+                return;
+            }
+            
+            const searchVal = searchModel.value.toLowerCase().trim();
+            const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
+            const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            const compMaterialFilter = document.getElementById('filter-comp-material')?.value;
+            
+            const exportData = [];
+            
+            filteredData.forEach(r => {
+                if (r.isUnmapped) return;
+                
+                let matched = [];
+                if (r.Serial && r.Serial !== '-') {
+                    matched = compBySerial[r.Serial] || [];
+                }
+                if (matched.length === 0 && r.SalesDoc && r.SalesDoc !== '-') {
+                    matched = compBySalesDoc[r.SalesDoc] || [];
+                }
+                
+                matched.forEach(c => {
+                    const model = r.Model || '';
+                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
+                    const isNoHistory = isInitialComponent(c.Component, c.Month);
+                    
+                    if (showSqOnly && !isSq) return;
+                    if (showNoHistoryOnly && !isNoHistory) return;
+                    if (compMaterialFilter && c.Component !== compMaterialFilter) return;
+                    
+                    if (searchVal) {
+                        const modelLower = model.toLowerCase();
+                        const compLower = (c.Component || '').toLowerCase();
+                        const descLower = (c.CompDesc || '').toLowerCase();
+                        const parentLower = (c.ParentMat || '').toLowerCase();
+                        
+                        const matchSearch = modelLower.includes(searchVal) ||
+                                           compLower.includes(searchVal) ||
+                                           descLower.includes(searchVal) ||
+                                           parentLower.includes(searchVal);
+                        if (!matchSearch) return;
+                    }
+                    
+                    let typeLabel = '양산품';
+                    if (isSq) typeLabel = '초도품(SQ)';
+                    else if (isNoHistory) typeLabel = '시스템 생산 이력X';
+                    
+                    exportData.push({
+                        "생산월": c.Month || '',
+                        "기종": model,
+                        "완제품 품번 (Parent Mat.)": c.ParentMat || '',
+                        "Sales Doc": c.SalesDoc || '',
+                        "시리얼번호": c.Serial || '',
+                        "가공품 품번 (Component)": c.Component || '',
+                        "가공품명 (Description)": c.CompDesc || '',
+                        "소요량 (Qty)": c.Qty,
+                        "구분": typeLabel
+                    });
+                });
+            });
+            
+            if (exportData.length === 0) {
+                alert("내보낼 데이터가 없습니다.");
+                return;
+            }
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Add sum total at bottom
+            const totalQty = exportData.reduce((sum, item) => sum + (item["소요량 (Qty)"] || 0), 0);
+            
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["조회된 총 소요량 합계", "", "", "", "", "", "", totalQty, ""]
+            ], { origin: -1 });
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "가공품 소요 현황");
+            
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `가공품_소요_현황_${dateStr}.xlsx`);
         }
 
         setTimeout(() => {
