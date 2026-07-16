@@ -4180,7 +4180,7 @@ DST: 22. 지티테크`;
 
         async function cancelSapFile(type) {
             sapData[type] = [];
-            if (type === 'component') {
+            if (type && type.startsWith('component')) {
                 rebuildComponentIndex();
             }
             document.getElementById(`sap-${type}`).value = '';
@@ -4216,7 +4216,7 @@ DST: 22. 지티테크`;
                 const content = e.target.result;
                 const parsed = parseSapMhtml(content, true, type);
                 sapData[type] = parsed;
-                if (type === 'component') {
+                if (type && type.startsWith('component')) {
                     rebuildComponentIndex();
                 }
                 document.getElementById(`btn-${type}`).textContent = `✅ ${file.name.substring(0, 10)}...`;
