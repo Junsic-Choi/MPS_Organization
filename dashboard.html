@@ -1213,11 +1213,22 @@
                         <input type="checkbox" id="filter-comp-no-history" onchange="renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
                         시스템 생산 이력X만 보기
                     </label>
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
                         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">가공품 품명 필터:</span>
-                        <select id="filter-comp-material" onchange="renderComponentTable()" style="padding: 0.4rem 2rem 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--input-bg); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; outline: none; min-width: 240px; max-width: 360px;">
-                            <option value="">전체보기</option>
-                        </select>
+                        <div class="custom-multiselect" style="position: relative; display: inline-block;">
+                            <button type="button" id="comp-material-btn" onclick="toggleCompMaterialDropdown(event)" style="padding: 0.4rem 2.2rem 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--surface-color); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; outline: none; min-width: 240px; max-width: 360px; text-align: left; position: relative; width: 100%;">
+                                전체보기 <span style="position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none;">▼</span>
+                            </button>
+                            <div id="comp-material-dropdown" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 320px; max-height: 400px; overflow-y: auto; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0.5rem; margin-top: 4px;">
+                                <div style="display: flex; gap: 0.5rem; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                                    <button type="button" onclick="selectAllCompMaterials(true)" style="background: none; border: none; color: var(--accent-color); font-size: 0.8rem; cursor: pointer; font-weight: 600; padding: 2px 4px;">전체 선택</button>
+                                    <button type="button" onclick="selectAllCompMaterials(false)" style="background: none; border: none; color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; font-weight: 600; padding: 2px 4px;">선택 해제</button>
+                                </div>
+                                <div id="comp-material-list" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                    <!-- Checkboxes dynamically generated -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -4102,6 +4113,16 @@ DST: 22. 지티테크`;
         let compBySerial = {};
         let compBySalesDoc = {};
         let compMinMonthOrder = {};
+        let selectedCompMaterials = [];
+
+        // Close component material dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('comp-material-dropdown');
+            const btn = document.getElementById('comp-material-btn');
+            if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
 
         function rebuildComponentIndex() {
             compBySerial = {};
@@ -6264,11 +6285,42 @@ DST: 22. 지티테크`;
             return minOrder >= targetOrder;
         }
 
+        function toggleCompMaterialDropdown(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('comp-material-dropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function updateCompMaterialBtnText() {
+            const btn = document.getElementById('comp-material-btn');
+            if (!btn) return;
+            if (selectedCompMaterials.length === 0) {
+                btn.innerHTML = '전체보기 <span style="position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none;">▼</span>';
+            } else if (selectedCompMaterials.length === 1) {
+                btn.innerHTML = `${selectedCompMaterials[0]} <span style="position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none;">▼</span>`;
+            } else {
+                btn.innerHTML = `선택됨 (${selectedCompMaterials.length}개) <span style="position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none;">▼</span>`;
+            }
+        }
+
+        function selectAllCompMaterials(selectAll) {
+            const checkboxes = document.querySelectorAll('#comp-material-list input[type="checkbox"]');
+            selectedCompMaterials = [];
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll;
+                if (selectAll) {
+                    selectedCompMaterials.push(cb.value);
+                }
+            });
+            updateCompMaterialBtnText();
+            renderComponentTable();
+        }
+
         function rebuildComponentMaterialDropdown() {
-            const select = document.getElementById('filter-comp-material');
-            if (!select) return;
-            
-            const currentVal = select.value;
+            const listContainer = document.getElementById('comp-material-list');
+            if (!listContainer) return;
             
             // Gather components from filteredData
             const uniqueMap = new Map();
@@ -6289,22 +6341,59 @@ DST: 22. 지티테크`;
                 });
             });
             
-            const sortedKeys = Array.from(uniqueMap.keys()).sort();
+            // Filter selectedCompMaterials to only keep ones that are still in uniqueMap
+            selectedCompMaterials = selectedCompMaterials.filter(code => uniqueMap.has(code));
             
-            select.innerHTML = '<option value="">전체보기</option>';
+            const sortedKeys = Array.from(uniqueMap.keys()).sort();
+            listContainer.innerHTML = '';
+            
             sortedKeys.forEach(comp => {
                 const desc = uniqueMap.get(comp);
-                const opt = document.createElement('option');
-                opt.value = comp;
-                opt.textContent = `${comp} (${desc})`;
-                select.appendChild(opt);
+                const isChecked = selectedCompMaterials.includes(comp);
+                
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.gap = '0.5rem';
+                label.style.padding = '0.25rem 0.5rem';
+                label.style.borderRadius = '4px';
+                label.style.cursor = 'pointer';
+                label.style.fontSize = '0.85rem';
+                label.style.color = 'var(--text-primary)';
+                
+                label.onmouseover = () => { label.style.backgroundColor = 'var(--surface-hover)'; };
+                label.onmouseout = () => { label.style.backgroundColor = 'transparent'; };
+                
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = comp;
+                cb.checked = isChecked;
+                cb.style.width = '14px';
+                cb.style.height = '14px';
+                cb.style.cursor = 'pointer';
+                
+                cb.onchange = (e) => {
+                    if (e.target.checked) {
+                        if (!selectedCompMaterials.includes(comp)) {
+                            selectedCompMaterials.push(comp);
+                        }
+                    } else {
+                        selectedCompMaterials = selectedCompMaterials.filter(x => x !== comp);
+                    }
+                    updateCompMaterialBtnText();
+                    renderComponentTable();
+                };
+                
+                label.appendChild(cb);
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = `${comp} (${desc})`;
+                label.appendChild(textSpan);
+                
+                listContainer.appendChild(label);
             });
             
-            if (uniqueMap.has(currentVal)) {
-                select.value = currentVal;
-            } else {
-                select.value = '';
-            }
+            updateCompMaterialBtnText();
         }
 
         function renderComponentTable() {
@@ -6325,7 +6414,6 @@ DST: 22. 지티테크`;
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
-            const compMaterialFilter = document.getElementById('filter-comp-material')?.value;
             
             const filteredComps = [];
             
@@ -6348,7 +6436,7 @@ DST: 22. 지티테크`;
                     // Apply local filters
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
-                    if (compMaterialFilter && c.Component !== compMaterialFilter) return;
+                    if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
@@ -6608,7 +6696,6 @@ DST: 22. 지티테크`;
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
-            const compMaterialFilter = document.getElementById('filter-comp-material')?.value;
             
             const exportData = [];
             
@@ -6630,7 +6717,7 @@ DST: 22. 지티테크`;
                     
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
-                    if (compMaterialFilter && c.Component !== compMaterialFilter) return;
+                    if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
