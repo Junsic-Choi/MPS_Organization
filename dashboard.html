@@ -1206,11 +1206,11 @@
                 <!-- Local Filter Control Panel -->
                 <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: var(--surface-hover); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.25rem;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
-                        <input type="checkbox" id="filter-comp-sq" onchange="renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        <input type="checkbox" id="filter-comp-sq" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
                         초도품(SQ)만 보기
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
-                        <input type="checkbox" id="filter-comp-no-history" onchange="renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        <input type="checkbox" id="filter-comp-no-history" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
                         시스템 생산 이력X만 보기
                     </label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
@@ -4203,6 +4203,8 @@ DST: 22. 지티테크`;
             sapData[type] = [];
             if (type && type.startsWith('component')) {
                 rebuildComponentIndex();
+                rebuildComponentMaterialDropdown();
+                renderComponentTable();
             }
             document.getElementById(`sap-${type}`).value = '';
             const btn = document.getElementById(`btn-${type}`);
@@ -4239,6 +4241,8 @@ DST: 22. 지티테크`;
                 sapData[type] = parsed;
                 if (type && type.startsWith('component')) {
                     rebuildComponentIndex();
+                    rebuildComponentMaterialDropdown();
+                    renderComponentTable();
                 }
                 document.getElementById(`btn-${type}`).textContent = `✅ ${file.name.substring(0, 10)}...`;
                 document.getElementById(`btn-${type}`).style.background = 'var(--success)';
@@ -6322,6 +6326,10 @@ DST: 22. 지티테크`;
             const listContainer = document.getElementById('comp-material-list');
             if (!listContainer) return;
             
+            const searchVal = searchModel.value.toLowerCase().trim();
+            const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
+            const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            
             // Gather components from filteredData
             const uniqueMap = new Map();
             filteredData.forEach(r => {
@@ -6335,6 +6343,27 @@ DST: 22. 지티테크`;
                 }
                 
                 matched.forEach(c => {
+                    const model = r.Model || '';
+                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
+                    const isNoHistory = isInitialComponent(c.Component, c.Month);
+                    
+                    // Apply other local filters (except selectedCompMaterials)
+                    if (showSqOnly && !isSq) return;
+                    if (showNoHistoryOnly && !isNoHistory) return;
+                    
+                    if (searchVal) {
+                        const modelLower = model.toLowerCase();
+                        const compLower = (c.Component || '').toLowerCase();
+                        const descLower = (c.CompDesc || '').toLowerCase();
+                        const parentLower = (c.ParentMat || '').toLowerCase();
+                        
+                        const matchSearch = modelLower.includes(searchVal) ||
+                                           compLower.includes(searchVal) ||
+                                           descLower.includes(searchVal) ||
+                                           parentLower.includes(searchVal);
+                        if (!matchSearch) return;
+                    }
+                    
                     if (c.Component) {
                         uniqueMap.set(c.Component, c.CompDesc || '');
                     }
