@@ -1011,11 +1011,19 @@
                         </div>
                     </div>
                     <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                        <label for="sap-component" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(선택)</label>
-                        <input type="file" id="sap-component" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component')">
+                        <label for="sap-component_1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1842)</label>
+                        <input type="file" id="sap-component_1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1842')">
                         <div style="display: flex; gap: 4px;">
-                            <button onclick="document.getElementById('sap-component').click()" class="btn-small" id="btn-component" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
-                            <button onclick="cancelSapFile('component')" class="btn-small" id="btn-cancel-component" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                            <button onclick="document.getElementById('sap-component_1842').click()" class="btn-small" id="btn-component_1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                            <button onclick="cancelSapFile('component_1842')" class="btn-small" id="btn-cancel-component_1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        </div>
+                    </div>
+                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <label for="sap-component_1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1840)</label>
+                        <input type="file" id="sap-component_1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1840')">
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="document.getElementById('sap-component_1840').click()" class="btn-small" id="btn-component_1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                            <button onclick="cancelSapFile('component_1840')" class="btn-small" id="btn-cancel-component_1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
                         </div>
                     </div>
                     <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
@@ -1348,6 +1356,8 @@
 
         let rawData = [];
         let unusedData = [];
+        let originalRawData = [];
+        let originalUnusedData = [];
         let filteredData = [];
         let headers = [];
         let currentTab = 'main';
@@ -1925,14 +1935,17 @@ DST: 22. 지티테크`;
                 localStorage.setItem('lastMpsFilename', currentFilename);
                 fetchSavedMpsFiles();
                 
-                rawData = result.finalResults || [];
-                unusedData = (result.unusedData || []).map(row => ({ ...row, isUnmapped: true }));
+                originalRawData = JSON.parse(JSON.stringify(result.finalResults || []));
+                originalUnusedData = (result.unusedData || []).map(row => ({ ...row, isUnmapped: true }));
+
+                rawData = JSON.parse(JSON.stringify(originalRawData));
+                unusedData = JSON.parse(JSON.stringify(originalUnusedData));
 
                 // 만약 서버에서 로드되었거나 사용자가 등록한 SAP 데이터가 있으면 자동으로 결합 수행
                 const hasSap = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
                 if (hasSap) {
                     console.log('[Auto-Join] Automatically joining SAP details...');
-                    const joined = performSapJoin(rawData, unusedData, sapData);
+                    const joined = performSapJoin(originalRawData, originalUnusedData, sapData);
                     rawData = joined.rawData;
                     unusedData = joined.unusedData;
                 }
@@ -2394,7 +2407,8 @@ DST: 22. 지티테크`;
                 const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
 
                 let hasComponentSearchMatch = false;
-                if (searchVal && sapData['component'] && sapData['component'].length > 0 && !row.isUnmapped) {
+                const hasAnyComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
+                if (searchVal && hasAnyComponent && !row.isUnmapped) {
                     let comps = [];
                     if (row.Serial && row.Serial !== '-') comps = compBySerial[row.Serial] || [];
                     if (comps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') comps = compBySalesDoc[row.SalesDoc] || [];
@@ -4084,7 +4098,7 @@ DST: 22. 지티테크`;
         }
 
         // ========== SAP MHTML Detail Join Logic ==========
-        let sapData = { '1842': [], '1840': [], 'component': [] };
+        let sapData = { '1842': [], '1840': [], 'component_1842': [], 'component_1840': [] };
         let compBySerial = {};
         let compBySalesDoc = {};
         let compMinMonthOrder = {};
@@ -4093,7 +4107,7 @@ DST: 22. 지티테크`;
             compBySerial = {};
             compBySalesDoc = {};
             compMinMonthOrder = {};
-            const components = sapData['component'] || [];
+            const components = [...(sapData['component_1842'] || []), ...(sapData['component_1840'] || [])];
             components.forEach(c => {
                 if (c.Serial && c.Serial !== '-') {
                     if (!compBySerial[c.Serial]) compBySerial[c.Serial] = [];
@@ -4114,7 +4128,7 @@ DST: 22. 지티테크`;
 
         async function loadSavedSapFiles() {
             try {
-                for (const type of ['1842', '1840', 'component']) {
+                for (const type of ['1842', '1840', 'component_1842', 'component_1840']) {
                     const res = await fetch(`/api/load-sap/${type}`);
                     if (res.ok) {
                         const data = await res.json();
@@ -4124,7 +4138,10 @@ DST: 22. 지티테크`;
                             
                             const btn = document.getElementById(`btn-${type}`);
                             if (btn) {
-                                btn.textContent = `✅ 서버 저장됨 (${type === 'component' ? '가공품' : type})`;
+                                let label = type;
+                                if (type === 'component_1842') label = '가공품(1842)';
+                                else if (type === 'component_1840') label = '가공품(1840)';
+                                btn.textContent = `✅ 서버 저장됨 (${label})`;
                                 btn.style.background = 'var(--success)';
                                 btn.style.color = 'white';
                             }
@@ -4225,7 +4242,7 @@ DST: 22. 지티테크`;
                 btn.style.opacity = hasData ? '1' : '0.5';
                 btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
             }
-            const hasComponent = sapData['component'] && sapData['component'].length > 0;
+            const hasComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
             const tabComp = document.getElementById('tab-component');
             if (tabComp) {
                 tabComp.style.display = hasComponent ? 'inline-block' : 'none';
@@ -4271,7 +4288,7 @@ DST: 22. 지티테크`;
             
             if (!targetTable) return [];
             
-            if (type === 'component') {
+            if (type && type.startsWith('component')) {
                 return extractComponentFromTable(targetTable, showAlert);
             } else {
                 return extractFromTable(targetTable, showAlert);
@@ -4715,7 +4732,7 @@ DST: 22. 지티테크`;
                 if (!confirm('현재 분석 결과에 SAP 상세 정보를 결합하시겠습니까?\n모든 데이터가 수량 단위에서 시리얼 단위(1:1)로 전환됩니다.')) return;
             }
 
-            const joined = performSapJoin(rawData, unusedData, sapData);
+            const joined = performSapJoin(originalRawData, originalUnusedData, sapData);
             rawData = joined.rawData;
             unusedData = joined.unusedData;
 
@@ -6295,7 +6312,7 @@ DST: 22. 지티테크`;
             if (!tbody) return;
             tbody.innerHTML = '';
             
-            const components = sapData['component'] || [];
+            const components = [...(sapData['component_1842'] || []), ...(sapData['component_1840'] || [])];
             if (components.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">가공품 소요 데이터가 없습니다. component.MHTML 파일을 먼저 올려주세요.</td></tr>';
                 const subEl = document.getElementById('component-count-sub');
@@ -6582,7 +6599,8 @@ DST: 22. 지티테크`;
         }
 
         function exportComponentToExcel() {
-            if (!sapData['component'] || sapData['component'].length === 0) {
+            const hasComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
+            if (!hasComponent) {
                 alert("내보낼 가공품 소요 데이터가 없습니다.");
                 return;
             }
