@@ -607,6 +607,19 @@
             display: block;
         }
 
+        .clickable-diff-cell {
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .clickable-diff-cell:hover {
+            filter: brightness(1.25);
+            box-shadow: inset 0 0 0 1.5px currentColor;
+            transform: scale(1.03);
+            z-index: 2;
+            position: relative;
+        }
+
         /* Thin Scrollbar for Table */
         .table-container::-webkit-scrollbar {
             width: 10px;
@@ -3528,14 +3541,17 @@ DST: 22. 지티테크`;
                         const serialsSet = modelChangedSerials[item.model];
                         const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
                         const titleText = serialsList 
-                            ? `더블 클릭하여 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
-                            : '더블 클릭하여 변동 상세 내역 보기';
+                            ? `클릭/더블클릭하여 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
+                            : '클릭/더블클릭하여 전체 변동 상세 내역 보기';
                         
                         dot.title = titleText;
                         tdModel.prepend(dot);
                         
                         tdModel.style.cursor = 'pointer';
                         tdModel.title = titleText;
+                        tdModel.addEventListener('click', () => {
+                            showCompareDetail(item.model);
+                        });
                         tdModel.addEventListener('dblclick', () => {
                             showCompareDetail(item.model);
                         });
@@ -3625,10 +3641,18 @@ DST: 22. 지티테크`;
                             tdDiff.textContent = `+${diff.toLocaleString()}`;
                             tdDiff.style.color = '#10b981';
                             tdDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                            tdDiff.classList.add('clickable-diff-cell');
+                            tdDiff.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기 (+${diff.toLocaleString()}대)`;
+                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
                         } else if (diff < 0) {
                             tdDiff.textContent = diff.toLocaleString();
                             tdDiff.style.color = '#ef4444';
                             tdDiff.style.background = 'rgba(239, 68, 68, 0.12)';
+                            tdDiff.classList.add('clickable-diff-cell');
+                            tdDiff.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기 (${diff.toLocaleString()}대)`;
+                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
                         } else {
                             tdDiff.textContent = '-';
                             tdDiff.style.color = 'var(--text-secondary)';
@@ -3636,6 +3660,17 @@ DST: 22. 지티테크`;
                             tdDiff.style.background = 'rgba(255, 255, 255, 0.02)';
                         }
                     }
+
+                    if (diff !== 0) {
+                        tdA.classList.add('clickable-diff-cell');
+                        tdA.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기`;
+                        tdA.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                        
+                        tdB.classList.add('clickable-diff-cell');
+                        tdB.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기`;
+                        tdB.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                    }
+
                     tr.appendChild(tdDiff);
                 });
 
@@ -3820,7 +3855,7 @@ DST: 22. 지티테크`;
             }
         }
 
-        function showCompareDetail(modelName) {
+        function showCompareDetail(modelName, selectedMonth = null) {
             const listA = window.lastFilteredA || [];
             const listB = window.lastFilteredB || [];
 
@@ -3845,7 +3880,9 @@ DST: 22. 지티테크`;
             const sortedMonthsA = Array.from(monthsA).sort((a, b) => getMonthNum(a) - getMonthNum(b));
 
             let targetMonths = [];
-            if (intersectionOnly) {
+            if (selectedMonth) {
+                targetMonths = [selectedMonth];
+            } else if (intersectionOnly) {
                 targetMonths = sortedMonthsA.filter(m => monthsB.has(m));
             } else {
                 const allMonths = new Set([...monthsA, ...monthsB]);
@@ -3871,7 +3908,11 @@ DST: 22. 지티테크`;
             const titleEl = document.getElementById('compare-detail-title');
             const bodyEl = document.getElementById('compare-detail-body');
 
-            titleEl.innerHTML = `🔍 <b>[${modelName}]</b> 계획 변동 상세 내역`;
+            if (selectedMonth) {
+                titleEl.innerHTML = `🔍 <b>[${modelName}] ${selectedMonth}</b> 계획 변동 상세 내역`;
+            } else {
+                titleEl.innerHTML = `🔍 <b>[${modelName}] 전체</b> 계획 변동 상세 내역`;
+            }
             bodyEl.innerHTML = '';
 
             let hasAnyChange = false;
