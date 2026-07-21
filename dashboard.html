@@ -595,6 +595,9 @@
             border: 1px solid var(--border-color);
             overflow: auto;
             max-height: 65vh;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
             /* Responsive height */
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1041,9 +1044,9 @@
         </div>
 
         <!-- Summary Data Grid (Summary Tab) -->
-        <div id="summary-container" style="display: none;">
+        <div id="summary-container" style="display: none; max-width: 100%; box-sizing: border-box; width: 100%;">
             <!-- Comparison Controls Card -->
-            <div id="compare-controls" style="display: flex; gap: 1rem; align-items: center; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <div id="compare-controls" style="display: flex; gap: 1rem; align-items: center; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; margin-bottom: 1.5rem; flex-wrap: wrap; max-width: 100%; box-sizing: border-box; width: 100%;">
                 <div style="flex: 1; min-width: 200px;">
                     <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">📊 계획 데이터 비교 분석 (Comparison Mode)</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary);">두 개의 생산 계획 파일을 선택하여 변동 내역(추가/삭제/지연)을 비교 분석합니다.</div>
@@ -1073,7 +1076,7 @@
             </div>
             
             <!-- Comparison Summary Cards -->
-            <div id="compare-summary-cards" style="display: none; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <div id="compare-summary-cards" style="display: none; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; max-width: 100%; box-sizing: border-box; width: 100%;">
                 <div class="summary-card" style="flex: 1; min-width: 200px; background: var(--surface-color); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                     <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">기준 계획 (A) 총수량</div>
                     <div id="compare-stat-qty-a" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0대</div>
