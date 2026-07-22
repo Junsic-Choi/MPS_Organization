@@ -171,18 +171,19 @@
             <p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 1.1rem;">신규 기능 및 사용 가이드</p>
         </div>
         <div class="meta">
-            <div>배포 버전: v3.4 - 계획 비교 및 레이아웃 최적화 버전</div>
-            <div>작성일자: 2026년 7월 21일</div>
+            <div>배포 버전: v3.5 - 남산 대조립 직 필터 추가 및 레이아웃 최적화 버전</div>
+            <div>작성일자: 2026년 7월 22일</div>
         </div>
     </div>
 
     <!-- Section 1 -->
     <div class="section">
         <div class="section-title">1. 개요</div>
-        <p>본 문서는 MPS 생산계획 대시보드(v3.4)에 적용된 <strong>계획 비교 레이아웃 최적화</strong>, <strong>SAP S/O 생산월 연동 정밀화</strong> 및 기존 기능들의 사용 방법들을 이해하기 쉽게 정리한 가이드입니다.</p>
+        <p>본 문서는 MPS 생산계획 대시보드(v3.5)에 적용된 <strong>남산 생산처 대조립 직(Shift) 구분 필터 추가</strong>, <strong>계획 비교 레이아웃 최적화</strong>, <strong>SAP S/O 생산월 연동 정밀화</strong> 및 기존 기능들의 사용 방법들을 이해하기 쉽게 정리한 가이드입니다.</p>
         <div class="highlight-box">
             <h4>핵심 업데이트 내용 요약</h4>
             <ul class="bullet-list" style="margin-bottom: 0;">
+                <li><strong>남산 생산처 대조립 직(Shift) 구별 필터 추가 (v3.5 신규)</strong>: 구분 (TC/MC) 필터 바로 다음 위치에 남산 생산처 전용 <strong>`대조립 직 (Shift)`</strong> 필터(1직~5직)가 제공됩니다. 구분을 MC로 선택 시 1~4직, TC 선택 시 1~5직으로 자동 연동되어 공장 직별 생산 현황을 정밀하게 분리 조회할 수 있습니다.</li>
                 <li><strong>월별 변동 셀(초록색/빨간색) 클릭 필터링</strong>: 전체 변동 내역이 많아 부담스러울 때, 각 월의 초록색(+)/빨간색(-) 수량 변동 셀을 클릭하면 해당 특정 월의 변동 내역(추가/삭제 S/O)만 핀포인트로 바로 확인할 수 있습니다. (주황색 원 또는 기종명 클릭 시에는 전체 월 내역 표시)</li>
                 <li><strong>전체 월 비교 모드 대시보드 레이아웃 이탈 방지</strong>: 전체 월 비교 시 다수의 컬럼이 표시되어도 화면 상단 컨트롤 박스와 요약 카드가 깨지거나 화면 바깥으로 벗어나지 않도록 스크롤 영역을 안정화했습니다.</li>
                 <li><strong>SAP S/O 생산월 기준 결합 정밀화</strong>: 생산 계획 이월 시 SAP ERP 상의 변경된 생산월(Prod.M) 기준 매칭을 적용하여 S/O 시리얼 단위 추적의 정확도를 높였습니다.</li>

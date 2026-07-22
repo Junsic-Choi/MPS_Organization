@@ -885,6 +885,13 @@
                 </div>
             </div>
             <div class="filter-group">
+                <label>대조립 직 (Shift)</label>
+                <div class="multiselect-container" id="multiselect-shift-container">
+                    <div class="select-custom multiselect-trigger" id="shift-trigger" onclick="toggleDropdown('shift')">전체보기</div>
+                    <div class="multiselect-options" id="shift-options"></div>
+                </div>
+            </div>
+            <div class="filter-group">
                 <label>기종분류 (Group)</label>
                 <div class="multiselect-container" id="multiselect-group-container">
                     <div class="select-custom multiselect-trigger" id="group-trigger" onclick="toggleDropdown('group')">전체보기</div>
@@ -1346,7 +1353,9 @@
             months: [],
             selectedMonths: [],
             divisions: ['TC', 'MC'],
-            selectedDivisions: ['TC', 'MC']
+            selectedDivisions: ['TC', 'MC'],
+            shifts: ['1직', '2직', '3직', '4직', '5직'],
+            selectedShifts: ['1직', '2직', '3직', '4직', '5직']
         };
 
         function getDivision(groupName) {
@@ -1369,6 +1378,29 @@
                 return 'TC';
             }
             return '기타';
+        }
+
+        function getShift(row) {
+            if (!row) return '미지정';
+            if (row.Shift) return row.Shift;
+
+            const str = [
+                row.LineCode || '',
+                row.Ver || '',
+                row.RawSite || '',
+                row.Site || '',
+                row.SiteName || '',
+                row['Site'] || ''
+            ].join(' ').toUpperCase();
+
+            // MC 1~4직 & TC 1~5직 라인코드 및 텍스트 체크
+            if (/0AM1|0AMA|0AMB|0AT1|0ATA|0ATH/.test(str) || str.includes('1직')) return '1직';
+            if (/0AM2|0AT2|0ATB|0ATI/.test(str) || str.includes('2직')) return '2직';
+            if (/0AM3|0AMC|0AT3|0ATC|0ATJ/.test(str) || str.includes('3직')) return '3직';
+            if (/0AM4|0AMD|0AT4|0ATD|0ATK/.test(str) || str.includes('4직')) return '4직';
+            if (/0AM5|0AME|0AT5|0ATE|0ATL|0ATS/.test(str) || str.includes('5직')) return '5직';
+
+            return '미지정';
         }
 
         let lastSelectedSites = [];
@@ -2058,17 +2090,34 @@ DST: 22. 지티테크`;
                 activeFilters.selectedMonths = [...sortedMonths];
             }
 
-            // Always reset division filters to select all when populating new data
+            // Always reset division and shift filters to select all when populating new data
             activeFilters.divisions = ['TC', 'MC'];
             activeFilters.selectedDivisions = ['TC', 'MC'];
+            activeFilters.shifts = ['1직', '2직', '3직', '4직', '5직'];
+            activeFilters.selectedShifts = ['1직', '2직', '3직', '4직', '5직'];
             lastSelectedDivisions = ['TC', 'MC'];
             lastSelectedGroups = [];
 
             renderMultiselectOptions('site', activeFilters.sites);
             renderMultiselectOptions('month', activeFilters.months);
             renderMultiselectOptions('division', activeFilters.divisions);
+            renderMultiselectOptions('shift', activeFilters.shifts);
 
+            updateShiftOptions();
             updateGroupOptions();
+        }
+
+        function updateShiftOptions() {
+            let availableShifts = ['1직', '2직', '3직', '4직', '5직'];
+            if (activeFilters.selectedDivisions.length === 1 && activeFilters.selectedDivisions.includes('MC')) {
+                availableShifts = ['1직', '2직', '3직', '4직'];
+            }
+            activeFilters.shifts = availableShifts;
+            activeFilters.selectedShifts = activeFilters.selectedShifts.filter(s => availableShifts.includes(s));
+            if (activeFilters.selectedShifts.length === 0) {
+                activeFilters.selectedShifts = [...availableShifts];
+            }
+            renderMultiselectOptions('shift', activeFilters.shifts);
         }
 
         function updateGroupOptions() {
@@ -2217,7 +2266,7 @@ DST: 22. 지티테크`;
             allCheckbox.type = 'checkbox';
             allCheckbox.id = `${type}-select-all`;
             
-            const selectedList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
+            const selectedList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'shift' ? activeFilters.selectedShifts : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths))));
             const isAllSelected = items.length > 0 && items.every(item => selectedList.includes(item));
             allCheckbox.checked = isAllSelected;
             
@@ -2247,7 +2296,7 @@ DST: 22. 지티테크`;
 
                 checkbox.addEventListener('change', () => {
                     const isChecked = checkbox.checked;
-                    let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
+                    let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'shift' ? activeFilters.selectedShifts : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths))));
                     
                     if (isChecked) {
                         if (!currentList.includes(item)) currentList.push(item);
@@ -2425,6 +2474,10 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
+                const shift = getShift(row);
+                const isNamsan = (row['Site'] || '').includes('남산');
+                const matchShift = !isNamsan || shift === '미지정' || activeFilters.selectedShifts.includes(shift) || activeFilters.selectedShifts.length === activeFilters.shifts.length;
+
                 const rowModel = row['Model'] || row['UnmappedModel'] || '';
                 const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
 
@@ -2452,7 +2505,7 @@ DST: 22. 지티테크`;
                                    code.includes(searchVal) ||
                                    hasComponentSearchMatch;
                 
-                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
+                return matchSite && matchGroup && matchMonth && matchDivision && matchShift && matchModel && matchSearch;
             });
 
             // 정렬 적용
@@ -2923,6 +2976,10 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
+                const shift = getShift(row);
+                const isNamsan = (row['Site'] || '').includes('남산');
+                const matchShift = !isNamsan || shift === '미지정' || activeFilters.selectedShifts.includes(shift) || activeFilters.selectedShifts.length === activeFilters.shifts.length;
+
                 const rowModel = row['Model'] || row['UnmappedModel'] || '';
                 const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
 
@@ -2935,7 +2992,7 @@ DST: 22. 지티테크`;
                                    product.includes(searchVal) ||
                                    code.includes(searchVal);
                 
-                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
+                return matchSite && matchGroup && matchMonth && matchDivision && matchShift && matchModel && matchSearch;
             });
         }
 
@@ -5960,6 +6017,10 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
+                const shift = getShift(row);
+                const isNamsan = (row['Site'] || '').includes('남산');
+                const matchShift = !isNamsan || shift === '미지정' || activeFilters.selectedShifts.includes(shift) || activeFilters.selectedShifts.length === activeFilters.shifts.length;
+
                 const rowModel = row['Model'] || row['UnmappedModel'] || '';
                 const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
 
@@ -5972,7 +6033,7 @@ DST: 22. 지티테크`;
                                    product.includes(searchVal) ||
                                    code.includes(searchVal);
                 
-                return matchSite && matchGroup && matchMonth && matchDivision && matchModel && matchSearch;
+                return matchSite && matchGroup && matchMonth && matchDivision && matchShift && matchModel && matchSearch;
             });
         }
 
