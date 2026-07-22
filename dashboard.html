@@ -1380,12 +1380,28 @@
             return '기타';
         }
 
+        function isSiteMatch(rowSite, selectedSites, allSites) {
+            if (!rowSite) return selectedSites.length === allSites.length;
+            if (selectedSites.includes(rowSite)) return true;
+            const normRow = (rowSite || '').toString().trim();
+            return selectedSites.some(sel => {
+                const normSel = (sel || '').toString().trim();
+                if (normSel === normRow) return true;
+                if ((normSel.includes('남산') || normSel === '남산') && 
+                    (normRow.includes('남산') || normRow.includes('1840') || normRow.startsWith('MC') || normRow.startsWith('TC') || normRow.startsWith('0AM') || normRow.startsWith('0AT'))) return true;
+                if ((normSel.includes('성주') || normSel === '성주') && 
+                    (normRow.includes('성주') || normRow.includes('1842'))) return true;
+                return false;
+            });
+        }
+
         function getShift(row) {
             if (!row) return '미지정';
             if (row.Shift) return row.Shift;
 
             const str = [
                 row.LineCode || '',
+                row.LineName || '',
                 row.Ver || '',
                 row.RawSite || '',
                 row.Site || '',
@@ -2468,14 +2484,14 @@ DST: 22. 지티테크`;
                 // '미매칭만 보기' 체크 시 필터링
                 if (unmappedOnly && !row.isUnmapped) return false;
 
-                const matchSite = activeFilters.selectedSites.includes(row['Site'] || '') || (!row['Site'] && activeFilters.selectedSites.length === activeFilters.sites.length);
+                const matchSite = isSiteMatch(row['Site'], activeFilters.selectedSites, activeFilters.sites);
                 const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
                 const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
                 const shift = getShift(row);
-                const isNamsan = (row['Site'] || '').includes('남산');
+                const isNamsan = (row['Site'] || '').includes('남산') || (row['Site'] || '').includes('1840') || !!row.LineName;
                 const matchShift = !isNamsan || shift === '미지정' || activeFilters.selectedShifts.includes(shift) || activeFilters.selectedShifts.length === activeFilters.shifts.length;
 
                 const rowModel = row['Model'] || row['UnmappedModel'] || '';
@@ -2970,14 +2986,14 @@ DST: 22. 지티테크`;
             return dataset.filter(row => {
                 if (unmappedOnly && !row.isUnmapped) return false;
 
-                const matchSite = activeFilters.selectedSites.includes(row['Site'] || '') || (!row['Site'] && activeFilters.selectedSites.length === activeFilters.sites.length);
+                const matchSite = isSiteMatch(row['Site'], activeFilters.selectedSites, activeFilters.sites);
                 const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
                 const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
                 const division = getDivision(row['Group']);
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
                 const shift = getShift(row);
-                const isNamsan = (row['Site'] || '').includes('남산');
+                const isNamsan = (row['Site'] || '').includes('남산') || (row['Site'] || '').includes('1840') || !!row.LineName;
                 const matchShift = !isNamsan || shift === '미지정' || activeFilters.selectedShifts.includes(shift) || activeFilters.selectedShifts.length === activeFilters.shifts.length;
 
                 const rowModel = row['Model'] || row['UnmappedModel'] || '';
@@ -4807,7 +4823,16 @@ DST: 22. 지티테크`;
                                 break;
                             }
                         }
-                        if (!foundSite) newRow.Site = '남산';
+                        if (foundSite) {
+                            newRow.LineName = foundSite;
+                            if (foundSite.includes('1840') || foundSite.includes('남산') || foundSite.startsWith('MC') || foundSite.startsWith('TC')) {
+                                newRow.Site = '남산';
+                            } else {
+                                newRow.Site = foundSite;
+                            }
+                        } else {
+                            newRow.Site = '남산';
+                        }
                     }
                 }
                 newRawData.push(newRow);
@@ -4844,7 +4869,16 @@ DST: 22. 지티테크`;
                                 break;
                             }
                         }
-                        if (!foundSite) newRow.Site = '남산';
+                        if (foundSite) {
+                            newRow.LineName = foundSite;
+                            if (foundSite.includes('1840') || foundSite.includes('남산') || foundSite.startsWith('MC') || foundSite.startsWith('TC')) {
+                                newRow.Site = '남산';
+                            } else {
+                                newRow.Site = foundSite;
+                            }
+                        } else {
+                            newRow.Site = '남산';
+                        }
                     }
                 }
                 newUnusedData.push(newRow);
