@@ -1399,11 +1399,19 @@
             if (!row) return '미지정';
             if (row.Shift) return row.Shift;
 
+            if (!manualSiteMap || Object.keys(manualSiteMap).length === 0) {
+                parseSiteMaster();
+            }
+
             let mappedSite = '';
-            if (row.Code && typeof manualSiteMap !== 'undefined' && manualSiteMap && manualSiteMap[row.Code]) {
-                mappedSite = manualSiteMap[row.Code];
-            } else if (row.Ver && typeof manualSiteMap !== 'undefined' && manualSiteMap && manualSiteMap[row.Ver]) {
-                mappedSite = manualSiteMap[row.Ver];
+            const verCode = (row.Ver || row.LineCode || row.Code || '').toString().trim().toUpperCase();
+            if (verCode) {
+                for (const [prefix, siteName] of Object.entries(manualSiteMap)) {
+                    if (prefix && verCode.startsWith(prefix.trim().toUpperCase())) {
+                        mappedSite = siteName;
+                        break;
+                    }
+                }
             }
 
             const str = [
@@ -1652,7 +1660,8 @@ DST: 22. 지티테크`;
         }
 
         function parseSiteMaster() {
-            const lines = siteMasterText.value.split('\n');
+            const rawText = (siteMasterText && siteMasterText.value) ? siteMasterText.value : (localStorage.getItem('mps_site_master') || DEFAULT_SITE_MASTER);
+            const lines = rawText.split('\n');
             const newMap = {};
             lines.forEach(line => {
                 const parts = line.split(':');
@@ -1665,6 +1674,9 @@ DST: 22. 지티테크`;
             manualSiteMap = newMap;
             console.log('Manual Site Map loaded:', manualSiteMap);
         }
+
+        // 페이지 로드 즉시 기본 사이트 마스터 파싱 수행
+        parseSiteMaster();
 
         function saveSiteMaster() {
             localStorage.setItem('mps_site_master', siteMasterText.value);
@@ -2076,6 +2088,7 @@ DST: 22. 지티테크`;
 
         window.addEventListener('DOMContentLoaded', () => {
             extractBtn.disabled = true;
+            loadSiteMaster(); // 초기 사이트 마스터 맵 로드
             loadSavedSapFiles(); // 서버에 저장된 SAP 데이터 로드
         });
 
@@ -4614,6 +4627,10 @@ DST: 22. 지티테크`;
 
 
         function performSapJoin(rawList, unusedList, sapDataForJoin) {
+            if (!manualSiteMap || Object.keys(manualSiteMap).length === 0) {
+                parseSiteMaster();
+            }
+
             // Create a copy of the SAP records to track which have been matched for this specific join run
             const sapDataCopy = {
                 '1842': (sapDataForJoin['1842'] || []).map(s => ({ ...s, Used: false })),
@@ -4824,6 +4841,8 @@ DST: 22. 지티테크`;
                     newRow.SalesDoc = sapMatch.SalesDoc;
                     newRow.StartDate = sapMatch.StartDate;
                     newRow.SapMatchMethod = item.sapMatchMethod;
+                    newRow.Ver = sapMatch.Ver || newRow.Ver || '';
+                    newRow.LineCode = sapMatch.Ver || newRow.LineCode || '';
                     
                     const prodStr = newRow.Product || '';
                     const isExact = (item.sapMatchMethod === 'exact' || item.sapMatchMethod === 'suffix');
@@ -4870,6 +4889,8 @@ DST: 22. 지티테크`;
                     newRow.SalesDoc = sapMatch.SalesDoc;
                     newRow.StartDate = sapMatch.StartDate;
                     newRow.SapMatchMethod = item.sapMatchMethod;
+                    newRow.Ver = sapMatch.Ver || newRow.Ver || '';
+                    newRow.LineCode = sapMatch.Ver || newRow.LineCode || '';
                     
                     const prodNameStr = newRow.ProductName || '';
                     const isExact = (item.sapMatchMethod === 'exact' || item.sapMatchMethod === 'suffix');
