@@ -2149,7 +2149,7 @@ DST: 22. 지티테크`;
 
         function updateShiftOptions() {
             let availableShifts = ['1직', '2직', '3직', '4직', '5직'];
-            if (activeFilters.selectedDivisions.length === 1 && activeFilters.selectedDivisions.includes('MC')) {
+            if (!activeFilters.selectedDivisions.includes('TC') || (activeFilters.selectedDivisions.length === 1 && activeFilters.selectedDivisions.includes('MC'))) {
                 availableShifts = ['1직', '2직', '3직', '4직'];
             }
             activeFilters.shifts = availableShifts;
@@ -2355,6 +2355,7 @@ DST: 22. 지티테크`;
                     updateTriggerText(type);
 
                     if (type === 'site' || type === 'division') {
+                        if (type === 'division') updateShiftOptions();
                         updateGroupOptions();
                     } else if (type === 'group') {
                         updateModelOptions();
@@ -2383,6 +2384,7 @@ DST: 22. 지티테크`;
                 updateTriggerText(type);
 
                 if (type === 'site' || type === 'division') {
+                    if (type === 'division') updateShiftOptions();
                     updateGroupOptions();
                 } else if (type === 'group') {
                     updateModelOptions();
