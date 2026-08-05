@@ -2178,7 +2178,7 @@ DST: 22. 지티테크`;
                 const group = row['Group'];
                 if (group) {
                     const div = getDivision(group);
-                    if (activeFilters.selectedSites.includes(site) && activeFilters.selectedDivisions.includes(div)) {
+                    if (isSiteMatch(site, activeFilters.selectedSites, activeFilters.sites) && activeFilters.selectedDivisions.includes(div)) {
                         validGroups.add(group);
                     }
                 }
@@ -2193,7 +2193,7 @@ DST: 22. 지티테크`;
                         
                         const sitesForGroup = groupToSitesMap[g];
                         if (!sitesForGroup) return false;
-                        return Array.from(sitesForGroup).some(s => activeFilters.selectedSites.includes(s));
+                        return Array.from(sitesForGroup).some(s => isSiteMatch(s, activeFilters.selectedSites, activeFilters.sites));
                     });
                 }
 
@@ -2203,7 +2203,7 @@ DST: 22. 지티테크`;
                         const group = row['Group'];
                         if (group) {
                             const div = getDivision(group);
-                            if (addedDivisions.includes(div) && activeFilters.selectedSites.includes(site)) {
+                            if (addedDivisions.includes(div) && isSiteMatch(site, activeFilters.selectedSites, activeFilters.sites)) {
                                 if (!activeFilters.selectedGroups.includes(group)) {
                                     activeFilters.selectedGroups.push(group);
                                 }
@@ -2218,7 +2218,7 @@ DST: 22. 지티테크`;
                         const group = row['Group'];
                         if (group) {
                             const div = getDivision(group);
-                            if (addedSites.includes(site) && activeFilters.selectedDivisions.includes(div)) {
+                            if (isSiteMatch(site, addedSites, activeFilters.sites) && activeFilters.selectedDivisions.includes(div)) {
                                 if (!activeFilters.selectedGroups.includes(group)) {
                                     activeFilters.selectedGroups.push(group);
                                 }
@@ -2231,6 +2231,9 @@ DST: 22. 지티테크`;
             }
 
             activeFilters.selectedGroups = activeFilters.selectedGroups.filter(g => sortedGroups.includes(g));
+            if (activeFilters.selectedGroups.length === 0 && sortedGroups.length > 0) {
+                activeFilters.selectedGroups = [...sortedGroups];
+            }
 
             activeFilters.groups = sortedGroups;
             lastSelectedSites = [...activeFilters.selectedSites];
@@ -2255,7 +2258,7 @@ DST: 22. 지티테크`;
                 const div = getDivision(group);
                 const model = row['Model'] || row['UnmappedModel'] || '';
                 if (model) {
-                    if (activeFilters.selectedSites.includes(site) && 
+                    if (isSiteMatch(site, activeFilters.selectedSites, activeFilters.sites) && 
                         activeFilters.selectedDivisions.includes(div) && 
                         activeFilters.selectedGroups.includes(group)) {
                         validModels.add(model);
@@ -2270,6 +2273,9 @@ DST: 22. 지티테크`;
                 activeFilters.selectedModels = [...sortedModels];
             } else {
                 activeFilters.selectedModels = activeFilters.selectedModels.filter(m => sortedModels.includes(m));
+            }
+            if (activeFilters.selectedModels.length === 0 && sortedModels.length > 0) {
+                activeFilters.selectedModels = [...sortedModels];
             }
 
             activeFilters.models = sortedModels;
@@ -6058,7 +6064,7 @@ DST: 22. 지티테크`;
             return data.filter(row => {
                 if (unmappedOnly && !row.isUnmapped) return false;
 
-                const matchSite = activeFilters.selectedSites.includes(row['Site'] || '') || (!row['Site'] && activeFilters.selectedSites.length === activeFilters.sites.length);
+                const matchSite = isSiteMatch(row['Site'], activeFilters.selectedSites, activeFilters.sites);
                 const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
                 const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
                 const division = getDivision(row['Group']);
