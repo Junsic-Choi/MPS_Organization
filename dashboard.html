@@ -2354,7 +2354,7 @@ DST: 22. 지티테크`;
             // Select All toggler
             allCheckbox.addEventListener('change', () => {
                 const isChecked = allCheckbox.checked;
-                let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths)));
+                let currentList = type === 'site' ? activeFilters.selectedSites : (type === 'group' ? activeFilters.selectedGroups : (type === 'division' ? activeFilters.selectedDivisions : (type === 'shift' ? activeFilters.selectedShifts : (type === 'model' ? activeFilters.selectedModels : activeFilters.selectedMonths))));
                 
                 currentList.length = 0;
                 if (isChecked) {
