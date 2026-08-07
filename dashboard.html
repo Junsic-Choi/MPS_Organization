@@ -4620,7 +4620,8 @@ DST: 22. 지티테크`;
                 qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
                 parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
                 reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
-                sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬'])
+                sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬']),
+                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
             };
 
             const data = [];
@@ -4629,6 +4630,10 @@ DST: 22. 지티테크`;
             for (let i = startIndex; i < rows.length; i++) {
                 const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
                 if (cells.length < 5) continue;
+
+                // 삭제 품목 (Deleted Item = X) 자동 제외
+                const isDeleted = mapping.deletedItem !== -1 && (cells[mapping.deletedItem] || '').trim().toUpperCase() === 'X';
+                if (isDeleted) continue;
 
                 const monVal = cells[mapping.mon] || ''; 
                 let mNum = null;
@@ -4653,7 +4658,7 @@ DST: 22. 지티테크`;
             }
             
             if (data.length > 0) {
-                if (showAlert) alert(`✅ SAP 가공품 소요 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다.`);
+                if (showAlert) alert(`✅ SAP 가공품 소요 데이터 파싱 성공: 총 ${data.length}건의 데이터를 읽어왔습니다. (삭제 품목 자동 제외)`);
             } else {
                 if (showAlert) alert(`⚠️ 데이터를 찾지 못했습니다. 컬럼 헤더(Component, S/O Order 등)가 포함되어 있는지 확인해주세요.`);
             }
@@ -4698,7 +4703,8 @@ DST: 22. 지티테크`;
                 order: findIdx(['ORDER', '오더', '주문']),
                 salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
                 startDate: findIdx(['START DATE', '시작일', 'STARTDATE']),
-                ver: findIdx(['VER.', 'VERSION', '버전'])
+                ver: findIdx(['VER.', 'VERSION', '버전']),
+                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
             };
 
             const data = [];
@@ -4707,6 +4713,10 @@ DST: 22. 지티테크`;
             for (let i = startIndex; i < rows.length; i++) {
                 const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
                 if (cells.length < 5) continue;
+
+                // 삭제 품목 (Deleted Item = X) 자동 제외
+                const isDeleted = mapping.deletedItem !== -1 && (cells[mapping.deletedItem] || '').trim().toUpperCase() === 'X';
+                if (isDeleted) continue;
 
                 const monVal = cells[mapping.mon] || ''; 
                 let mNum = null;
