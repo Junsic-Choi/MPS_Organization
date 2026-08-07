@@ -6769,17 +6769,16 @@ DST: 22. 지티테크`;
                     });
                 });
             });
+            return filteredComps;
+        }
+
+        function renderComponentTable() {
+            const table = document.getElementById('component-table');
+            const tbody = document.getElementById('component-body');
+            const tfoot = document.getElementById('component-foot');
+            if (!tbody || !table) return;
             
-            // Calculate total quantity sum
-            let totalQty = 0;
-            filteredComps.forEach(c => {
-                totalQty += c.Qty;
-            });
-            
-            const totalQtyEl = document.getElementById('component-total-qty');
-            if (totalQtyEl) {
-                totalQtyEl.textContent = totalQty.toLocaleString();
-            }
+            const filteredComps = filterComponentData();
             
             const subEl = document.getElementById('component-count-sub');
             if (subEl) {
@@ -6791,10 +6790,129 @@ DST: 22. 지티테크`;
                     subEl.style.color = 'var(--text-secondary)';
                 }
             }
+
+            // Render Header dynamically with click-to-sort indicators
+            const thead = table.querySelector('thead');
+            if (thead) {
+                thead.innerHTML = '';
+                const trHead = document.createElement('tr');
+                const thSeq = document.createElement('th');
+                thSeq.style.width = '60px';
+                thSeq.style.textAlign = 'center';
+                thSeq.textContent = '순서';
+                trHead.appendChild(thSeq);
+
+                compUserVisibleHeaders.forEach(h => {
+                    const th = document.createElement('th');
+                    th.style.cursor = 'pointer';
+                    th.style.userSelect = 'none';
+                    if (h === 'Qty') th.style.textAlign = 'right';
+                    else if (h === 'Category') th.style.textAlign = 'center';
+
+                    let label = compHeaderLabels[h] || h;
+                    if (compSortKey === h) {
+                        label += compSortDirection === 'asc' ? ' ▲' : ' ▼';
+                        th.style.color = '#3b82f6';
+                    } else {
+                        label += ' ↕';
+                    }
+                    th.textContent = label;
+
+                    th.onclick = () => {
+                        if (compSortKey === h) {
+                            compSortDirection = compSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            compSortKey = h;
+                            compSortDirection = 'asc';
+                        }
+                        renderComponentTable();
+                    };
+                    trHead.appendChild(th);
+                });
+                thead.appendChild(trHead);
+            }
+            
+            tbody.innerHTML = '';
             
             if (filteredComps.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">필터링된 결과가 없습니다.</td></tr>';
+                const totalCols = compUserVisibleHeaders.length + 1;
+                tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align: center; color: var(--text-secondary); padding: 2rem;">필터링된 결과가 없습니다.</td></tr>`;
+                if (tfoot) tfoot.style.display = 'none';
                 return;
+            }
+            if (tfoot) tfoot.style.display = '';
+
+            // Apply Sorting if sortKey is set
+            if (compSortKey && compSortDirection) {
+                filteredComps.sort((a, b) => {
+                    let valA = a[compSortKey];
+                    let valB = b[compSortKey];
+                    if (compSortKey === 'Category') {
+                        valA = a.IsSq ? '1_SQ' : (a.IsNoHistory ? '2_NoHistory' : '3_Mass');
+                        valB = b.IsSq ? '1_SQ' : (b.IsNoHistory ? '2_NoHistory' : '3_Mass');
+                    } else if (compSortKey === 'Month') {
+                        valA = getMonthOrder(a.Month);
+                        valB = getMonthOrder(b.Month);
+                    }
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        return compSortDirection === 'asc' ? valA - valB : valB - valA;
+                    }
+                    valA = (valA || '').toString().toUpperCase();
+                    valB = (valB || '').toString().toUpperCase();
+                    if (valA < valB) return compSortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return compSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            // Calculate total quantity sum
+            let totalQty = 0;
+            filteredComps.forEach(c => {
+                totalQty += c.Qty;
+            });
+
+            // Update Footer colspan & total Qty
+            if (tfoot) {
+                tfoot.innerHTML = '';
+                const trFoot = document.createElement('tr');
+                trFoot.style.fontWeight = 'bold';
+                trFoot.style.background = 'var(--surface-hover)';
+                trFoot.style.borderTop = '2px solid var(--border-color)';
+
+                const qtyIndex = compUserVisibleHeaders.indexOf('Qty');
+                let leftColspan = 1;
+                if (qtyIndex !== -1) {
+                    leftColspan = qtyIndex + 1; // including 순서
+                } else {
+                    leftColspan = compUserVisibleHeaders.length;
+                }
+
+                const tdTitle = document.createElement('td');
+                tdTitle.colSpan = leftColspan;
+                tdTitle.style.textAlign = 'center';
+                tdTitle.style.padding = '0.75rem 1rem';
+                tdTitle.style.color = 'var(--text-primary)';
+                tdTitle.textContent = '조회된 총 소요량 합계';
+                trFoot.appendChild(tdTitle);
+
+                if (qtyIndex !== -1) {
+                    const tdQtyVal = document.createElement('td');
+                    tdQtyVal.style.textAlign = 'right';
+                    tdQtyVal.style.padding = '0.75rem 1rem';
+                    tdQtyVal.style.fontWeight = '800';
+                    tdQtyVal.style.fontSize = '1rem';
+                    tdQtyVal.style.color = 'var(--accent-color)';
+                    tdQtyVal.textContent = totalQty.toLocaleString();
+                    trFoot.appendChild(tdQtyVal);
+
+                    const rightColspan = compUserVisibleHeaders.length - (qtyIndex + 1);
+                    if (rightColspan > 0) {
+                        const tdRight = document.createElement('td');
+                        tdRight.colSpan = rightColspan;
+                        trFoot.appendChild(tdRight);
+                    }
+                }
+                tfoot.appendChild(trFoot);
             }
             
             const limit = Math.min(filteredComps.length, 2000);
@@ -6812,52 +6930,56 @@ DST: 22. 지티테크`;
                 tdIdx.textContent = idx + 1;
                 tdIdx.style.textAlign = 'center';
                 tr.appendChild(tdIdx);
-                
-                const tdMonth = document.createElement('td');
-                tdMonth.textContent = c.Month;
-                tr.appendChild(tdMonth);
-                
-                const tdModel = document.createElement('td');
-                tdModel.textContent = c.Model || '-';
-                tr.appendChild(tdModel);
-                
-                const tdParent = document.createElement('td');
-                tdParent.textContent = c.ParentMat || '-';
-                tr.appendChild(tdParent);
-                
-                const tdSalesDoc = document.createElement('td');
-                tdSalesDoc.textContent = c.SalesDoc || '-';
-                tr.appendChild(tdSalesDoc);
-                
-                const tdSerial = document.createElement('td');
-                tdSerial.textContent = c.Serial || '-';
-                tr.appendChild(tdSerial);
-                
-                const tdComp = document.createElement('td');
-                tdComp.textContent = c.Component || '-';
-                tdComp.style.fontFamily = 'monospace';
-                tr.appendChild(tdComp);
-                
-                const tdDesc = document.createElement('td');
-                tdDesc.textContent = c.CompDesc || '-';
-                tr.appendChild(tdDesc);
-                
-                const tdQty = document.createElement('td');
-                tdQty.textContent = c.Qty.toLocaleString();
-                tdQty.style.textAlign = 'right';
-                tdQty.style.fontWeight = 'bold';
-                tr.appendChild(tdQty);
-                
-                const tdPilot = document.createElement('td');
-                tdPilot.style.textAlign = 'center';
-                if (c.IsSq) {
-                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">초도품(SQ)</span>';
-                } else if (c.IsNoHistory) {
-                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">시스템 생산 이력X</span>';
-                } else {
-                    tdPilot.innerHTML = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">양산품</span>';
-                }
-                tr.appendChild(tdPilot);
+
+                compUserVisibleHeaders.forEach(h => {
+                    if (h === 'Month') {
+                        const tdMonth = document.createElement('td');
+                        tdMonth.textContent = c.Month;
+                        tr.appendChild(tdMonth);
+                    } else if (h === 'Model') {
+                        const tdModel = document.createElement('td');
+                        tdModel.textContent = c.Model || '-';
+                        tr.appendChild(tdModel);
+                    } else if (h === 'ParentMat') {
+                        const tdParent = document.createElement('td');
+                        tdParent.textContent = c.ParentMat || '-';
+                        tr.appendChild(tdParent);
+                    } else if (h === 'SalesDoc') {
+                        const tdSalesDoc = document.createElement('td');
+                        tdSalesDoc.textContent = c.SalesDoc || '-';
+                        tr.appendChild(tdSalesDoc);
+                    } else if (h === 'Serial') {
+                        const tdSerial = document.createElement('td');
+                        tdSerial.textContent = c.Serial || '-';
+                        tr.appendChild(tdSerial);
+                    } else if (h === 'Component') {
+                        const tdComp = document.createElement('td');
+                        tdComp.textContent = c.Component || '-';
+                        tdComp.style.fontFamily = 'monospace';
+                        tr.appendChild(tdComp);
+                    } else if (h === 'CompDesc') {
+                        const tdDesc = document.createElement('td');
+                        tdDesc.textContent = c.CompDesc || '-';
+                        tr.appendChild(tdDesc);
+                    } else if (h === 'Qty') {
+                        const tdQty = document.createElement('td');
+                        tdQty.textContent = c.Qty.toLocaleString();
+                        tdQty.style.textAlign = 'right';
+                        tdQty.style.fontWeight = 'bold';
+                        tr.appendChild(tdQty);
+                    } else if (h === 'Category') {
+                        const tdPilot = document.createElement('td');
+                        tdPilot.style.textAlign = 'center';
+                        if (c.IsSq) {
+                            tdPilot.innerHTML = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">초도품(SQ)</span>';
+                        } else if (c.IsNoHistory) {
+                            tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">시스템 생산 이력X</span>';
+                        } else {
+                            tdPilot.innerHTML = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">양산품</span>';
+                        }
+                        tr.appendChild(tdPilot);
+                    }
+                });
                 
                 tbody.appendChild(tr);
             }
