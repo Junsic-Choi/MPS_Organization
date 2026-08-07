@@ -1219,6 +1219,18 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary);">🔩 가공품 소요 현황 (Component Requirements)</div>
                     <div style="display: flex; gap: 0.5rem;">
+                        <div style="position: relative; display: inline-block;">
+                            <button type="button" onclick="toggleCompColumnSettings(event)" class="btn" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px;">
+                                ⚙️ 열 설정
+                            </button>
+                            <div id="comp-col-settings-dropdown" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1050; min-width: 240px; max-height: 380px; overflow-y: auto; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); padding: 0.75rem; margin-top: 4px;">
+                                <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                                    <span>보일 열 선택</span>
+                                    <button type="button" onclick="resetCompColumns()" style="background: none; border: none; color: var(--accent-color); font-size: 0.75rem; cursor: pointer; font-weight: 600;">초기화</button>
+                                </div>
+                                <div id="comp-col-options-list" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
+                            </div>
+                        </div>
                         <button onclick="exportComponentToExcel()" class="btn" style="background: #16a34a; color: white; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem 1rem;">
                             📥 엑셀 내보내기
                         </button>
@@ -1257,7 +1269,7 @@
 
                 <div class="table-container active" style="border: 1px solid var(--border-color); border-radius: 8px; overflow-x: auto; margin-top: 0.5rem; display: block;">
                     <table id="component-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
-                        <thead>
+                        <thead id="component-head">
                             <tr>
                                 <th style="width: 60px; text-align: center;">순서</th>
                                 <th>생산월</th>
@@ -4266,12 +4278,113 @@ DST: 22. 지티테크`;
         let compMinMonthOrder = {};
         let selectedCompMaterials = [];
 
-        // Close component material dropdown when clicking outside
+        const allCompHeaders = ['Month', 'Model', 'ParentMat', 'SalesDoc', 'Serial', 'Component', 'CompDesc', 'Qty', 'Category'];
+        const compHeaderLabels = {
+            'Month': '생산월',
+            'Model': '기종',
+            'ParentMat': '완제품 품번 (Parent Mat.)',
+            'SalesDoc': 'Sales Doc',
+            'Serial': '시리얼번호',
+            'Component': '가공품 품번 (Component)',
+            'CompDesc': '가공품명 (Description)',
+            'Qty': '소요량 (Qty)',
+            'Category': '구분'
+        };
+        let compUserVisibleHeaders = [...allCompHeaders];
+        let compSortKey = null;
+        let compSortDirection = 'asc';
+
+        function loadCompUserPreferences() {
+            try {
+                const saved = localStorage.getItem('comp_user_visible_headers');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        compUserVisibleHeaders = parsed.filter(h => allCompHeaders.includes(h));
+                    }
+                }
+            } catch(e){}
+            renderCompColumnSettingsDropdown();
+        }
+
+        function saveCompUserPreferences() {
+            try {
+                localStorage.setItem('comp_user_visible_headers', JSON.stringify(compUserVisibleHeaders));
+            } catch(e){}
+        }
+
+        function toggleCompColumnSettings(e) {
+            if (e) e.stopPropagation();
+            const dropdown = document.getElementById('comp-col-settings-dropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function resetCompColumns() {
+            compUserVisibleHeaders = [...allCompHeaders];
+            saveCompUserPreferences();
+            renderCompColumnSettingsDropdown();
+            renderComponentTable();
+        }
+
+        function renderCompColumnSettingsDropdown() {
+            const container = document.getElementById('comp-col-options-list');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            allCompHeaders.forEach(h => {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.gap = '0.5rem';
+                label.style.fontSize = '0.85rem';
+                label.style.cursor = 'pointer';
+                label.style.color = 'var(--text-primary)';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = compUserVisibleHeaders.includes(h);
+                checkbox.style.cursor = 'pointer';
+                checkbox.onchange = () => {
+                    if (checkbox.checked) {
+                        if (!compUserVisibleHeaders.includes(h)) {
+                            compUserVisibleHeaders.push(h);
+                            compUserVisibleHeaders.sort((a, b) => allCompHeaders.indexOf(a) - allCompHeaders.indexOf(b));
+                        }
+                    } else {
+                        if (compUserVisibleHeaders.length <= 1) {
+                            alert('최소 1개 이상의 열은 선택되어 있어야 합니다.');
+                            checkbox.checked = true;
+                            return;
+                        }
+                        compUserVisibleHeaders = compUserVisibleHeaders.filter(col => col !== h);
+                    }
+                    saveCompUserPreferences();
+                    renderComponentTable();
+                };
+                
+                const span = document.createElement('span');
+                span.textContent = compHeaderLabels[h] || h;
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                container.appendChild(label);
+            });
+        }
+
+        // Close component material & column dropdowns when clicking outside
         window.addEventListener('click', function(e) {
             const dropdown = document.getElementById('comp-material-dropdown');
             const btn = document.getElementById('comp-material-btn');
             if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
                 dropdown.style.display = 'none';
+            }
+
+            const colDropdown = document.getElementById('comp-col-settings-dropdown');
+            const colBtn = document.querySelector('button[onclick="toggleCompColumnSettings(event)"]');
+            if (colDropdown && colDropdown.style.display !== 'none' && (!colBtn || !colBtn.contains(e.target)) && !colDropdown.contains(e.target)) {
+                colDropdown.style.display = 'none';
             }
         });
 
@@ -4299,6 +4412,7 @@ DST: 22. 지티테크`;
         }
 
         async function loadSavedSapFiles() {
+            loadCompUserPreferences();
             try {
                 for (const type of ['1842', '1840', 'component_1842', 'component_1840']) {
                     const res = await fetch(`/api/load-sap/${type}`);
@@ -6607,27 +6721,11 @@ DST: 22. 지티테크`;
             updateCompMaterialBtnText();
         }
 
-        function renderComponentTable() {
-            const tbody = document.getElementById('component-body');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            
-            const components = [...(sapData['component_1842'] || []), ...(sapData['component_1840'] || [])];
-            if (components.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">가공품 소요 데이터가 없습니다. component.MHTML 파일을 먼저 올려주세요.</td></tr>';
-                const subEl = document.getElementById('component-count-sub');
-                if (subEl) subEl.textContent = '';
-                const totalQtyEl = document.getElementById('component-total-qty');
-                if (totalQtyEl) totalQtyEl.textContent = '0';
-                return;
-            }
-            
+        function filterComponentData() {
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
-            
             const filteredComps = [];
-            
             filteredData.forEach(r => {
                 if (r.isUnmapped) return; // Skip unmapped rows to avoid incorrect components
                 
@@ -6947,17 +7045,19 @@ DST: 22. 지티테크`;
                     if (isSq) typeLabel = '초도품(SQ)';
                     else if (isNoHistory) typeLabel = '시스템 생산 이력X';
                     
-                    exportData.push({
-                        "생산월": c.Month || '',
-                        "기종": model,
-                        "완제품 품번 (Parent Mat.)": c.ParentMat || '',
-                        "Sales Doc": c.SalesDoc || '',
-                        "시리얼번호": c.Serial || '',
-                        "가공품 품번 (Component)": c.Component || '',
-                        "가공품명 (Description)": c.CompDesc || '',
-                        "소요량 (Qty)": c.Qty,
-                        "구분": typeLabel
+                    const rowObj = {};
+                    compUserVisibleHeaders.forEach(h => {
+                        if (h === 'Month') rowObj['생산월'] = c.Month || '';
+                        else if (h === 'Model') rowObj['기종'] = model;
+                        else if (h === 'ParentMat') rowObj['완제품 품번 (Parent Mat.)'] = c.ParentMat || '';
+                        else if (h === 'SalesDoc') rowObj['Sales Doc'] = c.SalesDoc || '';
+                        else if (h === 'Serial') rowObj['시리얼번호'] = c.Serial || '';
+                        else if (h === 'Component') rowObj['가공품 품번 (Component)'] = c.Component || '';
+                        else if (h === 'CompDesc') rowObj['가공품명 (Description)'] = c.CompDesc || '';
+                        else if (h === 'Qty') rowObj['소요량 (Qty)'] = c.Qty;
+                        else if (h === 'Category') rowObj['구분'] = typeLabel;
                     });
+                    exportData.push(rowObj);
                 });
             });
             
