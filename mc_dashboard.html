@@ -650,16 +650,53 @@
             if (parts.length >= 2) siteMap[parts[0].trim()] = parts[1].trim();
         });
 
+        function getDivision(groupName) {
+            if (!groupName) return '기타';
+            const match = groupName.trim().match(/^(\d+)/);
+            if (!match) {
+                const upper = groupName.toUpperCase();
+                if (upper.includes('MC') || upper.includes('DNM') || upper.includes('MYNX') || upper.includes('VM') || upper.includes('DVF') || upper.includes('VCF')) return 'MC';
+                if (upper.includes('LYNX') || upper.includes('PUMA') || upper.includes('SMX') || upper.includes('GT') || upper.includes('DNT')) return 'TC';
+                return '기타';
+            }
+            const num = parseInt(match[1]);
+            if ((num >= 1 && num <= 17) || num === 34) return 'MC';
+            if ((num >= 18 && num <= 33) || num === 38 || num === 90) return 'TC';
+            return '기타';
+        }
+
         // Resolve Shift for MC rows
         function getMcShift(row) {
             if (!row) return '미지정';
             if (row.Shift && row.Shift.includes('직')) return row.Shift;
 
-            const code = (row.LineCode || row.Ver || row.Code || '').toUpperCase();
-            if (/0AM1|0AMA|0AMB/.test(code) || (row.LineName && row.LineName.includes('MC1직'))) return '1직';
-            if (/0AM2/.test(code) || (row.LineName && row.LineName.includes('MC2직'))) return '2직';
-            if (/0AM3|0AMC/.test(code) || (row.LineName && row.LineName.includes('MC3직'))) return '3직';
-            if (/0AM4|0AMD/.test(code) || (row.LineName && row.LineName.includes('MC4직'))) return '4직';
+            let mappedSite = '';
+            const verCode = (row.Ver || row.LineCode || row.Code || '').toString().trim().toUpperCase();
+            if (verCode) {
+                for (const [prefix, siteName] of Object.entries(siteMap)) {
+                    if (prefix && verCode.startsWith(prefix.trim().toUpperCase())) {
+                        mappedSite = siteName;
+                        break;
+                    }
+                }
+            }
+
+            const str = [
+                row.Code || '',
+                row.LineCode || '',
+                row.LineName || '',
+                row.Ver || '',
+                row.RawSite || '',
+                row.Site || '',
+                row.Product || '',
+                row.ProductName || '',
+                mappedSite
+            ].join(' ').toUpperCase();
+
+            if (/0AM1|0AMA|0AMB/.test(str) || str.includes('1직')) return '1직';
+            if (/0AM2/.test(str) || str.includes('2직')) return '2직';
+            if (/0AM3|0AMC/.test(str) || str.includes('3직')) return '3직';
+            if (/0AM4|0AMD/.test(str) || str.includes('4직')) return '4직';
 
             return '미지정';
         }
@@ -723,11 +760,9 @@
             // Filter MPS rows for Namsan & MC
             const namsanRows = mpsResults.filter(r => {
                 const site = (r.Site || '').trim();
-                const group = (r.Group || '').toUpperCase();
-                // Check if site is Namsan and Division is MC (MC groups)
                 const isNamsan = site === '남산' || site.includes('01.') || site.includes('남산');
-                const isMcGroup = !group.startsWith('TC') && !group.startsWith('T2');
-                return isNamsan && isMcGroup;
+                const isMc = getDivision(r.Group) === 'MC';
+                return isNamsan && isMc;
             });
 
             // Perform Join
