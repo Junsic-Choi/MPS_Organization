@@ -757,34 +757,57 @@
             const sapRecords = parseSapMhtml(sapMhtml);
             const compRecords = parseCompMhtml(compMhtml);
 
-            // Filter MPS rows for Namsan & MC
-            const namsanRows = mpsResults.filter(r => {
+            // Filter MPS rows for Namsan & MC and expand by Qty
+            const namsanRows = [];
+            mpsResults.forEach(r => {
                 const site = (r.Site || '').trim();
                 const isNamsan = site === '남산' || site.includes('01.') || site.includes('남산');
                 const isMc = getDivision(r.Group) === 'MC';
-                return isNamsan && isMc;
+                if (isNamsan && isMc) {
+                    const qty = parseInt(r.Qty) || 1;
+                    for (let i = 0; i < qty; i++) {
+                        namsanRows.push({ ...r, Qty: 1 });
+                    }
+                }
             });
 
-            // Perform Join
+            // Perform Multi-stage SAP Join
             rawMcData = namsanRows.map(row => {
-                const item = { ...row, Qty: 1 };
-                
-                // Match with SAP 1840
+                const item = { ...row };
                 let matchedSap = null;
                 let matchMethod = 'none';
 
                 if (sapRecords.length > 0) {
+                    // Stage 1: Exact match by Serial or SalesDoc
                     if (row.Serial && row.Serial !== '-') {
-                        matchedSap = sapRecords.find(s => s.Serial === row.Serial);
+                        matchedSap = sapRecords.find(s => !s.Used && s.Serial === row.Serial);
                         if (matchedSap) matchMethod = 'exact';
                     }
                     if (!matchedSap && row.SalesDoc && row.SalesDoc !== '-') {
-                        matchedSap = sapRecords.find(s => s.SalesDoc === row.SalesDoc);
+                        matchedSap = sapRecords.find(s => !s.Used && s.SalesDoc === row.SalesDoc);
                         if (matchedSap) matchMethod = 'exact';
+                    }
+                    // Stage 2: Match by Month & Model/Material
+                    if (!matchedSap && row.Model) {
+                        const mStr = row.Model.toString().trim().toUpperCase();
+                        matchedSap = sapRecords.find(s => {
+                            if (s.Used) return false;
+                            if (s.Month && row.Month && s.Month !== row.Month) return false;
+                            const rawStr = (s.ModelRaw || '').toString().trim().toUpperCase();
+                            const matStr = (s.Material || '').toString().trim().toUpperCase();
+                            return rawStr.includes(mStr) || mStr.includes(rawStr) || matStr.includes(mStr) || mStr.includes(matStr);
+                        });
+                        if (matchedSap) matchMethod = 'suffix';
+                    }
+                    // Stage 3: Month fallback
+                    if (!matchedSap && row.Month) {
+                        matchedSap = sapRecords.find(s => !s.Used && s.Month === row.Month);
+                        if (matchedSap) matchMethod = 'suffix';
                     }
                 }
 
                 if (matchedSap) {
+                    matchedSap.Used = true;
                     item.Customer = matchedSap.Customer || item.Customer;
                     item.Serial = matchedSap.Serial || item.Serial;
                     item.OrderNum = matchedSap.Order || item.OrderNum;
@@ -808,7 +831,7 @@
             applyMcFilters();
         }
 
-        // Parse SAP MHTML Table
+        // Parse SAP MHTML Table dynamically
         function parseSapMhtml(mhtml) {
             if (!mhtml) return [];
             const decoded = mhtml.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
@@ -821,17 +844,68 @@
             const rows = Array.from(table.querySelectorAll('tr'));
             if (rows.length < 2) return [];
 
+            // Find header row
+            let headerRow = rows[0];
+            let headerCells = Array.from(headerRow.querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+            
+            if (!headerCells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                for(let i=1; i<Math.min(5, rows.length); i++) {
+                    const cells = Array.from(rows[i].querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+                    if (cells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                        headerRow = rows[i];
+                        headerCells = cells;
+                        break;
+                    }
+                }
+            }
+
+            const findIdx = (keywords) => {
+                let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                if (idx !== -1) return idx;
+                return headerCells.findIndex(cell => keywords.some(k => {
+                    if (k === 'MATERIAL' && cell.includes('DESCRIPTION')) return false;
+                    return cell.includes(k);
+                }));
+            };
+
+            const mapping = {
+                mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+                model: findIdx(['MATERIAL DESCRIPTION', 'MODEL', '기종']),
+                material: findIdx(['MATERIAL', '품명', '자재코드']),
+                customer: findIdx(['CUSTOMER NAME', 'CUSTOMER', '고객']),
+                serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼']),
+                order: findIdx(['ORDER', '오더', '주문']),
+                salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
+                startDate: findIdx(['START DATE', '시작일', 'STARTDATE']),
+                ver: findIdx(['VER.', 'VERSION', '버전']),
+                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
+            };
+
             const data = [];
-            for (let i = 1; i < rows.length; i++) {
+            const startIndex = rows.indexOf(headerRow) + 1;
+
+            for (let i = startIndex; i < rows.length; i++) {
                 const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
-                if (cells.length < 10) continue;
+                if (cells.length < 5) continue;
+                if (mapping.deletedItem !== -1 && (cells[mapping.deletedItem] || '').trim().toUpperCase() === 'X') continue;
+
+                const monVal = cells[mapping.mon] || '';
+                let mNum = null;
+                const dateDigits = monVal.replace(/[^0-9]/g, '');
+                if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));
+                else if (dateDigits.length >= 1) mNum = parseInt(dateDigits);
+
                 data.push({
-                    Serial: cells[2] || '',
-                    SalesDoc: cells[3] || '',
-                    Order: cells[4] || '',
-                    Customer: cells[25] || '',
-                    Ver: cells[14] || '',
-                    StartDate: cells[26] || ''
+                    Month: mNum ? mNum + '월' : '',
+                    ModelRaw: cells[mapping.model] || '',
+                    Material: cells[mapping.material] || '',
+                    Customer: cells[mapping.customer] || '',
+                    Serial: cells[mapping.serial] || '',
+                    Order: cells[mapping.order] || '',
+                    SalesDoc: cells[mapping.salesDoc] || '',
+                    StartDate: cells[mapping.startDate] || '',
+                    Ver: cells[mapping.ver] || '',
+                    Used: false
                 });
             }
             return data;
