@@ -949,7 +949,13 @@
 
         // Populate Dropdowns
         function populateFilterDropdowns() {
-            const months = [...new Set(rawMcData.map(r => r.Month))].sort();
+            const months = [...new Set(rawMcData.map(r => r.Month))]
+                .filter(Boolean)
+                .sort((a, b) => {
+                    const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+                    const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+                    return numA - numB;
+                });
             const groups = [...new Set(rawMcData.map(r => r.Group))].sort();
 
             const monthSelect = document.getElementById('filter-month');
@@ -974,11 +980,10 @@
             const selectedSap = document.getElementById('filter-sap').value;
             const searchText = document.getElementById('filter-search').value.toLowerCase().trim();
 
-            let filtered = rawMcData.filter(r => {
+            // Base filtered set for Top Summary Cards (independent of activeShiftTab)
+            let baseFiltered = rawMcData.filter(r => {
                 if (selectedMonth !== 'ALL' && r.Month !== selectedMonth) return false;
                 if (selectedGroup !== 'ALL' && r.Group !== selectedGroup) return false;
-                if (activeShiftTab !== 'ALL' && r.Shift !== activeShiftTab) return false;
-
                 if (selectedSap === 'MATCHED' && r.SapMatchMethod === 'none') return false;
                 if (selectedSap === 'UNMATCHED' && r.SapMatchMethod !== 'none') return false;
 
@@ -994,17 +999,28 @@
                 return true;
             });
 
-            // Calculate Metrics
-            updateMcMetrics(filtered);
+            // Top Summary Cards ALWAYS show overall totals
+            updateMcMetrics(baseFiltered);
+
+            // Table filtered set (filters by activeShiftTab for shift lineup view)
+            let tableFiltered = baseFiltered.filter(r => {
+                if (activeShiftTab !== 'ALL' && r.Shift !== activeShiftTab) return false;
+                return true;
+            });
 
             // Sort
             if (currentSortKey) {
-                filtered.sort((a, b) => {
+                tableFiltered.sort((a, b) => {
                     let valA = a[currentSortKey] || '';
                     let valB = b[currentSortKey] || '';
                     if (currentSortKey === 'Qty') {
                         valA = Number(valA); valB = Number(valB);
                         return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+                    }
+                    if (currentSortKey === 'Month') {
+                        let numA = parseInt(valA.toString().replace(/[^0-9]/g, '')) || 0;
+                        let numB = parseInt(valB.toString().replace(/[^0-9]/g, '')) || 0;
+                        return currentSortDirection === 'asc' ? numA - numB : numB - numA;
                     }
                     valA = valA.toString().toUpperCase();
                     valB = valB.toString().toUpperCase();
@@ -1014,8 +1030,8 @@
                 });
             }
 
-            renderMcTable(filtered);
-            renderMcComponents(filtered);
+            renderMcTable(tableFiltered);
+            renderMcComponents(tableFiltered);
         }
 
         // Update Metrics Cards
