@@ -4978,7 +4978,7 @@ DST: 22. 지티테크`;
                         newRow.Product = prodStr + ' ' + badgeText;
                     }
                     
-                    if (row.Site !== '성주' && sapMatch.Ver) {
+                    if (sapMatch.Ver) {
                         let foundSite = null;
                         const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
                         for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
@@ -4990,13 +4990,6 @@ DST: 22. 지티테크`;
                         }
                         if (foundSite) {
                             newRow.LineName = foundSite;
-                            if (foundSite.includes('1840') || foundSite.includes('남산') || foundSite.startsWith('MC') || foundSite.startsWith('TC')) {
-                                newRow.Site = '남산';
-                            } else {
-                                newRow.Site = foundSite;
-                            }
-                        } else {
-                            newRow.Site = '남산';
                         }
                     }
                 }
@@ -5026,7 +5019,7 @@ DST: 22. 지티테크`;
                         newRow.ProductName = prodNameStr + ' ' + badgeText;
                     }
                     
-                    if (row.Site !== '성주' && sapMatch.Ver) {
+                    if (sapMatch.Ver) {
                         let foundSite = null;
                         const cleanVer = (sapMatch.Ver || '').trim().toUpperCase();
                         for (const [verPrefix, siteName] of Object.entries(manualSiteMap)) {
@@ -5038,13 +5031,6 @@ DST: 22. 지티테크`;
                         }
                         if (foundSite) {
                             newRow.LineName = foundSite;
-                            if (foundSite.includes('1840') || foundSite.includes('남산') || foundSite.startsWith('MC') || foundSite.startsWith('TC')) {
-                                newRow.Site = '남산';
-                            } else {
-                                newRow.Site = foundSite;
-                            }
-                        } else {
-                            newRow.Site = '남산';
                         }
                     }
                 }
