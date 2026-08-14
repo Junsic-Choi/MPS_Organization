@@ -1124,7 +1124,7 @@
             document.getElementById('metric-sap-rate').textContent = `결합률 ${sapRate}%`;
         }
 
-        // Render MC Table
+        // Render MC Table (High Performance Lazy Render with DocumentFragment)
         function renderMcTable(rows) {
             const tbody = document.getElementById('mc-table-body');
             const countInfo = document.getElementById('table-count-info');
@@ -1136,6 +1136,8 @@
                 tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);">해당 조건의 남산 MC 대조립 데이터가 없습니다.</td></tr>';
                 return;
             }
+
+            const fragment = document.createDocumentFragment();
 
             rows.forEach((r, idx) => {
                 const tr = document.createElement('tr');
@@ -1151,12 +1153,8 @@
                 if (r.SapMatchMethod === 'exact') sapBadge = '<span class="badge badge-sap-exact">🔗 확정결합</span>';
                 else if (r.SapMatchMethod === 'suffix') sapBadge = '<span class="badge badge-sap-est">🔗 추정결합</span>';
 
-                // Find matching components for this row
-                const itemComps = rawCompData.filter(c => {
-                    if (r.Serial && r.Serial !== '-' && c.Serial === r.Serial) return true;
-                    if (r.SalesDoc && r.SalesDoc !== '-' && c.SalesDoc === r.SalesDoc) return true;
-                    return false;
-                });
+                // Fast O(1) Component Lookup
+                const itemComps = getMatchedComponents(r.Serial, r.SalesDoc);
 
                 const compBadge = itemComps.length > 0 
                     ? `<span class="badge-comp-count" id="exp-badge-${idx}">▶ 🔩 ${itemComps.length}건</span>`
@@ -1179,42 +1177,32 @@
                 `;
 
                 // Add Row Click & Double Click Events to toggle accordion
-                tr.onclick = (e) => {
-                    toggleRowComponents(idx, r, itemComps, tr);
-                };
+                tr.onclick = () => toggleRowComponents(idx, r, tr);
                 tr.ondblclick = (e) => {
                     e.preventDefault();
-                    toggleRowComponents(idx, r, itemComps, tr);
+                    toggleRowComponents(idx, r, tr);
                 };
 
-                tbody.appendChild(tr);
+                fragment.appendChild(tr);
 
-                // Accordion Sub-row
+                // Accordion Sub-row Placeholder
                 const subTr = document.createElement('tr');
                 subTr.id = `comp-row-${idx}`;
                 subTr.className = 'comp-accordion-row';
                 subTr.style.display = 'none';
                 subTr.innerHTML = `
                     <td colspan="13" style="padding: 0; border-bottom: 1px solid var(--border-color);">
-                        <div class="comp-accordion-panel" id="comp-panel-${idx}">
-                            <!-- Dynamic Content -->
-                        </div>
+                        <div class="comp-accordion-panel" id="comp-panel-${idx}"></div>
                     </td>
                 `;
-                tbody.appendChild(subTr);
+                fragment.appendChild(subTr);
             });
+
+            tbody.appendChild(fragment);
         }
 
-        // Toggle Component Production Check Status
-        function toggleCompCheck(key) {
-            const current = localStorage.getItem(key);
-            const nextState = current === 'Y' ? 'N' : 'Y';
-            localStorage.setItem(key, nextState);
-            applyMcFilters();
-        }
-
-        // Toggle Accordion Panel for MC Row
-        function toggleRowComponents(idx, r, matchedComps, trEl) {
+        // Lazy Render Accordion Panel on Click / Double Click
+        function toggleRowComponents(idx, r, trEl) {
             const subRow = document.getElementById(`comp-row-${idx}`);
             const badge = document.getElementById(`exp-badge-${idx}`);
             if (!subRow) return;
@@ -1222,36 +1210,29 @@
             const isExpanded = subRow.style.display !== 'none';
             if (isExpanded) {
                 subRow.style.display = 'none';
+                if (badge) badge.textContent = badge.textContent.replace('▼', '▶');
                 if (trEl) trEl.style.backgroundColor = '';
             } else {
                 subRow.style.display = 'table-row';
+                if (badge) badge.textContent = badge.textContent.replace('▶', '▼');
                 if (trEl) trEl.style.backgroundColor = 'rgba(6, 182, 212, 0.12)';
 
                 const panel = document.getElementById(`comp-panel-${idx}`);
                 if (panel && r) {
-                    if (!matchedComps || matchedComps.length === 0) {
+                    const matchedComps = getMatchedComponents(r.Serial, r.SalesDoc);
+
+                    if (matchedComps.length === 0) {
                         panel.innerHTML = `
                             <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 0.75rem;">
                                 ⚠️ <b>[${r.Model || '-'}]</b> (S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}) 항목에 매칭된 가공품 소요 정보가 없습니다.
                             </div>`;
                     } else {
-                        let checkedCount = 0;
                         let rowsHtml = matchedComps.map((c, cIdx) => {
-                            const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
-                            const isChecked = localStorage.getItem(key) === 'Y';
-                            if (isChecked) checkedCount++;
-
                             const isSq = c.SortString && c.SortString.includes('SQ');
                             const badgeHtml = isSq ? '<span class="badge badge-sap-est">초도품(SQ)</span>' : '<span class="badge badge-shift-1">양산품</span>';
                             return `
-                                <tr style="${isChecked ? 'background: rgba(16, 185, 129, 0.1);' : ''}">
+                                <tr>
                                     <td style="text-align: center; font-weight: 600;">${cIdx + 1}</td>
-                                    <td style="text-align: center;" onclick="event.stopPropagation();">
-                                        <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 700; color: ${isChecked ? '#10b981' : 'var(--text-secondary)'};">
-                                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCompCheck('${key}')" style="width: 16px; height: 16px; cursor: pointer; accent-color: #10b981;">
-                                            ${isChecked ? '☑ 완료' : '[  ] 미완료'}
-                                        </label>
-                                    </td>
                                     <td>${c.Month || '-'}</td>
                                     <td>${c.ParentMat || '-'}</td>
                                     <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--mc-theme);">${c.Component || '-'}</td>
@@ -1261,18 +1242,15 @@
                                 </tr>`;
                         }).join('');
 
-                        const progressPct = Math.round((checkedCount / matchedComps.length) * 100);
-
                         panel.innerHTML = `
                             <div style="font-weight: 700; color: var(--mc-theme); font-size: 0.875rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                                <span>🔩 [${r.Model || '-'}] 가공품 생산 완료 진행률: <b style="color: #10b981;">${checkedCount} / ${matchedComps.length}건 완료 (${progressPct}%)</b> — S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation(); toggleRowComponents(${idx}, null, null, document.getElementById('mc-tr-${idx}'))">▲ 더블클릭/클릭하여 접기</span>
+                                <span>🔩 [${r.Model || '-'}] 가공품 소요 상세 목록 (총 ${matchedComps.length}건) — S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation(); toggleRowComponents(${idx}, null, document.getElementById('mc-tr-${idx}'))">▲ 접기</span>
                             </div>
                             <table class="comp-subtable">
                                 <thead>
                                     <tr>
                                         <th style="width: 40px; text-align: center;">순서</th>
-                                        <th style="width: 110px; text-align: center;">생산 완료 체크</th>
                                         <th>생산월</th>
                                         <th>모자재 품번</th>
                                         <th>가공품 품번</th>
@@ -1288,6 +1266,35 @@
                     }
                 }
             }
+        }
+
+        // Fast O(1) Component Lookup Map
+        let compSerialMap = new Map();
+        let compSalesDocMap = new Map();
+
+        function buildCompMap(compRecords) {
+            compSerialMap = new Map();
+            compSalesDocMap = new Map();
+            compRecords.forEach(c => {
+                if (c.Serial && c.Serial !== '-') {
+                    if (!compSerialMap.has(c.Serial)) compSerialMap.set(c.Serial, []);
+                    compSerialMap.get(c.Serial).push(c);
+                }
+                if (c.SalesDoc && c.SalesDoc !== '-') {
+                    if (!compSalesDocMap.has(c.SalesDoc)) compSalesDocMap.set(c.SalesDoc, []);
+                    compSalesDocMap.get(c.SalesDoc).push(c);
+                }
+            });
+        }
+
+        function getMatchedComponents(serial, salesDoc) {
+            if (serial && serial !== '-' && compSerialMap.has(serial)) {
+                return compSerialMap.get(serial);
+            }
+            if (salesDoc && salesDoc !== '-' && compSalesDocMap.has(salesDoc)) {
+                return compSalesDocMap.get(salesDoc);
+            }
+            return [];
         }
 
         // Render Components for Filtered MC rows
@@ -1308,6 +1315,8 @@
                 return;
             }
 
+            const fragment = document.createDocumentFragment();
+
             matchedComps.slice(0, 500).forEach((c, idx) => {
                 const tr = document.createElement('tr');
                 const isSq = c.SortString && c.SortString.includes('SQ');
@@ -1325,8 +1334,10 @@
                     <td style="text-align: right; font-weight: 700;">${c.Qty}</td>
                     <td style="text-align: center;">${badgeHtml}</td>
                 `;
-                compBody.appendChild(tr);
+                fragment.appendChild(tr);
             });
+
+            compBody.appendChild(fragment);
         }
 
         // Sort Handler
@@ -1349,7 +1360,7 @@
             });
         }
 
-        // Export MC Excel with Multi-Sheets (1직, 2직, 3직, 4직, 전체, 가공품_생산완료체크) and AutoFilter
+        // Export MC Excel with Multi-Sheets and AutoFilter
         function exportMcToExcel() {
             if (rawMcData.length === 0) {
                 alert('내보낼 MC 대조립 데이터가 없습니다.');
@@ -1361,20 +1372,7 @@
             const createFormattedSheet = (dataList) => {
                 const sortedList = sortByMonth(dataList);
                 const exportRows = sortedList.map((r, i) => {
-                    const itemComps = rawCompData.filter(c => {
-                        if (r.Serial && r.Serial !== '-' && c.Serial === r.Serial) return true;
-                        if (r.SalesDoc && r.SalesDoc !== '-' && c.SalesDoc === r.SalesDoc) return true;
-                        return false;
-                    });
-                    const checkedCount = itemComps.filter(c => {
-                        const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
-                        return localStorage.getItem(key) === 'Y';
-                    }).length;
-
-                    const compStatusText = itemComps.length > 0
-                        ? `${checkedCount}/${itemComps.length} 완료 (${Math.round((checkedCount/itemComps.length)*100)}%)`
-                        : '소요없음';
-
+                    const itemComps = getMatchedComponents(r.Serial, r.SalesDoc);
                     return {
                         "순서": i + 1,
                         "생산월": r.Month || '',
@@ -1389,12 +1387,11 @@
                         "고객명": r.Customer || '',
                         "시작일": r.StartDate || '',
                         "SAP 결합 상태": r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합'),
-                        "가공품 생산완료 현황": compStatusText
+                        "가공품 소요건수": itemComps.length > 0 ? `${itemComps.length}건` : '소요없음'
                     };
                 });
 
                 const ws = XLSX.utils.json_to_sheet(exportRows);
-                // Add AutoFilter
                 if (exportRows.length > 0) {
                     ws['!autofilter'] = { ref: `A1:N${exportRows.length + 1}` };
                 }
@@ -1410,17 +1407,12 @@
                 XLSX.utils.book_append_sheet(wb, createFormattedSheet(shiftData), `MC_${shift}`);
             });
 
-            // Sheet 6: 가공품_생산완료체크
-            const compCheckRows = [];
+            // Sheet 6: 가공품_소요현황
+            const compRows = [];
             let compSeq = 1;
             
             sortByMonth(rawMcData).forEach(r => {
-                const matchedComps = rawCompData.filter(c => {
-                    if (r.Serial && r.Serial !== '-' && c.Serial === r.Serial) return true;
-                    if (r.SalesDoc && r.SalesDoc !== '-' && c.SalesDoc === r.SalesDoc) return true;
-                    return false;
-                });
-
+                const matchedComps = getMatchedComponents(r.Serial, r.SalesDoc);
                 matchedComps.forEach(c => {
                     const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
                     const isChecked = localStorage.getItem(key) === 'Y';
