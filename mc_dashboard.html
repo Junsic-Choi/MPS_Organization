@@ -1178,8 +1178,12 @@
                     <td>${sapBadge}</td>
                 `;
 
-                // Add Row Click Event to toggle accordion
+                // Add Row Click & Double Click Events to toggle accordion
                 tr.onclick = (e) => {
+                    toggleRowComponents(idx, r, itemComps, tr);
+                };
+                tr.ondblclick = (e) => {
+                    e.preventDefault();
                     toggleRowComponents(idx, r, itemComps, tr);
                 };
 
@@ -1201,6 +1205,14 @@
             });
         }
 
+        // Toggle Component Production Check Status
+        function toggleCompCheck(key) {
+            const current = localStorage.getItem(key);
+            const nextState = current === 'Y' ? 'N' : 'Y';
+            localStorage.setItem(key, nextState);
+            applyMcFilters();
+        }
+
         // Toggle Accordion Panel for MC Row
         function toggleRowComponents(idx, r, matchedComps, trEl) {
             const subRow = document.getElementById(`comp-row-${idx}`);
@@ -1210,11 +1222,9 @@
             const isExpanded = subRow.style.display !== 'none';
             if (isExpanded) {
                 subRow.style.display = 'none';
-                if (badge && matchedComps) badge.innerHTML = `▶ 🔩 ${matchedComps.length}건`;
                 if (trEl) trEl.style.backgroundColor = '';
             } else {
                 subRow.style.display = 'table-row';
-                if (badge && matchedComps) badge.innerHTML = `▼ 🔩 ${matchedComps.length}건`;
                 if (trEl) trEl.style.backgroundColor = 'rgba(6, 182, 212, 0.12)';
 
                 const panel = document.getElementById(`comp-panel-${idx}`);
@@ -1225,12 +1235,23 @@
                                 ⚠️ <b>[${r.Model || '-'}]</b> (S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}) 항목에 매칭된 가공품 소요 정보가 없습니다.
                             </div>`;
                     } else {
+                        let checkedCount = 0;
                         let rowsHtml = matchedComps.map((c, cIdx) => {
+                            const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
+                            const isChecked = localStorage.getItem(key) === 'Y';
+                            if (isChecked) checkedCount++;
+
                             const isSq = c.SortString && c.SortString.includes('SQ');
                             const badgeHtml = isSq ? '<span class="badge badge-sap-est">초도품(SQ)</span>' : '<span class="badge badge-shift-1">양산품</span>';
                             return `
-                                <tr>
+                                <tr style="${isChecked ? 'background: rgba(16, 185, 129, 0.1);' : ''}">
                                     <td style="text-align: center; font-weight: 600;">${cIdx + 1}</td>
+                                    <td style="text-align: center;" onclick="event.stopPropagation();">
+                                        <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 700; color: ${isChecked ? '#10b981' : 'var(--text-secondary)'};">
+                                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCompCheck('${key}')" style="width: 16px; height: 16px; cursor: pointer; accent-color: #10b981;">
+                                            ${isChecked ? '☑ 완료' : '[  ] 미완료'}
+                                        </label>
+                                    </td>
                                     <td>${c.Month || '-'}</td>
                                     <td>${c.ParentMat || '-'}</td>
                                     <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--mc-theme);">${c.Component || '-'}</td>
@@ -1240,15 +1261,18 @@
                                 </tr>`;
                         }).join('');
 
+                        const progressPct = Math.round((checkedCount / matchedComps.length) * 100);
+
                         panel.innerHTML = `
                             <div style="font-weight: 700; color: var(--mc-theme); font-size: 0.875rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                                <span>🔩 [${r.Model || '-'}] 가공품 소요 상세 목록 (총 ${matchedComps.length}건) — S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation(); toggleRowComponents(${idx}, null, null, document.getElementById('mc-tr-${idx}'))">▲ 클릭하여 접기</span>
+                                <span>🔩 [${r.Model || '-'}] 가공품 생산 완료 진행률: <b style="color: #10b981;">${checkedCount} / ${matchedComps.length}건 완료 (${progressPct}%)</b> — S/O: ${r.Serial || '-'}, Sales Doc: ${r.SalesDoc || '-'}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation(); toggleRowComponents(${idx}, null, null, document.getElementById('mc-tr-${idx}'))">▲ 더블클릭/클릭하여 접기</span>
                             </div>
                             <table class="comp-subtable">
                                 <thead>
                                     <tr>
                                         <th style="width: 40px; text-align: center;">순서</th>
+                                        <th style="width: 110px; text-align: center;">생산 완료 체크</th>
                                         <th>생산월</th>
                                         <th>모자재 품번</th>
                                         <th>가공품 품번</th>
@@ -1316,32 +1340,116 @@
             applyMcFilters();
         }
 
-        // Export MC Excel
+        // Helper to sort rows numerically by Month
+        function sortByMonth(list) {
+            return list.slice().sort((a, b) => {
+                const numA = parseInt((a.Month || '').replace(/[^0-9]/g, '')) || 0;
+                const numB = parseInt((b.Month || '').replace(/[^0-9]/g, '')) || 0;
+                return numA - numB;
+            });
+        }
+
+        // Export MC Excel with Multi-Sheets (1직, 2직, 3직, 4직, 전체, 가공품_생산완료체크) and AutoFilter
         function exportMcToExcel() {
             if (rawMcData.length === 0) {
                 alert('내보낼 MC 대조립 데이터가 없습니다.');
                 return;
             }
-            const exportRows = rawMcData.map((r, i) => ({
-                "순서": i + 1,
-                "생산월": r.Month,
-                "대조립 직": r.Shift,
-                "라인코드": r.LineCode || r.Ver || '',
-                "기종분류": r.Group,
-                "기종명": r.Model,
-                "수량": 1,
-                "S/O 시리얼": r.Serial || '',
-                "주문번호": r.OrderNum || '',
-                "Sales Doc": r.SalesDoc || '',
-                "고객명": r.Customer || '',
-                "시작일": r.StartDate || '',
-                "SAP 결합 상태": r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합')
-            }));
 
-            const ws = XLSX.utils.json_to_sheet(exportRows);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "남산_MC_대조립");
-            XLSX.writeFile(wb, `남산_MC_대조립_생산계획_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            const createFormattedSheet = (dataList) => {
+                const sortedList = sortByMonth(dataList);
+                const exportRows = sortedList.map((r, i) => {
+                    const itemComps = rawCompData.filter(c => {
+                        if (r.Serial && r.Serial !== '-' && c.Serial === r.Serial) return true;
+                        if (r.SalesDoc && r.SalesDoc !== '-' && c.SalesDoc === r.SalesDoc) return true;
+                        return false;
+                    });
+                    const checkedCount = itemComps.filter(c => {
+                        const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
+                        return localStorage.getItem(key) === 'Y';
+                    }).length;
+
+                    const compStatusText = itemComps.length > 0
+                        ? `${checkedCount}/${itemComps.length} 완료 (${Math.round((checkedCount/itemComps.length)*100)}%)`
+                        : '소요없음';
+
+                    return {
+                        "순서": i + 1,
+                        "생산월": r.Month || '',
+                        "대조립 직": r.Shift || '',
+                        "라인코드": r.LineCode || r.Ver || '',
+                        "기종분류": r.Group || '',
+                        "기종명": r.Model || '',
+                        "수량": 1,
+                        "S/O 시리얼": r.Serial || '',
+                        "주문번호": r.OrderNum || '',
+                        "Sales Doc": r.SalesDoc || '',
+                        "고객명": r.Customer || '',
+                        "시작일": r.StartDate || '',
+                        "SAP 결합 상태": r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합'),
+                        "가공품 생산완료 현황": compStatusText
+                    };
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                // Add AutoFilter
+                if (exportRows.length > 0) {
+                    ws['!autofilter'] = { ref: `A1:N${exportRows.length + 1}` };
+                }
+                return ws;
+            };
+
+            // Sheet 1: 전체 대조립
+            XLSX.utils.book_append_sheet(wb, createFormattedSheet(rawMcData), "전체_MC_대조립");
+
+            // Sheet 2~5: MC 1직 ~ 4직
+            ['1직', '2직', '3직', '4직'].forEach(shift => {
+                const shiftData = rawMcData.filter(r => r.Shift === shift);
+                XLSX.utils.book_append_sheet(wb, createFormattedSheet(shiftData), `MC_${shift}`);
+            });
+
+            // Sheet 6: 가공품_생산완료체크
+            const compCheckRows = [];
+            let compSeq = 1;
+            
+            sortByMonth(rawMcData).forEach(r => {
+                const matchedComps = rawCompData.filter(c => {
+                    if (r.Serial && r.Serial !== '-' && c.Serial === r.Serial) return true;
+                    if (r.SalesDoc && r.SalesDoc !== '-' && c.SalesDoc === r.SalesDoc) return true;
+                    return false;
+                });
+
+                matchedComps.forEach(c => {
+                    const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
+                    const isChecked = localStorage.getItem(key) === 'Y';
+                    const isSq = c.SortString && c.SortString.includes('SQ');
+
+                    compCheckRows.push({
+                        "순서": compSeq++,
+                        "생산 완료 체크": isChecked ? "☑ 완료" : "[  ] 미완료",
+                        "대조립 직": r.Shift || '',
+                        "완제품 기종명": r.Model || '',
+                        "S/O 시리얼": r.Serial || '',
+                        "Sales Doc": r.SalesDoc || '',
+                        "생산월": c.Month || r.Month || '',
+                        "모자재 품번": c.ParentMat || '',
+                        "가공품 품번": c.Component || '',
+                        "가공품명 (Description)": c.CompDesc || '',
+                        "소요량": c.Qty || 1,
+                        "구분": isSq ? "초도품(SQ)" : "양산품"
+                    });
+                });
+            });
+
+            const wsComp = XLSX.utils.json_to_sheet(compCheckRows);
+            if (compCheckRows.length > 0) {
+                wsComp['!autofilter'] = { ref: `A1:L${compCheckRows.length + 1}` };
+            }
+            XLSX.utils.book_append_sheet(wb, wsComp, "가공품_생산완료체크");
+
+            XLSX.writeFile(wb, `남산_MC_대조립_생산계획_직별시트_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
         // Toggle Theme
