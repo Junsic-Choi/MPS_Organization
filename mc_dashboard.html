@@ -1504,9 +1504,9 @@
                                 fill: { fgColor: { rgb: isCheckCol ? "F8FAFC" : "FFFFFF" } },
                                 font: {
                                     name: "맑은 고딕",
-                                    sz: 9.5,
+                                    sz: isCheckCol ? 12 : 9.5,
                                     bold: isCheckCol || C === 7,
-                                    color: { rgb: isCheckCol ? "2563EB" : (C === 7 ? "0284C7" : (isMonthCol ? "64748B" : "334155")) }
+                                    color: { rgb: isCheckCol ? "1E40AF" : (C === 7 ? "0284C7" : (isMonthCol ? "64748B" : "334155")) }
                                 },
                                 alignment: {
                                     horizontal: [0, 1, 2, 3, 4, 5, 8, 13].includes(C) ? "center" : "left",
@@ -1562,7 +1562,7 @@
                             internalRows.push({
                                 __rowType: 'component',
                                 '구분': '',
-                                '생산 체크': '[  ] 미완료',
+                                '생산 체크': '☐',
                                 '호기 순서': '',
                                 '생산월': compMonth,
                                 '대조립 직': '',
@@ -1590,7 +1590,7 @@
                 // Auto-fit Column Widths
                 ws['!cols'] = [
                     { wch: 11 }, // 구분
-                    { wch: 13 }, // 생산 체크
+                    { wch: 10 }, // 생산 체크
                     { wch: 8 },  // 호기 순서
                     { wch: 9 },  // 생산월
                     { wch: 9 },  // 대조립 직
@@ -1636,7 +1636,7 @@
                     const isSq = c.SortString && c.SortString.includes('SQ');
                     compRows.push({
                         "순서": compSeq++,
-                        "생산 체크": "[  ] 미완료",
+                        "생산 체크": "☐",
                         "대조립 직": r.Shift || '',
                         "완제품 기종명": r.Model || '',
                         "S/O 시리얼": r.Serial || '',
@@ -1654,7 +1654,7 @@
             const wsComp = XLSX.utils.json_to_sheet(compRows);
             wsComp['!cols'] = [
                 { wch: 8 },  // 순서
-                { wch: 13 }, // 생산 체크
+                { wch: 10 }, // 생산 체크
                 { wch: 9 },  // 대조립 직
                 { wch: 20 }, // 완제품 기종명
                 { wch: 18 }, // S/O 시리얼
