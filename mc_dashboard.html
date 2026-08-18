@@ -1431,6 +1431,19 @@
             });
         }
 
+        // Helper to format month as 2-digit (e.g. 07월, 08월, 09월, 10월) for perfect chronological Excel AutoFilter sorting
+        function format2DigitMonth(monStr) {
+            if (!monStr) return '';
+            const digits = monStr.toString().replace(/[^0-9]/g, '');
+            let num = 0;
+            if (digits.length >= 6) num = parseInt(digits.substring(4, 6));
+            else if (digits.length >= 1) num = parseInt(digits);
+            if (num > 0 && num <= 12) {
+                return String(num).padStart(2, '0') + '월';
+            }
+            return monStr;
+        }
+
         // Export MC Excel with Styled Hierarchical Machine-Component Checklist, Multi-Sheets, and Auto-Fit Widths
         function exportMcToExcel() {
             if (rawMcData.length === 0) {
@@ -1486,13 +1499,14 @@
                             };
                         } else if (isComp) {
                             const isCheckCol = C === 1; // 생산 체크 열
+                            const isMonthCol = C === 3; // 생산월 열
                             cell.s = {
                                 fill: { fgColor: { rgb: isCheckCol ? "F8FAFC" : "FFFFFF" } },
                                 font: {
                                     name: "맑은 고딕",
                                     sz: 9.5,
                                     bold: isCheckCol || C === 7,
-                                    color: { rgb: isCheckCol ? "2563EB" : (C === 7 ? "0284C7" : "334155") }
+                                    color: { rgb: isCheckCol ? "2563EB" : (C === 7 ? "0284C7" : (isMonthCol ? "64748B" : "334155")) }
                                 },
                                 alignment: {
                                     horizontal: [0, 1, 2, 3, 4, 5, 8, 13].includes(C) ? "center" : "left",
@@ -1516,7 +1530,8 @@
                 let seq = 1;
 
                 sortedList.forEach(r => {
-                    const itemComps = getMatchedComponents(r.Serial, r.SalesDoc);
+                    const itemComps = r._matchedComps || getMatchedComponents(r.Serial, r.SalesDoc);
+                    const formattedMonth = format2DigitMonth(r.Month);
 
                     // 1. Machine Header Row
                     internalRows.push({
@@ -1524,7 +1539,7 @@
                         '구분': '★ [장비]',
                         '생산 체크': '',
                         '호기 순서': seq++,
-                        '생산월': r.Month || '',
+                        '생산월': formattedMonth,
                         '대조립 직': r.Shift || '',
                         '라인코드': r.LineCode || r.Ver || '',
                         '기종분류': r.Group || '',
@@ -1539,16 +1554,17 @@
                         '시작일': r.StartDate || ''
                     });
 
-                    // 2. Sub-rows for Components (Clean & Uncluttered: Redundant fields left blank)
+                    // 2. Sub-rows for Components (Clean & Uncluttered: Month populated for Excel AutoFilter)
                     if (itemComps.length > 0) {
                         itemComps.forEach(c => {
                             const isSq = c.SortString && c.SortString.includes('SQ');
+                            const compMonth = format2DigitMonth(c.Month) || formattedMonth;
                             internalRows.push({
                                 __rowType: 'component',
                                 '구분': '',
                                 '생산 체크': '[  ] 미완료',
                                 '호기 순서': '',
-                                '생산월': '',
+                                '생산월': compMonth,
                                 '대조립 직': '',
                                 '라인코드': '',
                                 '기종분류': '',
@@ -1576,7 +1592,7 @@
                     { wch: 11 }, // 구분
                     { wch: 13 }, // 생산 체크
                     { wch: 8 },  // 호기 순서
-                    { wch: 8 },  // 생산월
+                    { wch: 9 },  // 생산월
                     { wch: 9 },  // 대조립 직
                     { wch: 10 }, // 라인코드
                     { wch: 18 }, // 기종분류
@@ -1615,7 +1631,7 @@
             let compSeq = 1;
             
             sortByMonth(rawMcData).forEach(r => {
-                const matchedComps = getMatchedComponents(r.Serial, r.SalesDoc);
+                const matchedComps = r._matchedComps || getMatchedComponents(r.Serial, r.SalesDoc);
                 matchedComps.forEach(c => {
                     const isSq = c.SortString && c.SortString.includes('SQ');
                     compRows.push({
@@ -1625,7 +1641,7 @@
                         "완제품 기종명": r.Model || '',
                         "S/O 시리얼": r.Serial || '',
                         "Sales Doc": r.SalesDoc || '',
-                        "생산월": c.Month || r.Month || '',
+                        "생산월": format2DigitMonth(c.Month) || format2DigitMonth(r.Month) || '',
                         "모자재 품번": c.ParentMat || '',
                         "가공품 품번": c.Component || '',
                         "가공품명 (Description)": c.CompDesc || '',
@@ -1643,7 +1659,7 @@
                 { wch: 20 }, // 완제품 기종명
                 { wch: 18 }, // S/O 시리얼
                 { wch: 13 }, // Sales Doc
-                { wch: 8 },  // 생산월
+                { wch: 9 },  // 생산월
                 { wch: 22 }, // 모자재 품번
                 { wch: 20 }, // 가공품 품번
                 { wch: 38 }, // 가공품명 (Description)
