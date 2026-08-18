@@ -1431,7 +1431,7 @@
             });
         }
 
-        // Export MC Excel with Multi-Sheets and AutoFilter
+        // Export MC Excel with Hierarchical Machine-Component Checklist, Multi-Sheets, and Auto-Fit Widths
         function exportMcToExcel() {
             if (rawMcData.length === 0) {
                 alert('내보낼 MC 대조립 데이터가 없습니다.');
@@ -1440,45 +1440,101 @@
 
             const wb = XLSX.utils.book_new();
 
-            const createFormattedSheet = (dataList) => {
+            const createHierarchicalSheet = (dataList) => {
                 const sortedList = sortByMonth(dataList);
-                const exportRows = sortedList.map((r, i) => {
+                const exportRows = [];
+                let seq = 1;
+
+                sortedList.forEach(r => {
                     const itemComps = getMatchedComponents(r.Serial, r.SalesDoc);
-                    return {
-                        "순서": i + 1,
-                        "생산월": r.Month || '',
-                        "대조립 직": r.Shift || '',
-                        "라인코드": r.LineCode || r.Ver || '',
-                        "기종분류": r.Group || '',
-                        "기종명": r.Model || '',
-                        "수량": 1,
-                        "S/O 시리얼": r.Serial || '',
-                        "주문번호": r.OrderNum || '',
-                        "Sales Doc": r.SalesDoc || '',
-                        "고객명": r.Customer || '',
-                        "시작일": r.StartDate || '',
-                        "SAP 결합 상태": r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합'),
-                        "가공품 소요건수": itemComps.length > 0 ? `${itemComps.length}건` : '소요없음'
-                    };
+
+                    // 1. Machine Header Row
+                    exportRows.push({
+                        '항목 구분': '★ [장비 본체]',
+                        '생산 체크': '',
+                        '호기 순서': seq++,
+                        '생산월': r.Month || '',
+                        '대조립 직': r.Shift || '',
+                        '라인코드': r.LineCode || r.Ver || '',
+                        '기종분류': r.Group || '',
+                        '기종명 / 가공품 품번': r.Model || '',
+                        '수량': 1,
+                        'S/O 시리얼': r.Serial || '',
+                        'Sales Doc': r.SalesDoc || '',
+                        '주문번호': r.OrderNum || '',
+                        '가공품명 (Description)': r.Model || '',
+                        '품번 구분': r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합'),
+                        '고객명': r.Customer || '',
+                        '시작일': r.StartDate || '',
+                        '가공품 소요 현황': itemComps.length > 0 ? `${itemComps.length}건 부품소요` : '소요 부품 없음'
+                    });
+
+                    // 2. Sub-rows for Components
+                    if (itemComps.length > 0) {
+                        itemComps.forEach(c => {
+                            const isSq = c.SortString && c.SortString.includes('SQ');
+                            exportRows.push({
+                                '항목 구분': '  ↳ [가공품]',
+                                '생산 체크': '[  ] 미완료',
+                                '호기 순서': '',
+                                '생산월': c.Month || r.Month || '',
+                                '대조립 직': r.Shift || '',
+                                '라인코드': r.LineCode || r.Ver || '',
+                                '기종분류': r.Group || '',
+                                '기종명 / 가공품 품번': '  ↳ ' + (c.Component || ''),
+                                '수량': c.Qty || 1,
+                                'S/O 시리얼': r.Serial || '',
+                                'Sales Doc': r.SalesDoc || '',
+                                '주문번호': r.OrderNum || '',
+                                '가공품명 (Description)': c.CompDesc || '',
+                                '품번 구분': isSq ? '초도품(SQ)' : '양산품',
+                                '고객명': r.Customer || '',
+                                '시작일': r.StartDate || '',
+                                '가공품 소요 현황': '모자재: ' + (c.ParentMat || r.Model)
+                            });
+                        });
+                    }
                 });
 
                 const ws = XLSX.utils.json_to_sheet(exportRows);
+
+                // Auto-fit Column Widths
+                ws['!cols'] = [
+                    { wch: 14 }, // 항목 구분
+                    { wch: 13 }, // 생산 체크
+                    { wch: 8 },  // 호기 순서
+                    { wch: 8 },  // 생산월
+                    { wch: 9 },  // 대조립 직
+                    { wch: 10 }, // 라인코드
+                    { wch: 18 }, // 기종분류
+                    { wch: 24 }, // 기종명 / 가공품 품번
+                    { wch: 6 },  // 수량
+                    { wch: 18 }, // S/O 시리얼
+                    { wch: 13 }, // Sales Doc
+                    { wch: 14 }, // 주문번호
+                    { wch: 38 }, // 가공품명 (Description)
+                    { wch: 12 }, // 품번 구분
+                    { wch: 32 }, // 고객명
+                    { wch: 12 }, // 시작일
+                    { wch: 28 }  // 가공품 소요 현황
+                ];
+
                 if (exportRows.length > 0) {
-                    ws['!autofilter'] = { ref: `A1:N${exportRows.length + 1}` };
+                    ws['!autofilter'] = { ref: `A1:Q${exportRows.length + 1}` };
                 }
                 return ws;
             };
 
             // Sheet 1: 전체 대조립
-            XLSX.utils.book_append_sheet(wb, createFormattedSheet(rawMcData), "전체_MC_대조립");
+            XLSX.utils.book_append_sheet(wb, createHierarchicalSheet(rawMcData), "전체_MC_대조립");
 
             // Sheet 2~5: MC 1직 ~ 4직
             ['1직', '2직', '3직', '4직'].forEach(shift => {
                 const shiftData = rawMcData.filter(r => r.Shift === shift);
-                XLSX.utils.book_append_sheet(wb, createFormattedSheet(shiftData), `MC_${shift}`);
+                XLSX.utils.book_append_sheet(wb, createHierarchicalSheet(shiftData), `MC_${shift}`);
             });
 
-            // Sheet 6: 가공품_소요현황
+            // Sheet 6: 가공품_소요현황 (Flat Master List)
             const compRows = [];
             let compSeq = 1;
             
@@ -1488,6 +1544,7 @@
                     const isSq = c.SortString && c.SortString.includes('SQ');
                     compRows.push({
                         "순서": compSeq++,
+                        "생산 체크": "[  ] 미완료",
                         "대조립 직": r.Shift || '',
                         "완제품 기종명": r.Model || '',
                         "S/O 시리얼": r.Serial || '',
@@ -1503,12 +1560,26 @@
             });
 
             const wsComp = XLSX.utils.json_to_sheet(compRows);
+            wsComp['!cols'] = [
+                { wch: 8 },  // 순서
+                { wch: 13 }, // 생산 체크
+                { wch: 9 },  // 대조립 직
+                { wch: 20 }, // 완제품 기종명
+                { wch: 18 }, // S/O 시리얼
+                { wch: 13 }, // Sales Doc
+                { wch: 8 },  // 생산월
+                { wch: 22 }, // 모자재 품번
+                { wch: 20 }, // 가공품 품번
+                { wch: 38 }, // 가공품명 (Description)
+                { wch: 8 },  // 소요량
+                { wch: 12 }  // 구분
+            ];
             if (compRows.length > 0) {
-                wsComp['!autofilter'] = { ref: `A1:K${compRows.length + 1}` };
+                wsComp['!autofilter'] = { ref: `A1:L${compRows.length + 1}` };
             }
             XLSX.utils.book_append_sheet(wb, wsComp, "가공품_소요현황");
 
-            XLSX.writeFile(wb, `남산_MC_대조립_생산계획_직별시트_${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.writeFile(wb, `남산_MC_대조립_생산계획_호기별가공품체크_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
         // Toggle Theme
