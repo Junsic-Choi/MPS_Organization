@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <!-- XLSX library for Excel export -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- XLSX-js-style library for styled Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <style>
         :root {
             --bg-primary: #0f172a;
@@ -1431,7 +1431,7 @@
             });
         }
 
-        // Export MC Excel with Hierarchical Machine-Component Checklist, Multi-Sheets, and Auto-Fit Widths
+        // Export MC Excel with Styled Hierarchical Machine-Component Checklist, Multi-Sheets, and Auto-Fit Widths
         function exportMcToExcel() {
             if (rawMcData.length === 0) {
                 alert('내보낼 MC 대조립 데이터가 없습니다.');
@@ -1440,17 +1440,88 @@
 
             const wb = XLSX.utils.book_new();
 
+            const applySheetStyles = (ws, rowsData) => {
+                if (!ws['!ref']) return;
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+                    const isHeader = R === 0;
+                    const rowMeta = isHeader ? null : rowsData[R - 1];
+                    const isMachine = rowMeta && rowMeta.__rowType === 'machine';
+                    const isComp = rowMeta && rowMeta.__rowType === 'component';
+
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!ws[cellAddress]) {
+                            ws[cellAddress] = { t: 's', v: '' };
+                        }
+                        const cell = ws[cellAddress];
+
+                        if (isHeader) {
+                            cell.s = {
+                                fill: { fgColor: { rgb: "1E3A8A" } }, // Dark Navy
+                                font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } },
+                                alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                                border: {
+                                    top: { style: "thin", color: { rgb: "CBD5E1" } },
+                                    bottom: { style: "medium", color: { rgb: "0F172A" } },
+                                    left: { style: "thin", color: { rgb: "CBD5E1" } },
+                                    right: { style: "thin", color: { rgb: "CBD5E1" } }
+                                }
+                            };
+                        } else if (isMachine) {
+                            cell.s = {
+                                fill: { fgColor: { rgb: "E0F2FE" } }, // Soft Blue Shading
+                                font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "0F172A" } },
+                                alignment: {
+                                    horizontal: [0, 1, 2, 3, 4, 5, 8, 13].includes(C) ? "center" : "left",
+                                    vertical: "center"
+                                },
+                                border: {
+                                    top: { style: "medium", color: { rgb: "93C5FD" } },
+                                    bottom: { style: "thin", color: { rgb: "BFDBFE" } },
+                                    left: { style: "thin", color: { rgb: "E2E8F0" } },
+                                    right: { style: "thin", color: { rgb: "E2E8F0" } }
+                                }
+                            };
+                        } else if (isComp) {
+                            const isCheckCol = C === 1; // 생산 체크 열
+                            cell.s = {
+                                fill: { fgColor: { rgb: isCheckCol ? "F8FAFC" : "FFFFFF" } },
+                                font: {
+                                    name: "맑은 고딕",
+                                    sz: 9.5,
+                                    bold: isCheckCol || C === 7,
+                                    color: { rgb: isCheckCol ? "2563EB" : (C === 7 ? "0284C7" : "334155") }
+                                },
+                                alignment: {
+                                    horizontal: [0, 1, 2, 3, 4, 5, 8, 13].includes(C) ? "center" : "left",
+                                    vertical: "center"
+                                },
+                                border: {
+                                    top: { style: "thin", color: { rgb: "F1F5F9" } },
+                                    bottom: { style: "thin", color: { rgb: "E2E8F0" } },
+                                    left: { style: "thin", color: { rgb: "F1F5F9" } },
+                                    right: { style: "thin", color: { rgb: "F1F5F9" } }
+                                }
+                            };
+                        }
+                    }
+                }
+            };
+
             const createHierarchicalSheet = (dataList) => {
                 const sortedList = sortByMonth(dataList);
-                const exportRows = [];
+                const internalRows = [];
                 let seq = 1;
 
                 sortedList.forEach(r => {
                     const itemComps = getMatchedComponents(r.Serial, r.SalesDoc);
 
                     // 1. Machine Header Row
-                    exportRows.push({
-                        '항목 구분': '★ [장비 본체]',
+                    internalRows.push({
+                        __rowType: 'machine',
+                        '구분': '★ [장비]',
                         '생산 체크': '',
                         '호기 순서': seq++,
                         '생산월': r.Month || '',
@@ -1462,45 +1533,47 @@
                         'S/O 시리얼': r.Serial || '',
                         'Sales Doc': r.SalesDoc || '',
                         '주문번호': r.OrderNum || '',
-                        '가공품명 (Description)': r.Model || '',
+                        '가공품명 (Description)': itemComps.length > 0 ? `(${itemComps.length}건 부품소요)` : '소요 부품 없음',
                         '품번 구분': r.SapMatchMethod === 'exact' ? '확정결합' : (r.SapMatchMethod === 'suffix' ? '추정결합' : '미결합'),
                         '고객명': r.Customer || '',
-                        '시작일': r.StartDate || '',
-                        '가공품 소요 현황': itemComps.length > 0 ? `${itemComps.length}건 부품소요` : '소요 부품 없음'
+                        '시작일': r.StartDate || ''
                     });
 
-                    // 2. Sub-rows for Components
+                    // 2. Sub-rows for Components (Clean & Uncluttered: Redundant fields left blank)
                     if (itemComps.length > 0) {
                         itemComps.forEach(c => {
                             const isSq = c.SortString && c.SortString.includes('SQ');
-                            exportRows.push({
-                                '항목 구분': '  ↳ [가공품]',
+                            internalRows.push({
+                                __rowType: 'component',
+                                '구분': '',
                                 '생산 체크': '[  ] 미완료',
                                 '호기 순서': '',
-                                '생산월': c.Month || r.Month || '',
-                                '대조립 직': r.Shift || '',
-                                '라인코드': r.LineCode || r.Ver || '',
-                                '기종분류': r.Group || '',
+                                '생산월': '',
+                                '대조립 직': '',
+                                '라인코드': '',
+                                '기종분류': '',
                                 '기종명 / 가공품 품번': '  ↳ ' + (c.Component || ''),
                                 '수량': c.Qty || 1,
-                                'S/O 시리얼': r.Serial || '',
-                                'Sales Doc': r.SalesDoc || '',
-                                '주문번호': r.OrderNum || '',
+                                'S/O 시리얼': '',
+                                'Sales Doc': '',
+                                '주문번호': '',
                                 '가공품명 (Description)': c.CompDesc || '',
                                 '품번 구분': isSq ? '초도품(SQ)' : '양산품',
-                                '고객명': r.Customer || '',
-                                '시작일': r.StartDate || '',
-                                '가공품 소요 현황': '모자재: ' + (c.ParentMat || r.Model)
+                                '고객명': '',
+                                '시작일': ''
                             });
                         });
                     }
                 });
 
+                // Remove __rowType from export rows
+                const exportRows = internalRows.map(({ __rowType, ...rest }) => rest);
+
                 const ws = XLSX.utils.json_to_sheet(exportRows);
 
                 // Auto-fit Column Widths
                 ws['!cols'] = [
-                    { wch: 14 }, // 항목 구분
+                    { wch: 11 }, // 구분
                     { wch: 13 }, // 생산 체크
                     { wch: 8 },  // 호기 순서
                     { wch: 8 },  // 생산월
@@ -1515,13 +1588,16 @@
                     { wch: 38 }, // 가공품명 (Description)
                     { wch: 12 }, // 품번 구분
                     { wch: 32 }, // 고객명
-                    { wch: 12 }, // 시작일
-                    { wch: 28 }  // 가공품 소요 현황
+                    { wch: 12 }  // 시작일
                 ];
 
                 if (exportRows.length > 0) {
-                    ws['!autofilter'] = { ref: `A1:Q${exportRows.length + 1}` };
+                    ws['!autofilter'] = { ref: `A1:P${exportRows.length + 1}` };
                 }
+
+                // Apply Cell Shading, Fonts, and Borders
+                applySheetStyles(ws, internalRows);
+
                 return ws;
             };
 
@@ -1577,6 +1653,22 @@
             if (compRows.length > 0) {
                 wsComp['!autofilter'] = { ref: `A1:L${compRows.length + 1}` };
             }
+
+            // Apply Header styling to Sheet 6
+            if (wsComp['!ref']) {
+                const rangeComp = XLSX.utils.decode_range(wsComp['!ref']);
+                for (let C = rangeComp.s.c; C <= rangeComp.e.c; ++C) {
+                    const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+                    if (wsComp[addr]) {
+                        wsComp[addr].s = {
+                            fill: { fgColor: { rgb: "1E3A8A" } },
+                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } },
+                            alignment: { horizontal: "center", vertical: "center" }
+                        };
+                    }
+                }
+            }
+
             XLSX.utils.book_append_sheet(wb, wsComp, "가공품_소요현황");
 
             XLSX.writeFile(wb, `남산_MC_대조립_생산계획_호기별가공품체크_${new Date().toISOString().slice(0,10)}.xlsx`);
