@@ -973,27 +973,36 @@
             return data;
         }
 
-        // Parse Component MHTML Table (Dynamic Keyword Header Lookup)
+        // Parse Component MHTML Table (Dynamic Keyword Header Lookup & S/O Order Mapping)
         function parseCompMhtml(mhtml) {
             if (!mhtml) return [];
             const decoded = mhtml.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
             
             const parser = new DOMParser();
             const doc = parser.parseFromString(decoded, 'text/html');
-            const table = doc.querySelector('table');
-            if (!table) return [];
+            
+            const allTables = doc.querySelectorAll('table');
+            let targetTable = null;
+            let maxRows = 0;
+            allTables.forEach(t => {
+                if (t.rows.length > maxRows) {
+                    maxRows = t.rows.length;
+                    targetTable = t;
+                }
+            });
+            if (!targetTable) return [];
 
-            const rows = Array.from(table.querySelectorAll('tr'));
+            const rows = Array.from(targetTable.querySelectorAll('tr'));
             if (rows.length < 2) return [];
 
             // Find header row
             let headerRow = rows[0];
             let headerCells = Array.from(headerRow.querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
             
-            if (!headerCells.some(c => c.includes('COMPONENT') || c.includes('MATERIAL') || c.includes('PROD'))) {
-                for (let i = 1; i < Math.min(5, rows.length); i++) {
+            if (!headerCells.some(c => c.includes('COMPONENT') || c.includes('COMP.DESC.') || c.includes('S/O ORDER'))) {
+                for (let i = 1; i < Math.min(10, rows.length); i++) {
                     const cells = Array.from(rows[i].querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
-                    if (cells.some(c => c.includes('COMPONENT') || c.includes('MATERIAL') || c.includes('PROD'))) {
+                    if (cells.some(c => c.includes('COMPONENT') || c.includes('COMP.DESC.') || c.includes('S/O ORDER'))) {
                         headerRow = rows[i];
                         headerCells = cells;
                         break;
@@ -1008,10 +1017,11 @@
             };
 
             const mapping = {
-                mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
-                serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼', 'SERIAL']),
-                salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
-                component: findIdx(['COMPONENT MATERIAL', 'COMPONENT', '자재', '가공품']),
+                mon: findIdx(['PROD.MONTH', 'PROD.MON', '생산월', 'MONTH']),
+                salesDoc: findIdx(['S/O ORDER', 'SALES DOC', '판매문서', 'SALESDOC']),
+                serial: findIdx(['SERIAL NO', 'SERIALNO', '시리얼', 'SERIAL']),
+                order: findIdx(['ORDER', '오더']),
+                component: findIdx(['COMPONENT', '하위자재', '부품']),
                 compDesc: findIdx(['COMP.DESC.', 'COMP.DESC', '자재명', '부품명']),
                 qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
                 parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
