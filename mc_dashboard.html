@@ -1485,13 +1485,9 @@
             sortByMonth(rawMcData).forEach(r => {
                 const matchedComps = getMatchedComponents(r.Serial, r.SalesDoc);
                 matchedComps.forEach(c => {
-                    const key = `mc_comp_check_${c.Serial}_${c.SalesDoc}_${c.Component}`;
-                    const isChecked = localStorage.getItem(key) === 'Y';
                     const isSq = c.SortString && c.SortString.includes('SQ');
-
-                    compCheckRows.push({
+                    compRows.push({
                         "순서": compSeq++,
-                        "생산 완료 체크": isChecked ? "☑ 완료" : "[  ] 미완료",
                         "대조립 직": r.Shift || '',
                         "완제품 기종명": r.Model || '',
                         "S/O 시리얼": r.Serial || '',
@@ -1506,11 +1502,11 @@
                 });
             });
 
-            const wsComp = XLSX.utils.json_to_sheet(compCheckRows);
-            if (compCheckRows.length > 0) {
-                wsComp['!autofilter'] = { ref: `A1:L${compCheckRows.length + 1}` };
+            const wsComp = XLSX.utils.json_to_sheet(compRows);
+            if (compRows.length > 0) {
+                wsComp['!autofilter'] = { ref: `A1:K${compRows.length + 1}` };
             }
-            XLSX.utils.book_append_sheet(wb, wsComp, "가공품_생산완료체크");
+            XLSX.utils.book_append_sheet(wb, wsComp, "가공품_소요현황");
 
             XLSX.writeFile(wb, `남산_MC_대조립_생산계획_직별시트_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
