@@ -25,6 +25,140 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
+// MC 대시보드 및 디지털 트윈 라우트
+app.get('/mc', (req, res) => {
+    res.sendFile(path.join(__dirname, 'mc_dashboard.html'));
+});
+
+app.get('/twin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'mc_digital_twin.html'));
+});
+
+app.get('/digital-twin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'mc_digital_twin.html'));
+});
+
+// 디지털 트윈 공장 지번 및 공정 데이터 API
+app.get('/api/digital-twin-data', (req, res) => {
+    try {
+        const XLSX = require('xlsx');
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const dir = path.join(uploadDir, 'digital_twin');
+        if (!fs.existsSync(dir)) {
+            return res.json({ success: true, bayItems: [], masterModels: [] });
+        }
+
+        // 1. Master Models
+        const masterModels = [];
+        const pOrder = path.join(dir, '(반출승인)MC 기종별 조립 순서.xlsx');
+        if (fs.existsSync(pOrder)) {
+            const orderWb = XLSX.readFile(pOrder);
+            const s1 = orderWb.Sheets['MC 생산기종'];
+            if (s1) {
+                const rows = XLSX.utils.sheet_to_json(s1, { header: 1 });
+                for (let i = 3; i < rows.length; i++) {
+                    const r = rows[i];
+                    if (r && (r[1] || r[0])) {
+                        masterModels.push({
+                            category: r[0] || '',
+                            model: r[1] || '',
+                            mc1: r[2] || '',
+                            mc2: r[3] || '',
+                            mc3: r[4] || '',
+                            mc4: r[5] || '',
+                            core: r[6] || '',
+                            note: r[7] || ''
+                        });
+                    }
+                }
+            }
+        }
+
+        // 2. Shift Reports
+        const shiftFiles = [
+            { shift: 'MC1직', file: '(반출승인)MC1직 일일 진도현황 V0.2.xlsx' },
+            { shift: 'MC2직', file: '(반출승인)MC2직 일일 진도현황 (006).xlsx' },
+            { shift: 'MC3직', file: '(반출승인)MC3직 일일 진도현황.xlsx' },
+            { shift: 'MC4직', file: '(반출승인)MC4직 일일 진도현황.xlsx' }
+        ];
+
+        const bayItems = [];
+        shiftFiles.forEach(({ shift, file }) => {
+            const p = path.join(dir, file);
+            if (!fs.existsSync(p)) return;
+            const wb = XLSX.readFile(p);
+            const s = wb.Sheets['일일보고'];
+            if (!s) return;
+            const rows = XLSX.utils.sheet_to_json(s, { header: 1 });
+
+            let unitHeaderRowIdx = -1;
+            for (let i = 0; i < Math.min(15, rows.length); i++) {
+                const r = rows[i] || [];
+                if (r.some(c => c && c.toString().includes('BED') || c.toString().includes('CORE') || c.toString().includes('TABLE'))) {
+                    unitHeaderRowIdx = i;
+                    break;
+                }
+            }
+
+            const unitHeaders = unitHeaderRowIdx !== -1 ? rows[unitHeaderRowIdx] : [];
+            const startRow = unitHeaderRowIdx !== -1 ? unitHeaderRowIdx + 1 : 10;
+
+            for (let i = startRow; i < rows.length - 1; i += 2) {
+                const r1 = rows[i] || [];
+                const r2 = rows[i+1] || [];
+                if (r1.length === 0 && r2.length === 0) continue;
+
+                const month = (r1[1] || '').toString().trim();
+                const model = (r1[2] || '').toString().trim();
+                const planStart = r1[3] || '';
+                const reqDate = r1[4] || '';
+                const worker = (r1[5] || '').toString().trim();
+                const mcStart = r1[6] || '';
+                const spec = (r1[7] || '').toString().trim();
+
+                const serial = (r2[2] || '').toString().trim();
+                const bay = (r2[3] || '').toString().trim();
+                const customer = (r2[4] || '').toString().trim();
+                const currentProcess = (r2[5] || '').toString().trim();
+                const issue = (r2[7] || '').toString().trim();
+
+                const units = [];
+                for (let c = 8; c < Math.min(unitHeaders.length, 25); c++) {
+                    const uName = (unitHeaders[c] || '').toString().replace(/[\r\n]+/g, ' ').trim();
+                    const uVal = (r2[c] || r1[c] || '').toString().trim();
+                    if (uName) {
+                        units.push({ name: uName, status: uVal || '-' });
+                    }
+                }
+
+                if (bay || serial || model) {
+                    bayItems.push({
+                        shift,
+                        month,
+                        model,
+                        planStart,
+                        reqDate,
+                        worker,
+                        mcStart,
+                        spec,
+                        serial,
+                        bay: bay || '대기',
+                        customer,
+                        currentProcess: currentProcess || '대기',
+                        issue,
+                        units
+                    });
+                }
+            }
+        });
+
+        res.json({ success: true, masterModels, bayItems });
+    } catch (err) {
+        console.error('[api] Digital twin data load failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 가용 파일 목록 조회 API
 app.get('/api/list-files', (req, res) => {
     try {

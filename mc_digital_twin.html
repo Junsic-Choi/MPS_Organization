@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>남산 MC 공장 샵플로어 디지털 트윈 (Namsan MC Digital Twin)</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- XLSX & Style Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-card: #0f172a;
+            --bg-card-hover: #1e293b;
+            --border-color: #334155;
+            --border-glow: rgba(6, 182, 212, 0.4);
+            
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --mc-theme: #06b6d4;      /* Cyber Cyan */
+            --mc-glow: rgba(6, 182, 212, 0.25);
+            --accent-emerald: #10b981;/* Operational Green */
+            --accent-amber: #f59e0b;  /* Warning Yellow */
+            --accent-rose: #f43f5e;   /* Alert Red */
+            --accent-indigo: #6366f1; /* Special Spec Blue */
+            --accent-purple: #a855f7; /* High-end Model */
+            
+            --shift1-color: #38bdf8;
+            --shift2-color: #34d399;
+            --shift3-color: #c084fc;
+            --shift4-color: #fb923c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top HUD Navigation */
+        .hud-header {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.85rem 1.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .hud-title-box {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .hud-logo-icon {
+            font-size: 1.8rem;
+            animation: pulseGlow 3s infinite alternate;
+        }
+
+        @keyframes pulseGlow {
+            0% { filter: drop-shadow(0 0 4px var(--mc-theme)); transform: scale(1); }
+            100% { filter: drop-shadow(0 0 14px var(--mc-theme)); transform: scale(1.05); }
+        }
+
+        .hud-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #38bdf8, #06b6d4, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hud-subtext {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .hud-stats-container {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+
+        .hud-stat-pill {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            padding: 0.35rem 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .hud-stat-num {
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--mc-theme);
+        }
+
+        .hud-nav-btn {
+            background: rgba(6, 182, 212, 0.15);
+            border: 1px solid var(--mc-theme);
+            color: var(--mc-theme);
+            padding: 0.45rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.825rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .hud-nav-btn:hover {
+            background: var(--mc-theme);
+            color: #041019;
+            box-shadow: 0 0 16px var(--mc-glow);
+            transform: translateY(-1px);
+        }
+
+        /* Controls & Filter Bar */
+        .control-bar {
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .shift-tabs {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .shift-tab {
+            padding: 0.45rem 0.95rem;
+            border-radius: 6px;
+            font-size: 0.825rem;
+            font-weight: 700;
+            border: 1px solid var(--border-color);
+            background: #1e293b;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .shift-tab:hover {
+            color: var(--text-main);
+            border-color: var(--mc-theme);
+        }
+
+        .shift-tab.active {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(16, 185, 129, 0.2));
+            border-color: var(--mc-theme);
+            color: var(--mc-theme);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+        }
+
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .select-dark {
+            background: #1e293b;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 0.45rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .select-dark:focus {
+            border-color: var(--mc-theme);
+        }
+
+        .search-input {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.45rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+            width: 220px;
+        }
+
+        .search-input:focus {
+            border-color: var(--mc-theme);
+            box-shadow: 0 0 8px var(--mc-glow);
+        }
+
+        /* Main Shopfloor Canvas */
+        .shopfloor-container {
+            padding: 1.5rem 1.75rem 6rem;
+            flex: 1;
+        }
+
+        .shopfloor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 1.25rem;
+        }
+
+        /* Station Bay Card */
+        .bay-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.15rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+        }
+
+        .bay-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--border-color);
+            transition: background 0.3s ease;
+        }
+
+        .bay-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--mc-theme);
+            box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.25);
+            background: var(--bg-card-hover);
+        }
+
+        .bay-card.shift-mc1:hover::before, .bay-card.shift-mc1.active::before { background: var(--shift1-color); }
+        .bay-card.shift-mc2:hover::before, .bay-card.shift-mc2.active::before { background: var(--shift2-color); }
+        .bay-card.shift-mc3:hover::before, .bay-card.shift-mc3.active::before { background: var(--shift3-color); }
+        .bay-card.shift-mc4:hover::before, .bay-card.shift-mc4.active::before { background: var(--shift4-color); }
+
+        .bay-card.status-alert {
+            border-color: rgba(244, 63, 94, 0.5);
+        }
+        .bay-card.status-alert::before {
+            background: var(--accent-rose);
+            box-shadow: 0 0 8px var(--accent-rose);
+        }
+
+        .bay-card.status-warning {
+            border-color: rgba(245, 158, 11, 0.5);
+        }
+        .bay-card.status-warning::before {
+            background: var(--accent-amber);
+        }
+
+        /* Card Header */
+        .bay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bay-station-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.95rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--mc-theme);
+            background: rgba(6, 182, 212, 0.1);
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            border: 1px solid rgba(6, 182, 212, 0.25);
+        }
+
+        .beacon-led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-emerald);
+            box-shadow: 0 0 8px var(--accent-emerald);
+            animation: blink 2s infinite ease-in-out;
+        }
+
+        .beacon-led.alert {
+            background: var(--accent-rose);
+            box-shadow: 0 0 8px var(--accent-rose);
+            animation: blink 0.8s infinite ease-in-out;
+        }
+
+        .beacon-led.warning {
+            background: var(--accent-amber);
+            box-shadow: 0 0 8px var(--accent-amber);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .bay-worker-tag {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: #1e293b;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        /* Machine Info Box */
+        .machine-main-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .machine-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .machine-model {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.3px;
+        }
+
+        .machine-shift-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+        }
+
+        .badge-shift-mc1 { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-shift-mc2 { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        .badge-shift-mc3 { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
+        .badge-shift-mc4 { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.3); }
+
+        .machine-meta-row {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .machine-customer {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Process Progress Bar & Milestone */
+        .process-box {
+            background: #090d16;
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            border-radius: 8px;
+            padding: 0.65rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .process-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.775rem;
+        }
+
+        .process-name {
+            font-weight: 700;
+            color: var(--mc-theme);
+        }
+
+        .process-percent {
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-emerald);
+        }
+
+        .progress-track {
+            height: 6px;
+            background: #1e293b;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #06b6d4, #10b981);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        /* 8-Stage Step Dots */
+        .milestone-stepper {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.2rem;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .milestone-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .milestone-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #334155;
+        }
+
+        .milestone-step.done .milestone-dot {
+            background: var(--accent-emerald);
+            box-shadow: 0 0 4px var(--accent-emerald);
+        }
+
+        .milestone-step.active .milestone-dot {
+            background: var(--mc-theme);
+            box-shadow: 0 0 6px var(--mc-theme);
+            transform: scale(1.3);
+        }
+
+        /* Units & Spec Pills */
+        .bay-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            border-top: 1px dashed rgba(51, 65, 85, 0.6);
+            padding-top: 0.65rem;
+            font-size: 0.75rem;
+        }
+
+        .unit-status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-secondary);
+        }
+
+        .unit-pill-badge {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.725rem;
+        }
+
+        .spec-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+
+        .spec-tag {
+            font-size: 0.675rem;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+
+        /* Cockpit Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(4, 8, 16, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .cockpit-modal {
+            background: #0f172a;
+            border: 1px solid var(--mc-theme);
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.3);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 900px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalPop {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .cockpit-header {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.25rem 1.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cockpit-body {
+            padding: 1.75rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .cockpit-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .cockpit-section {
+            background: #090d16;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.15rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--mc-theme);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .unit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .unit-cell {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            font-size: 0.75rem;
+        }
+
+        .unit-name {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .unit-status {
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .status-ok { color: var(--accent-emerald); }
+        .status-x { color: var(--accent-rose); }
+        .status-wait { color: var(--accent-amber); }
+
+        .cockpit-footer {
+            background: #090d16;
+            border-top: 1px solid var(--border-color);
+            padding: 1rem 1.75rem;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .btn-action {
+            padding: 0.55rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-advance {
+            background: linear-gradient(135deg, #06b6d4, #10b981);
+            color: #041019;
+        }
+
+        .btn-advance:hover {
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-close {
+            background: #1e293b;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-close:hover {
+            background: #334155;
+        }
+
+        /* Floating Timeline Simulator Footer */
+        .timeline-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-color);
+            padding: 0.85rem 1.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            z-index: 90;
+        }
+
+        .timeline-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-play {
+            background: var(--mc-theme);
+            border: none;
+            color: #041019;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 0 12px var(--mc-glow);
+            transition: transform 0.2s ease;
+        }
+
+        .btn-play:hover {
+            transform: scale(1.1);
+        }
+
+        .timeline-slider-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .timeline-slider {
+            flex: 1;
+            accent-color: var(--mc-theme);
+            cursor: pointer;
+        }
+
+        .timeline-date-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 0.95rem;
+            color: var(--mc-theme);
+            min-width: 140px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top HUD Navigation -->
+    <header class="hud-header">
+        <div class="hud-title-box">
+            <div class="hud-logo-icon">🕹️</div>
+            <div>
+                <div class="hud-title">남산 MC 공장 샵플로어 디지털 트윈</div>
+                <div class="hud-subtext">NAMSAN MC SHOPFLOOR DIGITAL TWIN v1.0</div>
+            </div>
+        </div>
+
+        <div class="hud-stats-container">
+            <div class="hud-stat-pill">
+                <span>📍 가동 지번:</span>
+                <span class="hud-stat-num" id="stat-active-bays">0 / 0</span>
+            </div>
+            <div class="hud-stat-pill">
+                <span>⚙️ 조립 진행:</span>
+                <span class="hud-stat-num" id="stat-active-machines" style="color: var(--accent-emerald);">0대</span>
+            </div>
+            <div class="hud-stat-pill">
+                <span>⚠️ 결품 주의:</span>
+                <span class="hud-stat-num" id="stat-warning-bays" style="color: var(--accent-amber);">0건</span>
+            </div>
+            <div class="hud-stat-pill">
+                <span>🚨 공정 지연:</span>
+                <span class="hud-stat-num" id="stat-delayed-bays" style="color: var(--accent-rose);">0건</span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.6rem;">
+            <a href="mc_dashboard.html" class="hud-nav-btn">
+                <span>📊 MC 대시보드</span>
+            </a>
+            <a href="dashboard.html" class="hud-nav-btn" style="background: rgba(255,255,255,0.05); border-color: var(--border-color); color: var(--text-secondary);">
+                <span>📑 종합 대시보드</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Controls & Filter Bar -->
+    <nav class="control-bar">
+        <div class="shift-tabs" id="shift-tabs">
+            <button class="shift-tab active" onclick="switchShift('ALL')">🏭 전체 공장 뷰</button>
+            <button class="shift-tab" onclick="switchShift('MC1직')">🔵 MC 1직</button>
+            <button class="shift-tab" onclick="switchShift('MC2직')">🟢 MC 2직</button>
+            <button class="shift-tab" onclick="switchShift('MC3직')">🟣 MC 3직</button>
+            <button class="shift-tab" onclick="switchShift('MC4직')">🟠 MC 4직</button>
+        </div>
+
+        <div class="filter-controls">
+            <select class="select-dark" id="filter-month" onchange="renderShopfloor()">
+                <option value="ALL">전체 생산월</option>
+            </select>
+
+            <select class="select-dark" id="filter-status" onchange="renderShopfloor()">
+                <option value="ALL">전체 상태</option>
+                <option value="NORMAL">🟢 정상 진행</option>
+                <option value="WARNING">🟡 결품 주의</option>
+                <option value="ALERT">🚨 공정 지연</option>
+            </select>
+
+            <input type="text" class="search-input" id="search-keyword" placeholder="지번, 기종, 시리얼, 작업자 검색..." oninput="renderShopfloor()">
+        </div>
+    </nav>
+
+    <!-- Main Shopfloor Canvas -->
+    <main class="shopfloor-container">
+        <div class="shopfloor-grid" id="shopfloor-grid">
+            <!-- Dynamic Bay Cards Injected Here -->
+        </div>
+    </main>
+
+    <!-- Cockpit Detail Modal -->
+    <div class="modal-overlay" id="cockpit-modal" onclick="closeCockpit(event)">
+        <div class="cockpit-modal" onclick="event.stopPropagation()">
+            <div class="cockpit-header">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.5rem;" id="m-icon">⚙️</span>
+                    <div>
+                        <div style="font-size: 1.2rem; font-weight: 800; color: var(--mc-theme);" id="m-title">NHP4000 [지번 E2]</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;" id="m-serial-info">S/O: MH0028-000650 | Sales Doc: 700004149821</div>
+                    </div>
+                </div>
+                <button class="btn-close" style="padding: 0.4rem 0.8rem;" onclick="closeCockpit()">✕ 닫기</button>
+            </div>
+
+            <div class="cockpit-body" id="cockpit-body">
+                <!-- Dynamic Cockpit Details Injected Here -->
+            </div>
+
+            <div class="cockpit-footer">
+                <button class="btn-action btn-close" onclick="closeCockpit()">확인 완료</button>
+                <button class="btn-action btn-advance" onclick="advanceMachineProcess()">⏩ 다음 공정으로 전진</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Simulation Bar -->
+    <footer class="timeline-bar">
+        <div class="timeline-controls">
+            <button class="btn-play" id="btn-play" onclick="togglePlaySimulation()">▶</button>
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">공정 타임라인 시뮬레이터</span>
+        </div>
+
+        <div class="timeline-slider-box">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">2026.07.01</span>
+            <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="183" value="48" oninput="updateTimelineDate(this.value)">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">2026.12.31</span>
+        </div>
+
+        <div class="timeline-date-display" id="timeline-date-display">
+            📅 2026.08.18 (D-Day)
+        </div>
+    </footer>
+
+    <script>
+        // Digital Twin Global State
+        let rawBayData = [];
+        let masterModels = [];
+        let currentShift = 'ALL';
+        let activeModalItem = null;
+        let isSimulating = false;
+        let simTimer = null;
+
+        // Process Milestone Definitions
+        const PROCESS_STAGES = [
+            { code: 'BASE', name: 'Base 조립 & 레벨링', pct: 15 },
+            { code: 'GCLM', name: '컬럼 탑재 & 배관', pct: 30 },
+            { code: 'GEB',  name: '전장 박스 & 결선', pct: 45 },
+            { code: 'GAJ',  name: '정밀도 & 레이저', pct: 60 },
+            { code: 'GUARD',name: '스플래시 가드',   pct: 75 },
+            { code: 'GIN',  name: '기능 검사 & 쿨런트', pct: 85 },
+            { code: 'GSR',  name: '연속 가동 시험', pct: 95 },
+            { code: 'GOT',  name: '출하 검사 & 완료', pct: 100 }
+        ];
+
+        // Init on DOM Load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await fetchDigitalTwinData();
+            populateMonths();
+            renderShopfloor();
+        });
+
+        // Fetch Data from Server or Local Fallback
+        async function fetchDigitalTwinData() {
+            try {
+                const res = await fetch('/api/digital-twin-data');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && json.bayItems && json.bayItems.length > 0) {
+                        rawBayData = json.bayItems;
+                        masterModels = json.masterModels || [];
+                        console.log('Digital twin data loaded from server:', rawBayData.length);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Backend API not available, generating demo simulation items:', e);
+            }
+
+            // Fallback Generation for Standalone Mode
+            generateStandaloneFallbackData();
+        }
+
+        function generateStandaloneFallbackData() {
+            const sampleBays = [
+                { shift: 'MC1직', bay: 'E1', model: 'NHP4000', serial: 'MH0028-000647', worker: '최태규', customer: 'DN Solutions America', month: '07월', currentProcess: 'GAJ', spec: '15K HSK63A, 60T, TSC 30BAR, Auto Door', issue: '' },
+                { shift: 'MC1직', bay: 'E2', model: 'NHP4000', serial: 'MH0028-000648', worker: '김병훈', customer: '대승정밀', month: '07월', currentProcess: 'GEB', spec: '15K BT40, 60T, SFC TANK, 제3원점', issue: '쿨러 입고 대기(8/20)' },
+                { shift: 'MC1직', bay: 'F3', model: 'NHP55002', serial: 'MH0029-001106', worker: '박상현', customer: 'DOM', month: '07월', currentProcess: 'GOT', spec: '10K, 0.001도, 60T 베드부착형', issue: '' },
+                { shift: 'MC2직', bay: 'C12', model: 'DVF5002', serial: 'MD0015-000445', worker: '박학원', customer: 'DNSA', month: '08월', currentProcess: 'GAJ', spec: '20K, 120T CAT, 사이드오토, 칠러, 12AWC', issue: '' },
+                { shift: 'MC2직', bay: 'D15', model: 'DVF5002', serial: 'MD0015-000472', worker: '이진우', customer: 'DNSA', month: '08월', currentProcess: 'GCLM', spec: '20K, 120T HSK, 사이드오토, 미스트콜렛', issue: 'ATC 결품 확인 중' },
+                { shift: 'MC2직', bay: 'C8', model: 'NHC4000', serial: 'MH0053-000046', worker: '정동훈', customer: '(주)엠제이티4공장', month: '07월', currentProcess: 'GSR', spec: '8K BT40 TSC', issue: '' },
+                { shift: 'MC3직', bay: 'B4', model: 'NHP6300', serial: 'MH0030-000210', worker: '이원습', customer: 'DNSA', month: '08월', currentProcess: 'GEB', spec: '10K BT50, 60T, Big Plus', issue: '' },
+                { shift: 'MC3직', bay: 'B5', model: 'NHM6300', serial: 'MH0032-000155', worker: '강동원', customer: '현대위아 협력사', month: '08월', currentProcess: 'BASE', spec: '6K BT50 120T High Torque', issue: '' },
+                { shift: 'MC4직', bay: 'A1', model: 'NHP8000', serial: 'MH0035-000088', worker: '안영석', customer: '두산에너빌리티', month: '09월', currentProcess: 'GAJ', spec: '6K 50T, 1800x1400 팔레트, 대형기종', issue: '' },
+                { shift: 'MC4직', bay: 'A2', model: 'HM1000', serial: 'MH0040-000032', worker: '김성수', customer: '한국항공우주(KAI)', month: '09월', currentProcess: 'GCLM', spec: '6K Gear Spindle, 120T, 5축 틸팅헤드', issue: '컬럼 안착 진행 중' }
+            ];
+
+            rawBayData = sampleBays.map(b => {
+                const units = [
+                    { name: 'BED CORE', status: 'OK' },
+                    { name: 'TABLE', status: 'OK' },
+                    { name: 'PDP', status: 'OK' },
+                    { name: 'HEAD', status: 'OK' },
+                    { name: 'COLUMN', status: b.issue.includes('컬럼') ? 'X' : 'OK' },
+                    { name: 'ATC MAG', status: b.issue.includes('ATC') ? 'X' : 'OK' },
+                    { name: 'HYD', status: 'OK' },
+                    { name: 'COOLER', status: b.issue.includes('쿨러') ? 'X' : 'OK' },
+                    { name: 'APC', status: 'OK' },
+                    { name: 'PALLET', status: 'OK' },
+                    { name: 'GUARD', status: 'OK' }
+                ];
+                return { ...b, units };
+            });
+        }
+
+        // Populate Month Dropdown
+        function populateMonths() {
+            const months = [...new Set(rawBayData.map(r => r.month))].filter(Boolean).sort();
+            const select = document.getElementById('filter-month');
+            select.innerHTML = '<option value="ALL">전체 생산월</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+
+        // Switch Shift Tab
+        function switchShift(shift) {
+            currentShift = shift;
+            document.querySelectorAll('.shift-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderShopfloor();
+        }
+
+        // Render Shopfloor Grid
+        function renderShopfloor() {
+            const grid = document.getElementById('shopfloor-grid');
+            grid.innerHTML = '';
+
+            const monthVal = document.getElementById('filter-month').value;
+            const statusVal = document.getElementById('filter-status').value;
+            const searchVal = document.getElementById('search-keyword').value.trim().toLowerCase();
+
+            // Filter items
+            const filtered = rawBayData.filter(item => {
+                if (currentShift !== 'ALL' && item.shift !== currentShift) return false;
+                if (monthVal !== 'ALL' && item.month !== monthVal) return false;
+
+                const hasIssue = item.issue && item.issue.length > 0;
+                const hasMissingUnit = item.units && item.units.some(u => u.status === 'X');
+
+                if (statusVal === 'ALERT' && !hasIssue) return false;
+                if (statusVal === 'WARNING' && !hasMissingUnit) return false;
+                if (statusVal === 'NORMAL' && (hasIssue || hasMissingUnit)) return false;
+
+                if (searchVal) {
+                    const matchText = `${item.bay} ${item.model} ${item.serial} ${item.worker} ${item.customer} ${item.spec}`.toLowerCase();
+                    if (!matchText.includes(searchVal)) return false;
+                }
+
+                return true;
+            });
+
+            // Update Top HUD Stats
+            document.getElementById('stat-active-bays').textContent = `${filtered.length} / ${rawBayData.length} Bays`;
+            document.getElementById('stat-active-machines').textContent = `${filtered.length}대`;
+            
+            const warningCount = rawBayData.filter(r => r.units && r.units.some(u => u.status === 'X')).length;
+            const alertCount = rawBayData.filter(r => r.issue && r.issue.length > 0).length;
+            document.getElementById('stat-warning-bays').textContent = `${warningCount}건`;
+            document.getElementById('stat-delayed-bays').textContent = `${alertCount}건`;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; color: var(--text-secondary);">
+                        🔍 조건에 일치하는 지번(Bay) 데이터가 없습니다.
+                    </div>`;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            filtered.forEach((item, idx) => {
+                const card = document.createElement('div');
+                
+                let shiftClass = 'shift-mc1';
+                let shiftBadgeClass = 'badge-shift-mc1';
+                if (item.shift === 'MC2직') { shiftClass = 'shift-mc2'; shiftBadgeClass = 'badge-shift-mc2'; }
+                else if (item.shift === 'MC3직') { shiftClass = 'shift-mc3'; shiftBadgeClass = 'badge-shift-mc3'; }
+                else if (item.shift === 'MC4직') { shiftClass = 'shift-mc4'; shiftBadgeClass = 'badge-shift-mc4'; }
+
+                const hasAlert = item.issue && item.issue.length > 0;
+                const hasWarning = item.units && item.units.some(u => u.status === 'X');
+
+                let statusClass = '';
+                let beaconClass = '';
+                if (hasAlert) { statusClass = 'status-alert'; beaconClass = 'alert'; }
+                else if (hasWarning) { statusClass = 'status-warning'; beaconClass = 'warning'; }
+
+                // Calculate Process Stage & Progress
+                const stageIdx = PROCESS_STAGES.findIndex(p => p.code === (item.currentProcess || '').toUpperCase()) || 0;
+                const currentStage = PROCESS_STAGES[stageIdx >= 0 ? stageIdx : 3];
+                const progressPct = currentStage.pct;
+
+                // Units summary
+                const totalUnits = (item.units || []).length;
+                const okUnits = (item.units || []).filter(u => u.status === 'OK').length;
+
+                // Spec Tags
+                const specList = (item.spec || '').split(',').map(s => s.trim()).filter(Boolean);
+                const specHtml = specList.slice(0, 3).map(s => `<span class="spec-tag">${s}</span>`).join('');
+
+                // Milestone Steps HTML
+                const milestoneHtml = PROCESS_STAGES.map((st, sIdx) => {
+                    let stepState = '';
+                    if (sIdx < stageIdx) stepState = 'done';
+                    else if (sIdx === stageIdx) stepState = 'active';
+                    return `
+                        <div class="milestone-step ${stepState}" title="${st.name}">
+                            <div class="milestone-dot"></div>
+                            <span>${st.code}</span>
+                        </div>`;
+                }).join('');
+
+                card.className = `bay-card ${shiftClass} ${statusClass}`;
+                card.innerHTML = `
+                    <div class="bay-header">
+                        <div class="bay-station-badge">
+                            <span class="beacon-led ${beaconClass}"></span>
+                            <span>지번 ${item.bay || '대기'}</span>
+                        </div>
+                        <div class="bay-worker-tag">
+                            <span>👷 ${item.worker || '작업자 미지정'}</span>
+                        </div>
+                    </div>
+
+                    <div class="machine-main-info">
+                        <div class="machine-title-row">
+                            <span class="machine-model">${item.model || '-'}</span>
+                            <span class="machine-shift-badge ${shiftBadgeClass}">${item.shift}</span>
+                        </div>
+                        <div class="machine-meta-row">
+                            <span>호기: ${item.serial || '-'}</span>
+                            <span>${item.month || '-'}</span>
+                        </div>
+                        <div class="machine-customer">🏢 ${item.customer || '고객사 정보 없음'}</div>
+                    </div>
+
+                    <div class="process-box">
+                        <div class="process-title-row">
+                            <span class="process-name">⚙️ ${currentStage.name}</span>
+                            <span class="process-percent">${progressPct}%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width: ${progressPct}%;"></div>
+                        </div>
+                        <div class="milestone-stepper">
+                            ${milestoneHtml}
+                        </div>
+                    </div>
+
+                    <div class="bay-footer">
+                        <div class="unit-status-row">
+                            <span>📦 핵심 Unit 입고:</span>
+                            <span class="unit-pill-badge" style="color: ${okUnits === totalUnits ? 'var(--accent-emerald)' : 'var(--accent-amber)'};">
+                                ${okUnits}/${totalUnits} 완료
+                            </span>
+                        </div>
+                        ${specHtml ? `<div class="spec-tags">${specHtml}</div>` : ''}
+                        ${item.issue ? `<div style="font-size: 0.725rem; color: var(--accent-rose); font-weight: 600;">⚠️ ${item.issue}</div>` : ''}
+                    </div>
+                `;
+
+                card.onclick = () => openCockpit(item);
+                fragment.appendChild(card);
+            });
+
+            grid.appendChild(fragment);
+        }
+
+        // Open Digital Twin Cockpit Modal
+        function openCockpit(item) {
+            activeModalItem = item;
+            const modal = document.getElementById('cockpit-modal');
+            const mTitle = document.getElementById('m-title');
+            const mSerial = document.getElementById('m-serial-info');
+            const body = document.getElementById('cockpit-body');
+
+            mTitle.textContent = `${item.model} [지번 ${item.bay || '대기'}] — ${item.shift}`;
+            mSerial.textContent = `호기(시리얼): ${item.serial || '-'} | 생산월: ${item.month || '-'} | 담당 작업자: ${item.worker || '-'}`;
+
+            // Unit Grid
+            const unitsHtml = (item.units || []).map(u => {
+                let statusText = '🟢 입고 완료';
+                let statusClass = 'status-ok';
+                if (u.status === 'X') { statusText = '🔴 미입고(결품)'; statusClass = 'status-x'; }
+                else if (u.status !== 'OK') { statusText = `🟡 ${u.status}`; statusClass = 'status-wait'; }
+                return `
+                    <div class="unit-cell">
+                        <span class="unit-name">${u.name}</span>
+                        <span class="unit-status ${statusClass}">${statusText}</span>
+                    </div>`;
+            }).join('');
+
+            // Stage Index
+            const stageIdx = PROCESS_STAGES.findIndex(p => p.code === (item.currentProcess || '').toUpperCase()) || 0;
+            const currentStage = PROCESS_STAGES[stageIdx >= 0 ? stageIdx : 3];
+
+            body.innerHTML = `
+                <div class="cockpit-grid-2">
+                    <div class="cockpit-section">
+                        <div class="section-title">📋 기본 조립 & 고객 정보</div>
+                        <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.4rem; color: var(--text-secondary);">
+                            <div><b>고객사:</b> <span style="color: var(--text-main);">${item.customer || '-'}</span></div>
+                            <div><b>담당 지번:</b> <span style="color: var(--mc-theme); font-weight: 700;">${item.bay || '대기'}</span> (담당: ${item.worker || '-'})</div>
+                            <div><b>계획 시작일:</b> <span style="font-family: 'JetBrains Mono';">${item.planStart || '2026.08.01'}</span></div>
+                            <div><b>출하 요구일:</b> <span style="font-family: 'JetBrains Mono'; color: var(--accent-amber);">${item.reqDate || '2026.08.28'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="cockpit-section">
+                        <div class="section-title">⚡ SPECIAL 고객 맞춤 시방</div>
+                        <div style="font-size: 0.8rem; color: #a5b4fc; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 6px; padding: 0.75rem; line-height: 1.5;">
+                            ${item.spec || '기본 표준 사양'}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cockpit-section">
+                    <div class="section-title">⚙️ 표준 공정 진행 상태 [현재: ${currentStage.name} (${currentStage.pct}%)]</div>
+                    <div class="progress-track" style="height: 10px; margin: 0.5rem 0;">
+                        <div class="progress-fill" style="width: ${currentStage.pct}%;"></div>
+                    </div>
+                </div>
+
+                <div class="cockpit-section">
+                    <div class="section-title">📦 핵심 대물 & UNIT 모듈 입고 보드 (총 ${(item.units || []).length}개 모듈)</div>
+                    <div class="unit-grid">
+                        ${unitsHtml || '<div style="color: var(--text-muted);">유니트 정보 없음</div>'}
+                    </div>
+                </div>
+
+                ${item.issue ? `
+                <div class="cockpit-section" style="border-color: rgba(244,63,94,0.4); background: rgba(244,63,94,0.05);">
+                    <div class="section-title" style="color: var(--accent-rose);">🚨 현장 결품 / 품질 ISSUE 사항</div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--accent-rose);">${item.issue}</div>
+                </div>` : ''}
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        // Close Cockpit Modal
+        function closeCockpit(e) {
+            document.getElementById('cockpit-modal').style.display = 'none';
+            activeModalItem = null;
+        }
+
+        // Advance Process Step
+        function advanceMachineProcess() {
+            if (!activeModalItem) return;
+            const currentIdx = PROCESS_STAGES.findIndex(p => p.code === (activeModalItem.currentProcess || '').toUpperCase());
+            if (currentIdx < PROCESS_STAGES.length - 1) {
+                activeModalItem.currentProcess = PROCESS_STAGES[currentIdx + 1].code;
+                renderShopfloor();
+                openCockpit(activeModalItem);
+            } else {
+                alert('이미 최종 출하 완료(GOT) 단계입니다.');
+            }
+        }
+
+        // Timeline Slider Interaction
+        function updateTimelineDate(val) {
+            const startDate = new Date(2026, 6, 1); // 2026.07.01
+            startDate.setDate(startDate.getDate() + parseInt(val));
+            const y = startDate.getFullYear();
+            const m = String(startDate.getMonth() + 1).padStart(2, '0');
+            const d = String(startDate.getDate()).padStart(2, '0');
+            document.getElementById('timeline-date-display').textContent = `📅 ${y}.${m}.${d}`;
+        }
+
+        function togglePlaySimulation() {
+            isSimulating = !isSimulating;
+            const btn = document.getElementById('btn-play');
+            const slider = document.getElementById('timeline-slider');
+
+            if (isSimulating) {
+                btn.textContent = '⏸';
+                btn.style.background = 'var(--accent-amber)';
+                simTimer = setInterval(() => {
+                    let cur = parseInt(slider.value);
+                    if (cur >= 183) cur = 0;
+                    else cur += 1;
+                    slider.value = cur;
+                    updateTimelineDate(cur);
+                }, 400);
+            } else {
+                btn.textContent = '▶';
+                btn.style.background = 'var(--mc-theme)';
+                clearInterval(simTimer);
+            }
+        }
+    </script>
+</body>
+</html>
