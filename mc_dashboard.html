@@ -886,8 +886,9 @@
                 return item;
             });
 
-            // Store Components
+            // Store Components & Build Fast O(1) Lookup Maps
             rawCompData = compRecords;
+            buildCompMap(compRecords);
 
             populateFilterDropdowns();
             applyMcFilters();
