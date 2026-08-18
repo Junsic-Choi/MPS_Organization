@@ -973,7 +973,7 @@
             return data;
         }
 
-        // Parse Component MHTML Table
+        // Parse Component MHTML Table (Dynamic Keyword Header Lookup)
         function parseCompMhtml(mhtml) {
             if (!mhtml) return [];
             const decoded = mhtml.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
@@ -986,24 +986,65 @@
             const rows = Array.from(table.querySelectorAll('tr'));
             if (rows.length < 2) return [];
 
+            // Find header row
+            let headerRow = rows[0];
+            let headerCells = Array.from(headerRow.querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+            
+            if (!headerCells.some(c => c.includes('COMPONENT') || c.includes('MATERIAL') || c.includes('PROD'))) {
+                for (let i = 1; i < Math.min(5, rows.length); i++) {
+                    const cells = Array.from(rows[i].querySelectorAll('td, th')).map(c => c.textContent.trim().toUpperCase());
+                    if (cells.some(c => c.includes('COMPONENT') || c.includes('MATERIAL') || c.includes('PROD'))) {
+                        headerRow = rows[i];
+                        headerCells = cells;
+                        break;
+                    }
+                }
+            }
+
+            const findIdx = (keywords) => {
+                let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                if (idx !== -1) return idx;
+                return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+            };
+
+            const mapping = {
+                mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+                serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼', 'SERIAL']),
+                salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
+                component: findIdx(['COMPONENT MATERIAL', 'COMPONENT', '자재', '가공품']),
+                compDesc: findIdx(['COMP.DESC.', 'COMP.DESC', '자재명', '부품명']),
+                qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
+                parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
+                reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
+                sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬']),
+                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
+            };
+
             const data = [];
-            for (let i = 1; i < rows.length; i++) {
+            const startIndex = rows.indexOf(headerRow) + 1;
+
+            for (let i = startIndex; i < rows.length; i++) {
                 const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.textContent.trim());
-                if (cells.length < 14) continue;
-                
+                if (cells.length < 5) continue;
+
                 // Exclude Deleted Item (X)
-                const isDeleted = (cells[13] || '').toUpperCase() === 'X';
-                if (isDeleted) continue;
+                if (mapping.deletedItem !== -1 && (cells[mapping.deletedItem] || '').toUpperCase() === 'X') continue;
+
+                const monVal = cells[mapping.mon] || '';
+                let mNum = null;
+                const dateDigits = monVal.replace(/[^0-9]/g, '');
+                if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));
+                else if (dateDigits.length >= 1) mNum = parseInt(dateDigits);
 
                 data.push({
-                    Month: cells[5] || '',
-                    Serial: cells[2] || '',
-                    SalesDoc: cells[3] || '',
-                    ParentMat: cells[6] || '',
-                    Component: cells[7] || '',
-                    CompDesc: cells[8] || '',
-                    Qty: parseFloat(cells[9]) || 1,
-                    SortString: cells[15] || ''
+                    Month: mNum ? mNum + '월' : (monVal || ''),
+                    Serial: mapping.serial !== -1 ? (cells[mapping.serial] || '').trim() : '',
+                    SalesDoc: mapping.salesDoc !== -1 ? (cells[mapping.salesDoc] || '').trim() : '',
+                    ParentMat: mapping.parentMat !== -1 ? (cells[mapping.parentMat] || '').trim() : '',
+                    Component: mapping.component !== -1 ? (cells[mapping.component] || '').trim() : '',
+                    CompDesc: mapping.compDesc !== -1 ? (cells[mapping.compDesc] || '').trim() : '',
+                    Qty: mapping.qty !== -1 ? (parseFloat(cells[mapping.qty]) || 1) : 1,
+                    SortString: mapping.sortString !== -1 ? (cells[mapping.sortString] || '').trim() : ''
                 });
             }
             return data;
@@ -1268,7 +1309,7 @@
             }
         }
 
-        // Fast O(1) Component Lookup Map
+        // Fast O(1) Component Lookup Map (Dual Matching: Serial + SalesDoc)
         let compSerialMap = new Map();
         let compSalesDocMap = new Map();
 
@@ -1276,25 +1317,44 @@
             compSerialMap = new Map();
             compSalesDocMap = new Map();
             compRecords.forEach(c => {
-                if (c.Serial && c.Serial !== '-') {
-                    if (!compSerialMap.has(c.Serial)) compSerialMap.set(c.Serial, []);
-                    compSerialMap.get(c.Serial).push(c);
+                const s = (c.Serial || '').trim();
+                const sd = (c.SalesDoc || '').trim();
+                if (s && s !== '-') {
+                    if (!compSerialMap.has(s)) compSerialMap.set(s, []);
+                    compSerialMap.get(s).push(c);
                 }
-                if (c.SalesDoc && c.SalesDoc !== '-') {
-                    if (!compSalesDocMap.has(c.SalesDoc)) compSalesDocMap.set(c.SalesDoc, []);
-                    compSalesDocMap.get(c.SalesDoc).push(c);
+                if (sd && sd !== '-') {
+                    if (!compSalesDocMap.has(sd)) compSalesDocMap.set(sd, []);
+                    compSalesDocMap.get(sd).push(c);
                 }
             });
         }
 
         function getMatchedComponents(serial, salesDoc) {
-            if (serial && serial !== '-' && compSerialMap.has(serial)) {
-                return compSerialMap.get(serial);
+            const s = (serial || '').trim();
+            const sd = (salesDoc || '').trim();
+            const results = [];
+            const seen = new Set();
+
+            if (s && s !== '-' && compSerialMap.has(s)) {
+                compSerialMap.get(s).forEach(c => {
+                    if (!seen.has(c)) {
+                        seen.add(c);
+                        results.push(c);
+                    }
+                });
             }
-            if (salesDoc && salesDoc !== '-' && compSalesDocMap.has(salesDoc)) {
-                return compSalesDocMap.get(salesDoc);
+
+            if (sd && sd !== '-' && compSalesDocMap.has(sd)) {
+                compSalesDocMap.get(sd).forEach(c => {
+                    if (!seen.has(c)) {
+                        seen.add(c);
+                        results.push(c);
+                    }
+                });
             }
-            return [];
+
+            return results;
         }
 
         // Render Components for Filtered MC rows
