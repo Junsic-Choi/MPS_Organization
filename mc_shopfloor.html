@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>남산 MC 공장 조립 지번(Bay) 수기관리 현황판</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- XLSX for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #f8fafc;
+            --bg-surface: #ffffff;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            
+            --text-main: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            
+            --primary: #0284c7;
+            --primary-light: #e0f2fe;
+            --primary-dark: #0369a1;
+            
+            --success: #059669;
+            --success-light: #d1fae5;
+            --warning: #d97706;
+            --warning-light: #fef3c7;
+            --danger: #dc2626;
+            --danger-light: #fee2e2;
+
+            --mc1-color: #0284c7;
+            --mc2-color: #059669;
+            --mc3-color: #7c3aed;
+            --mc4-color: #ea580c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Clean Header */
+        .top-header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.85rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.4px;
+        }
+
+        .header-badge {
+            background: #f1f5f9;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.55rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .btn {
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.825rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+        }
+
+        .btn:hover {
+            background: #f1f5f9;
+            color: var(--text-main);
+            border-color: #cbd5e1;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            color: #ffffff;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #ffffff;
+            border-color: var(--success);
+        }
+
+        .btn-success:hover {
+            background: #047857;
+            color: #ffffff;
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            background: #f1f5f9;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .shift-tabs {
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .shift-tab {
+            padding: 0.4rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .shift-tab:hover {
+            background: #f8fafc;
+            color: var(--text-main);
+        }
+
+        .shift-tab.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        .search-input {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+            width: 240px;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            padding: 1.25rem 2rem 0.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.85rem 1.15rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .stat-val {
+            font-size: 1.35rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-main);
+        }
+
+        /* Main Content Grid */
+        .main-container {
+            padding: 1rem 2rem 4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .shift-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .badge-mc1 { background: #e0f2fe; color: #0369a1; }
+        .badge-mc2 { background: #d1fae5; color: #047857; }
+        .badge-mc3 { background: #ede9fe; color: #6d28d9; }
+        .badge-mc4 { background: #ffedd5; color: #c2410c; }
+
+        .bay-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        /* Bay Station Cards */
+        .bay-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+            position: relative;
+        }
+
+        .bay-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            border-color: var(--primary);
+        }
+
+        .bay-card.empty {
+            background: #fafafa;
+            border: 1px dashed #cbd5e1;
+            align-items: center;
+            justify-content: center;
+            min-height: 140px;
+            color: var(--text-muted);
+        }
+
+        .bay-card.empty:hover {
+            background: #f8fafc;
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .bay-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bay-num-badge {
+            font-size: 0.9rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 0.2rem 0.55rem;
+            border-radius: 5px;
+        }
+
+        .bay-worker-badge {
+            font-size: 0.775rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: #f1f5f9;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+        }
+
+        .bay-model {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--primary-dark);
+            letter-spacing: -0.3px;
+        }
+
+        .bay-serial {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .bay-customer {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bay-process-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.775rem;
+            font-weight: 700;
+            padding: 0.25rem 0.55rem;
+            border-radius: 5px;
+            background: #f1f5f9;
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .bay-footer {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            border-top: 1px solid #f1f5f9;
+            padding-top: 0.45rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+        }
+
+        .modal-card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 100%;
+            max-width: 680px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 1.15rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+
+        .modal-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            color: var(--text-main);
+            background: #ffffff;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem;
+        }
+
+        .modal-footer {
+            padding: 0.85rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+
+        /* Toast notification */
+        #toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Clean Header -->
+    <header class="top-header">
+        <div class="header-left">
+            <span style="font-size: 1.4rem;">⚙️</span>
+            <div>
+                <span class="header-title">남산 MC 공장 조립 지번(Bay) 수기관리 현황판</span>
+            </div>
+            <span class="header-badge">Port 8895 (독립 운영)</span>
+        </div>
+
+        <div class="header-actions">
+            <button class="btn" onclick="syncMpsPlan()">🔄 최신 MPS 계획 동기화</button>
+            <button class="btn btn-success" onclick="saveAllBays()">💾 전체 저장</button>
+            <button class="btn btn-primary" onclick="exportExcel()">📥 엑셀 내보내기</button>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <nav class="filter-bar">
+        <div class="shift-tabs">
+            <button class="shift-tab active" onclick="setShift('ALL')">전체 직 보기</button>
+            <button class="shift-tab" onclick="setShift('MC1직')">MC 1직 (E/F구역)</button>
+            <button class="shift-tab" onclick="setShift('MC2직')">MC 2직 (C/D구역)</button>
+            <button class="shift-tab" onclick="setShift('MC3직')">MC 3직 (B구역)</button>
+            <button class="shift-tab" onclick="setShift('MC4직')">MC 4직 (A구역)</button>
+        </div>
+
+        <div>
+            <input type="text" class="search-input" id="search-input" placeholder="지번, 기종, 호기, 작업자 검색..." oninput="renderBays()">
+        </div>
+    </nav>
+
+    <!-- Summary Stats -->
+    <section class="stats-grid">
+        <div class="stat-card">
+            <div>
+                <div class="stat-label">전체 지번 (Total Bays)</div>
+                <div class="stat-val" id="stat-total-bays">0</div>
+            </div>
+            <span style="font-size: 1.4rem;">📍</span>
+        </div>
+        <div class="stat-card">
+            <div>
+                <div class="stat-label">조립 진행 (Active)</div>
+                <div class="stat-val" id="stat-active-bays" style="color: var(--primary);">0 대</div>
+            </div>
+            <span style="font-size: 1.4rem;">⚙️</span>
+        </div>
+        <div class="stat-card">
+            <div>
+                <div class="stat-label">빈 지번 (Empty Slots)</div>
+                <div class="stat-val" id="stat-empty-bays" style="color: var(--text-muted);">0 개</div>
+            </div>
+            <span style="font-size: 1.4rem;">⚪</span>
+        </div>
+        <div class="stat-card">
+            <div>
+                <div class="stat-label">특이사항 / 이슈 지번</div>
+                <div class="stat-val" id="stat-issue-bays" style="color: var(--warning);">0 건</div>
+            </div>
+            <span style="font-size: 1.4rem;">⚠️</span>
+        </div>
+    </section>
+
+    <!-- Main Grid Content -->
+    <main class="main-container" id="main-container">
+        <!-- Dynamic Shift Sections Injected Here -->
+    </main>
+
+    <!-- Bay Edit Modal -->
+    <div class="modal-overlay" id="edit-modal" onclick="closeModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="m-title">지번 E2 편집 & 배정</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;" id="m-sub">소속: MC 1직</div>
+                </div>
+                <button class="btn" style="padding: 0.3rem 0.6rem;" onclick="closeModal()">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 1. MPS Machine Quick Selection -->
+                <div class="form-group">
+                    <label class="form-label">⚡ 최신 MPS 생산계획 장비 선택 (자동 입력)</label>
+                    <select class="form-select" id="m-mps-select" onchange="onMpsSelectChange()">
+                        <option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>
+                    </select>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">기종명 (Model)</label>
+                        <input type="text" class="form-input" id="m-model" placeholder="예: NHP4000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">호기 / S/O 시리얼</label>
+                        <input type="text" class="form-input" id="m-serial" placeholder="예: MH0028-000648">
+                    </div>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">고객사명 (Customer)</label>
+                        <input type="text" class="form-input" id="m-customer" placeholder="예: 대승정밀, DNSA">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">담당 작업자 (Worker)</label>
+                        <input type="text" class="form-input" id="m-worker" placeholder="예: 김병훈">
+                    </div>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">현재 공정 단계 (Process Stage)</label>
+                        <select class="form-select" id="m-process">
+                            <option value="BASE">[BASE] Base 조립 & 레벨링</option>
+                            <option value="GCLM">[GCLM] 컬럼 탑재 & 배관/배선</option>
+                            <option value="GEB">[GEB] 전장 박스 부착 & 결선</option>
+                            <option value="GAJ">[GAJ] 정밀도 측정 & 레이저 보정</option>
+                            <option value="GUARD">[GUARD] 스플래시 가드 설치</option>
+                            <option value="GIN">[GIN] 기능 검사 & 쿨런트 테스트</option>
+                            <option value="GSR">[GSR] 연속 무부하 가동 시험</option>
+                            <option value="GOT">[GOT] 출하 검사 & 최종 출하</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Sales Doc / 오더 번호</label>
+                        <input type="text" class="form-input" id="m-salesdoc" placeholder="예: 700004149821">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">SPECIAL 고객 맞춤 시방서 (RPM / Tool / 특이사항)</label>
+                    <textarea class="form-textarea" id="m-spec" rows="2" placeholder="예: 15K HSK63A, 60T, TSC 30BAR, Auto Door"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">현장 특이사항 / 결품 ISSUE 메모</label>
+                    <input type="text" class="form-input" id="m-issue" placeholder="예: 쿨러 8/25 입고 대기, ATC 결품 확인 중">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div>
+                    <button class="btn" style="color: var(--danger); border-color: #fecaca; background: #fff5f5;" onclick="clearCurrentBay()">🗑️ 지번 비우기 (출하 완료)</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn" onclick="closeModal()">취소</button>
+                    <button class="btn btn-primary" onclick="saveCurrentBay()">💾 지번 저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast">알림 메시지</div>
+
+    <script>
+        let allBays = [];
+        let mpsMachines = [];
+        let currentShift = 'ALL';
+        let activeEditingBayId = null;
+
+        const PROCESS_MAP = {
+            'BASE': { name: 'Base 조립', color: '#0284c7' },
+            'GCLM': { name: '컬럼/배관', color: '#0369a1' },
+            'GEB':  { name: '전장 결선', color: '#7c3aed' },
+            'GAJ':  { name: '정밀도 조정', color: '#d97706' },
+            'GUARD':{ name: '가드 설치', color: '#059669' },
+            'GIN':  { name: '기능 검사', color: '#0d9488' },
+            'GSR':  { name: '가동 시험', color: '#2563eb' },
+            'GOT':  { name: '출하 완료', color: '#16a34a' }
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await Promise.all([loadBays(), syncMpsPlan()]);
+            renderBays();
+            
+            // Heartbeat
+            setInterval(() => {
+                fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+            }, 30000);
+        });
+
+        // Load Bays from Server (Port 8895)
+        async function loadBays() {
+            try {
+                const res = await fetch('/api/shopfloor');
+                const json = await res.json();
+                if (json.success && Array.isArray(json.bays)) {
+                    allBays = json.bays;
+                }
+            } catch (e) {
+                console.error('Failed to load bays:', e);
+                showToast('지번 데이터를 불러오는데 실패했습니다.');
+            }
+        }
+
+        // Fetch MPS Planned Machines from Server (Port 8895)
+        async function syncMpsPlan() {
+            try {
+                const res = await fetch('/api/mps-plan-machines');
+                const json = await res.json();
+                if (json.success && Array.isArray(json.machines)) {
+                    mpsMachines = json.machines;
+                    showToast(`최신 MPS 계획 장비 ${mpsMachines.length}건을 동기화했습니다.`);
+                }
+            } catch (e) {
+                console.warn('MPS plan sync warning:', e);
+            }
+        }
+
+        function setShift(shift) {
+            currentShift = shift;
+            document.querySelectorAll('.shift-tab').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderBays();
+        }
+
+        // Render Shopfloor Bays
+        function renderBays() {
+            const container = document.getElementById('main-container');
+            container.innerHTML = '';
+
+            const searchVal = (document.getElementById('search-input').value || '').trim().toLowerCase();
+
+            const shifts = ['MC1직', 'MC2직', 'MC3직', 'MC4직'];
+            const targetShifts = currentShift === 'ALL' ? shifts : [currentShift];
+
+            let totalCount = allBays.length;
+            let activeCount = 0;
+            let emptyCount = 0;
+            let issueCount = 0;
+
+            targetShifts.forEach(shiftName => {
+                let badgeClass = 'badge-mc1';
+                if (shiftName === 'MC2직') badgeClass = 'badge-mc2';
+                else if (shiftName === 'MC3직') badgeClass = 'badge-mc3';
+                else if (shiftName === 'MC4직') badgeClass = 'badge-mc4';
+
+                const shiftBays = allBays.filter(b => b.shift === shiftName);
+
+                const filteredBays = shiftBays.filter(b => {
+                    if (!searchVal) return true;
+                    const str = `${b.bay} ${b.model || ''} ${b.serial || ''} ${b.customer || ''} ${b.worker || ''} ${b.spec || ''} ${b.issue || ''}`.toLowerCase();
+                    return str.includes(searchVal);
+                });
+
+                if (filteredBays.length === 0 && currentShift !== 'ALL') return;
+
+                const section = document.createElement('section');
+                section.className = 'shift-section';
+
+                const activeInShift = shiftBays.filter(b => b.assigned).length;
+
+                section.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-title">${shiftName} 조립 지번 현황</span>
+                        <span class="header-badge ${badgeClass}">${activeInShift}대 가동 중 / 총 ${shiftBays.length}개 지번</span>
+                    </div>
+                    <div class="bay-grid" id="grid-${shiftName}"></div>
+                `;
+
+                const grid = section.querySelector(`#grid-${shiftName}`);
+
+                filteredBays.forEach(bay => {
+                    if (bay.assigned) {
+                        activeCount++;
+                        if (bay.issue && bay.issue.trim()) issueCount++;
+                    } else {
+                        emptyCount++;
+                    }
+
+                    const card = document.createElement('div');
+
+                    if (!bay.assigned) {
+                        card.className = 'bay-card empty';
+                        card.innerHTML = `
+                            <div style="font-weight: 800; font-family: 'JetBrains Mono'; font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.25rem;">지번 ${bay.bay}</div>
+                            <div style="font-size: 0.8rem; font-weight: 600;">+ 빈 지번 (클릭하여 배정)</div>
+                        `;
+                    } else {
+                        card.className = 'bay-card';
+                        const procInfo = PROCESS_MAP[bay.currentProcess] || { name: bay.currentProcess || '조립 중', color: '#475569' };
+
+                        card.innerHTML = `
+                            <div class="bay-card-top">
+                                <span class="bay-num-badge">지번 ${bay.bay}</span>
+                                <span class="bay-worker-badge">👷 ${bay.worker || '작업자 미지정'}</span>
+                            </div>
+
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <span class="bay-model">${bay.model || '-'}</span>
+                                    <span class="bay-serial">호기: ${bay.serial || '-'}</span>
+                                </div>
+                                <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
+                            </div>
+
+                            <div class="bay-process-badge" style="border-left: 3px solid ${procInfo.color};">
+                                <span>⚙️</span>
+                                <span>[${bay.currentProcess || 'BASE'}] ${procInfo.name}</span>
+                            </div>
+
+                            <div class="bay-footer">
+                                ${bay.spec ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">⚡ ${bay.spec}</div>` : ''}
+                                ${bay.issue ? `<div style="color: var(--danger); font-weight: 700;">⚠️ ${bay.issue}</div>` : ''}
+                            </div>
+                        `;
+                    }
+
+                    card.onclick = () => openEditModal(bay);
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(section);
+            });
+
+            // Update stats
+            document.getElementById('stat-total-bays').textContent = totalCount;
+            document.getElementById('stat-active-bays').textContent = `${activeCount} 대`;
+            document.getElementById('stat-empty-bays').textContent = `${emptyCount} 개`;
+            document.getElementById('stat-issue-bays').textContent = `${issueCount} 건`;
+        }
+
+        // Open Edit Modal for a Bay
+        function openEditModal(bay) {
+            activeEditingBayId = bay.id;
+
+            document.getElementById('m-title').textContent = `지번 ${bay.bay} 편집 & 배정`;
+            document.getElementById('m-sub').textContent = `소속: ${bay.shift}`;
+
+            // Populate MPS Select Dropdown for this shift
+            const mpsSelect = document.getElementById('m-mps-select');
+            const shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
+
+            mpsSelect.innerHTML = '<option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>' +
+                shiftMachines.map((m, idx) => {
+                    return `<option value="${idx}">[${m.month}] ${m.model} | S/O: ${m.serial || '-'} | ${m.customer || '고객사 미지정'}</option>`;
+                }).join('');
+
+            // Fill inputs with current bay data
+            document.getElementById('m-model').value = bay.model || '';
+            document.getElementById('m-serial').value = bay.serial || '';
+            document.getElementById('m-customer').value = bay.customer || '';
+            document.getElementById('m-worker').value = bay.worker || '';
+            document.getElementById('m-process').value = bay.currentProcess || 'BASE';
+            document.getElementById('m-salesdoc').value = bay.salesDoc || '';
+            document.getElementById('m-spec').value = bay.spec || '';
+            document.getElementById('m-issue').value = bay.issue || '';
+
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+
+        function onMpsSelectChange() {
+            const idx = document.getElementById('m-mps-select').value;
+            if (idx === '') return;
+
+            const bay = allBays.find(b => b.id === activeEditingBayId);
+            if (!bay) return;
+
+            const shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
+            const m = shiftMachines[idx];
+            if (!m) return;
+
+            document.getElementById('m-model').value = m.model || '';
+            document.getElementById('m-serial').value = m.serial || '';
+            document.getElementById('m-customer').value = m.customer || '';
+            document.getElementById('m-salesdoc').value = m.salesDoc || '';
+        }
+
+        // Save Current Bay
+        async function saveCurrentBay() {
+            const bay = allBays.find(b => b.id === activeEditingBayId);
+            if (!bay) return;
+
+            const model = document.getElementById('m-model').value.trim();
+            const serial = document.getElementById('m-serial').value.trim();
+            const customer = document.getElementById('m-customer').value.trim();
+            const worker = document.getElementById('m-worker').value.trim();
+            const process = document.getElementById('m-process').value;
+            const salesDoc = document.getElementById('m-salesdoc').value.trim();
+            const spec = document.getElementById('m-spec').value.trim();
+            const issue = document.getElementById('m-issue').value.trim();
+
+            if (model || serial || worker || customer) {
+                bay.assigned = true;
+                bay.model = model;
+                bay.serial = serial;
+                bay.customer = customer;
+                bay.worker = worker;
+                bay.currentProcess = process;
+                bay.salesDoc = salesDoc;
+                bay.spec = spec;
+                bay.issue = issue;
+            } else {
+                bay.assigned = false;
+            }
+
+            closeModal();
+            renderBays();
+            await saveAllBays();
+            showToast(`지번 ${bay.bay} 정보가 성공적으로 저장되었습니다.`);
+        }
+
+        // Clear Current Bay (출하 완료)
+        async function clearCurrentBay() {
+            const bay = allBays.find(b => b.id === activeEditingBayId);
+            if (!bay) return;
+
+            if (confirm(`지번 ${bay.bay}의 장비 배정을 해제(출하 완료)하시겠습니까?`)) {
+                bay.assigned = false;
+                bay.model = '';
+                bay.serial = '';
+                bay.customer = '';
+                bay.worker = '';
+                bay.currentProcess = 'BASE';
+                bay.salesDoc = '';
+                bay.spec = '';
+                bay.issue = '';
+
+                closeModal();
+                renderBays();
+                await saveAllBays();
+                showToast(`지번 ${bay.bay} 배정이 초기화되었습니다.`);
+            }
+        }
+
+        // Save All Bays to Server (Persistence)
+        async function saveAllBays() {
+            try {
+                const res = await fetch('/api/shopfloor/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bays: allBays })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    showToast('전체 지번 데이터가 서버에 안전하게 저장되었습니다.');
+                }
+            } catch (e) {
+                console.error('Save failed:', e);
+                showToast('저장 중 오류가 발생했습니다.');
+            }
+        }
+
+        function closeModal(e) {
+            document.getElementById('edit-modal').style.display = 'none';
+            activeEditingBayId = null;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // Export Shopfloor to Excel
+        function exportExcel() {
+            const rows = allBays.map((b, idx) => ({
+                "번호": idx + 1,
+                "대조립 직": b.shift,
+                "지번": b.bay,
+                "배정 상태": b.assigned ? "가동 중" : "빈 지번",
+                "기종명": b.model || '',
+                "호기 시리얼": b.serial || '',
+                "고객사": b.customer || '',
+                "담당 작업자": b.worker || '',
+                "현재 공정 단계": b.assigned ? (PROCESS_MAP[b.currentProcess]?.name || b.currentProcess) : '',
+                "Sales Doc": b.salesDoc || '',
+                "SPECIAL 시방서": b.spec || '',
+                "특이사항 / 이슈": b.issue || ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [
+                { wch: 6 },  // 번호
+                { wch: 10 }, // 대조립 직
+                { wch: 8 },  // 지번
+                { wch: 10 }, // 배정 상태
+                { wch: 16 }, // 기종명
+                { wch: 18 }, // 호기 시리얼
+                { wch: 22 }, // 고객사
+                { wch: 12 }, // 담당 작업자
+                { wch: 18 }, // 현재 공정 단계
+                { wch: 14 }, // Sales Doc
+                { wch: 35 }, // SPECIAL 시방서
+                { wch: 30 }  // 특이사항 / 이슈
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "MC_지번별_조립현황");
+            XLSX.writeFile(wb, `남산_MC_지번별_조립현황_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('엑셀 파일이 다운로드되었습니다.');
+        }
+    </script>
+</body>
+</html>
