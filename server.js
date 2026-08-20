@@ -25,17 +25,139 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
-// MC 대시보드 및 디지털 트윈 라우트
+// MC 대시보드 및 지번 현황 라우트
 app.get('/mc', (req, res) => {
     res.sendFile(path.join(__dirname, 'mc_dashboard.html'));
 });
 
-app.get('/twin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'mc_digital_twin.html'));
+app.get('/shopfloor', (req, res) => {
+    res.sendFile(path.join(__dirname, 'mc_shopfloor.html'));
 });
 
-app.get('/digital-twin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'mc_digital_twin.html'));
+// 지번 데이터 API
+const SHOPFLOOR_DATA_FILE = path.join(__dirname, 'shopfloor_data.json');
+
+function getDefaultBaysTemplate() {
+    const bays = [];
+    for (let i = 1; i <= 10; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 6; i++) bays.push({ id: `mc1-f${i}`, shift: 'MC1직', bay: `F${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 12; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 12; i++) bays.push({ id: `mc2-d${i}`, shift: 'MC2직', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 10; i++) bays.push({ id: `mc3-b${i}`, shift: 'MC3직', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 10; i++) bays.push({ id: `mc4-a${i}`, shift: 'MC4직', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    return bays;
+}
+
+app.get('/api/shopfloor', (req, res) => {
+    try {
+        if (fs.existsSync(SHOPFLOOR_DATA_FILE)) {
+            const content = fs.readFileSync(SHOPFLOOR_DATA_FILE, 'utf8');
+            const data = JSON.parse(content);
+            return res.json({ success: true, bays: data.bays || [] });
+        }
+        const defaultBays = getDefaultBaysTemplate();
+        fs.writeFileSync(SHOPFLOOR_DATA_FILE, JSON.stringify({ bays: defaultBays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
+        res.json({ success: true, bays: defaultBays });
+    } catch (err) {
+        console.error('[shopfloor] Load failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/shopfloor/save', (req, res) => {
+    try {
+        const { bays } = req.body;
+        if (!Array.isArray(bays)) return res.status(400).json({ success: false, error: 'bays array required' });
+        fs.writeFileSync(SHOPFLOOR_DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
+        res.json({ success: true, count: bays.length });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/mps-plan-machines', (req, res) => {
+    try {
+        const sapPath = path.join(__dirname, 'sap_1840.mhtml');
+        if (!fs.existsSync(sapPath)) return res.json({ success: true, machines: [] });
+
+        const mhtml = fs.readFileSync(sapPath, 'utf8');
+        const decoded = mhtml
+            .replace(/=\r?\n/g, '')
+            .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+        const trMatches = decoded.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+        const rows = trMatches.map(tr => {
+            const tdMatches = tr.match(/<t[dh][\s\S]*?<\/t[dh]>/gi) || [];
+            return tdMatches.map(td => td.replace(/<[^>]+>/g, '').trim());
+        });
+
+        if (rows.length < 2) return res.json({ success: true, machines: [] });
+
+        let headerRow = rows[0];
+        let headerCells = headerRow.map(c => c.toUpperCase());
+        for (let i = 1; i < Math.min(10, rows.length); i++) {
+            const cells = rows[i].map(c => c.toUpperCase());
+            if (cells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                headerRow = rows[i];
+                headerCells = cells;
+                break;
+            }
+        }
+
+        const findIdx = (keywords) => {
+            let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+            if (idx !== -1) return idx;
+            return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+        };
+
+        const map = {
+            mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+            model: findIdx(['MATERIAL DESCRIPTION', 'MODEL', '기종']),
+            customer: findIdx(['CUSTOMER NAME', 'CUSTOMER', '고객']),
+            serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼', 'SERIAL']),
+            order: findIdx(['ORDER', '오더']),
+            salesDoc: findIdx(['S/O ORDER', 'SALES DOC', 'SALESDOC', '판매문서']),
+            startDate: findIdx(['START DATE', '시작일']),
+            ver: findIdx(['VER.', 'VERSION', '버전']),
+            deletedItem: findIdx(['DELETED ITEM', 'DELETED', '삭제'])
+        };
+
+        const machines = [];
+        const startIndex = rows.indexOf(headerRow) + 1;
+
+        for (let i = startIndex; i < rows.length; i++) {
+            const cells = rows[i];
+            if (cells.length < 5) continue;
+            if (map.deletedItem !== -1 && (cells[map.deletedItem] || '').toUpperCase() === 'X') continue;
+
+            const ver = cells[map.ver] || '';
+            let shift = 'MC1직';
+            if (ver.includes('0AM2') || ver.includes('2직')) shift = 'MC2직';
+            else if (ver.includes('0AM3') || ver.includes('3직')) shift = 'MC3직';
+            else if (ver.includes('0AM4') || ver.includes('4직')) shift = 'MC4직';
+
+            const monVal = cells[map.mon] || '';
+            let mNum = null;
+            const dateDigits = monVal.replace(/[^0-9]/g, '');
+            if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));
+            else if (dateDigits.length >= 1) mNum = parseInt(dateDigits);
+
+            machines.push({
+                month: mNum ? String(mNum).padStart(2, '0') + '월' : monVal,
+                model: cells[map.model] || '',
+                serial: cells[map.serial] || '',
+                salesDoc: cells[map.salesDoc] || '',
+                orderNum: cells[map.order] || '',
+                customer: cells[map.customer] || '',
+                startDate: cells[map.startDate] || '',
+                shift
+            });
+        }
+
+        res.json({ success: true, machines });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // 디지털 트윈 공장 지번 및 공정 데이터 API

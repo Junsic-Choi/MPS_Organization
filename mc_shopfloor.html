@@ -662,9 +662,10 @@
             renderBays();
             
             // Heartbeat
+            fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
             setInterval(() => {
                 fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-            }, 30000);
+            }, 10000);
         });
 
         // Load Bays from Server (Port 8895)
