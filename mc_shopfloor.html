@@ -584,7 +584,7 @@
                 <div class="form-grid-2">
                     <div class="form-group">
                         <label class="form-label">기종명 (Model)</label>
-                        <input type="text" class="form-input" id="m-model" placeholder="예: NHP4000">
+                        <input type="text" class="form-input" id="m-model" placeholder="예: NHP4000" oninput="onModelInputChange()">
                     </div>
                     <div class="form-group">
                         <label class="form-label">호기 / S/O 시리얼</label>
@@ -605,16 +605,9 @@
 
                 <div class="form-grid-2">
                     <div class="form-group">
-                        <label class="form-label">현재 공정 단계 (Process Stage)</label>
+                        <label class="form-label">현재 공정 단계 (Process Stage) <span id="m-lt-badge" style="font-size: 0.725rem; font-weight: 700; color: var(--primary); margin-left: 0.3rem;"></span></label>
                         <select class="form-select" id="m-process">
-                            <option value="BASE">[BASE] Base 조립 & 레벨링</option>
-                            <option value="GCLM">[GCLM] 컬럼 탑재 & 배관/배선</option>
-                            <option value="GEB">[GEB] 전장 박스 부착 & 결선</option>
-                            <option value="GAJ">[GAJ] 정밀도 측정 & 레이저 보정</option>
-                            <option value="GUARD">[GUARD] 스플래시 가드 설치</option>
-                            <option value="GIN">[GIN] 기능 검사 & 쿨런트 테스트</option>
-                            <option value="GSR">[GSR] 연속 무부하 가동 시험</option>
-                            <option value="GOT">[GOT] 출하 검사 & 최종 출하</option>
+                            <option value="">-- 기종에 맞는 공정 단계가 자동 표시됩니다 --</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -654,16 +647,137 @@
         let currentShift = 'ALL';
         let activeEditingBayId = null;
 
-        const PROCESS_MAP = {
-            'BASE': { name: 'Base 조립', color: '#0284c7' },
-            'GCLM': { name: '컬럼/배관', color: '#0369a1' },
-            'GEB':  { name: '전장 결선', color: '#7c3aed' },
-            'GAJ':  { name: '정밀도 조정', color: '#d97706' },
-            'GUARD':{ name: '가드 설치', color: '#059669' },
-            'GIN':  { name: '기능 검사', color: '#0d9488' },
-            'GSR':  { name: '가동 시험', color: '#2563eb' },
-            'GOT':  { name: '출하 완료', color: '#16a34a' }
+        const MODEL_PROCESS_MASTER = {
+            'NHP4000': {
+                name: 'NHP4000/5000, HC400/500 (15일 L/T)',
+                badge: '15일 L/T (NHP40/50 계열)',
+                steps: [
+                    { code: 'GCLM1', name: '1일차 / GCLM | Base 레벨링 & 베드 안착 (GBDLEVEL)' },
+                    { code: 'GCLM2', name: '2일차 / GCLM | 테이블 안착 & 서보모터 (PGEB)' },
+                    { code: 'GEB',   name: '3일차 / EIF  | 전장 인터페이스 & 결선 (EIF)' },
+                    { code: 'EAD',   name: '4일차 / EAD  | 전장 시운전 & 파라미터 (EAD)' },
+                    { code: 'GAJ1',  name: '5일차 / GAJ1 | 원점 셋팅 & 팔레트 안착 (TRANS/XYHOME)' },
+                    { code: 'GAJ2',  name: '6일차 / GAJ2 | 레이저 측정 & 직각도 보정 (GAJLASER)' },
+                    { code: 'GAJ3',  name: '7일차 / GAJ3 | 매거진 & ATC 센터링 (GAJATC)' },
+                    { code: 'GAJ4',  name: '8일차 / GAJ4 | ATC 센터링 & 셀프컷팅 (SELFCUTT)' },
+                    { code: 'GIN1',  name: '9일차 / GIN  | 기능 검사 & 축 진직도 (GIN1)' },
+                    { code: 'GIN2',  name: '10일차 / GIN | Test Cutting & 정도검사 (GIN2)' },
+                    { code: 'GSG',   name: '11일차 / GSG | Splash Guard 외주 조립 (GSG)' },
+                    { code: 'GSR',   name: '12일차 / GSR | 안전스위치 & 도어조정 (GSR)' },
+                    { code: 'GRNE',  name: '13일차 / GRNE| 절삭유 탱크 & 옵션작업 (GRNE)' },
+                    { code: 'GOT',   name: '14일차 / GOT | 연속 가동 시험 & 출하준비 (GOT)' },
+                    { code: 'OINS',  name: '15일차 / 출검| 최종 출하검사 & 축고정 (OINS/LK)' }
+                ]
+            },
+            'DVF5000': {
+                name: 'DVF5000 / DVF4000 5축 (16일 L/T)',
+                badge: '16일 L/T (DVF5000 5축 계열)',
+                steps: [
+                    { code: 'GCLM1', name: '1일차 / GCLM | Spindle Head Sub 조립 (S-MOTORSUB)' },
+                    { code: 'GCLM2', name: '2일차 / GCLM | Core MC 레벨링 & 로터리테이블 (GRTAM)' },
+                    { code: 'GEB',   name: '3일차 / GEB  | ATC 조립 & 오일쿨러 & 배관 (GCLPIP)' },
+                    { code: 'EIF1',  name: '4일차 / EIF  | 스케일 조립 & 전장 인터페이스 (EIF1)' },
+                    { code: 'EIF2',  name: '5일차 / EIF  | 전장 결선 & 케이블베이어 (EIF2/3)' },
+                    { code: 'EAD',   name: '6일차 / EAD  | 전장 시운전 & I/O 체크 (EAD)' },
+                    { code: 'GAJ1',  name: '7일차 / GAJ1 | 장비 정도 & 원점셋팅 (GAJTBAR)' },
+                    { code: 'GAJ2',  name: '8일차 / GAJ2 | Table 5축 분할 정도 & 직각도 (GAJACC)' },
+                    { code: 'GAJ3',  name: '9일차 / GAJ3 | 레이저 측정 & ATC 정도 (GAJATC)' },
+                    { code: 'GIN',   name: '10일차 / GIN | 기능/정도검사 (GIN)' },
+                    { code: 'GSG',   name: '11일차 / GSG | Splash Guard 외주 조립 (GSG)' },
+                    { code: 'GMC',   name: '12일차 / GMC | Multi Cover & Head Cover 조립 (GMC)' },
+                    { code: 'GRNE1', name: '13일차 / GRNE| 절삭유 Tank & 옵션 작업 (GRN1)' },
+                    { code: 'GRNE2', name: '14일차 / GRNE| 명판 & 잔여 커버 조립 (GRN2)' },
+                    { code: 'OINS',  name: '15일차 / 출검| 최종 출하검사 (OINS)' },
+                    { code: 'LK',    name: '16일차 / 완료| 축고정 & 최종 완료 (LK)' }
+                ]
+            },
+            'NHM6300': {
+                name: 'NHM50/63/80, NHP55/63/80 (18일 L/T)',
+                badge: '18일 L/T (NHM/NHP 중대형 계열)',
+                steps: [
+                    { code: 'GBD1',  name: '1일차 / GBD1 | Bed 레벨링 & LM 가이드 (GBDLEVEL)' },
+                    { code: 'GBD2',  name: '2일차 / GBD2 | 볼스크류 조립 & 베드 배관 (GBDBSX,Z)' },
+                    { code: 'GBD3',  name: '3일차 / GBD3 | Table Sub & TS27R 셋팅' },
+                    { code: 'GCLM',  name: '4일차 / GCLM | Column 탑재 & 기브 안착 (GCLAM)' },
+                    { code: 'GEB',   name: '5일차 / GEB  | 강전반 부착 & 전장 결선 (GEB)' },
+                    { code: 'EIF',   name: '6일차 / EIF  | 전장 인터페이스 & 덕트 (EIF)' },
+                    { code: 'EAD',   name: '7일차 / EAD  | 전장 시운전 & 3상 체크 (EAD)' },
+                    { code: 'GAJ1',  name: '8일차 / GAJ1 | 원점 셋팅 & 팔레트 높이 (TRANS)' },
+                    { code: 'GAJ2',  name: '9일차 / GAJ2 | Y-Z, X-Y 직각도 및 평행도 (GAJACC)' },
+                    { code: 'GAJ3',  name: '10일차 / GAJ3| 레이저 측정 & 런아웃 (GAJLASER)' },
+                    { code: 'GAJ4',  name: '11일차 / GAJ4| 매거진 & ATC 센터링 (GAJATC)' },
+                    { code: 'GIN1',  name: '12일차 / GIN | 기능 검사 & Test Cutting (GIN1)' },
+                    { code: 'GIN2',  name: '13일차 / GIN | 정도 검사 (검사직) (GIN2)' },
+                    { code: 'GSG',   name: '14일차 / GSG | Splash Guard 외장 커버 (GSG)' },
+                    { code: 'GSR',   name: '15일차 / GSR | 안전 스위치 & Work Light (GSR)' },
+                    { code: 'GRNE',  name: '16일차 / GRNE| 옵션 작업 & 도어기능 확인' },
+                    { code: 'GOT',   name: '17일차 / GOT | 연속 무부하 가동 시험 (GOT)' },
+                    { code: 'OINS',  name: '18일차 / 출검| 최종 출하검사 & 축고정 (OINS/LK)' }
+                ]
+            },
+            'HM1000': {
+                name: 'HM1000/1250, DHF800 (17일 L/T)',
+                badge: '17일 L/T (HM/DHF 대형 5면/HMC 계열)',
+                steps: [
+                    { code: 'GCLM1', name: '1~2일차 / GCLM | 대형 Column 안착 & 볼트 체결' },
+                    { code: 'GEB',   name: '3일차 / GEB   | 전장 결선 & 강전반 조립' },
+                    { code: 'EIF',   name: '4일차 / EIF   | 전장 인터페이스 결선' },
+                    { code: 'EAD',   name: '5일차 / EAD   | 전장 시운전 & FSSB 설정' },
+                    { code: 'GAJ1',  name: '6~7일차 / GAJ1| 대형 베드/테이블 직각도 측정' },
+                    { code: 'GAJ2',  name: '8일차 / GAJ2  | 레이저 측정 & 피치 보정' },
+                    { code: 'GAJ3',  name: '9일차 / GAJ3  | ATC 센터링 & 매거진 셋팅' },
+                    { code: 'GAJ4',  name: '10일차 / GAJ4 | Self Cutting & 정밀도' },
+                    { code: 'GIN1',  name: '11일차 / GIN  | 기능 검사 & 쿨런트 테스트' },
+                    { code: 'GIN2',  name: '12일차 / GIN  | 절삭 시험 & 시운전' },
+                    { code: 'GSR',   name: '13일차 / GSR  | 가드 설치 & 연속운전' },
+                    { code: 'GRN',   name: '14일차 / GRN  | 안전스위치 & 표준 옵션' },
+                    { code: 'GOT1',  name: '15일차 / GOT  | 최종 시운전 가동' },
+                    { code: 'OINS',  name: '16일차 / 출검 | 최종 출하검사 (검사직)' },
+                    { code: 'LK',    name: '17일차 / 완료 | 축고정 & 출하 포장 (LK)' }
+                ]
+            },
+            'DEFAULT': {
+                name: '표준 MC 공통 공정 (8단계)',
+                badge: '표준 8단계 공정',
+                steps: [
+                    { code: 'BASE',  name: '[BASE] Base 조립 & 레벨링' },
+                    { code: 'GCLM',  name: '[GCLM] 컬럼 탑재 & 배관/배선' },
+                    { code: 'GEB',   name: '[GEB] 전장 박스 부착 & 결선' },
+                    { code: 'GAJ',   name: '[GAJ] 정밀도 측정 & 레이저 보정' },
+                    { code: 'GUARD', name: '[GUARD] 스플래시 가드 설치' },
+                    { code: 'GIN',   name: '[GIN] 기능 검사 & 쿨런트 테스트' },
+                    { code: 'GSR',   name: '[GSR] 연속 무부하 가동 시험' },
+                    { code: 'GOT',   name: '[GOT] 출하 검사 & 최종 출하' }
+                ]
+            }
         };
+
+        function getProcessConfigForModel(modelName) {
+            const m = (modelName || '').toUpperCase();
+            if (m.includes('DVF5') || m.includes('DVF4') || m.includes('DVF')) return MODEL_PROCESS_MASTER['DVF5000'];
+            if (m.includes('NHP40') || m.includes('NHP50') || m.includes('NHC4') || m.includes('NHC5') || m.includes('HC4') || m.includes('HC5')) return MODEL_PROCESS_MASTER['NHP4000'];
+            if (m.includes('NHM') || m.includes('NHP55') || m.includes('NHP63') || m.includes('NHP8') || m.includes('XC4')) return MODEL_PROCESS_MASTER['NHM6300'];
+            if (m.includes('HM') || m.includes('DHF') || m.includes('1000') || m.includes('1250') || m.includes('800')) return MODEL_PROCESS_MASTER['HM1000'];
+            return MODEL_PROCESS_MASTER['DEFAULT'];
+        }
+
+        function updateProcessDropdownForModel(modelName, currentValue) {
+            const config = getProcessConfigForModel(modelName);
+            const badge = document.getElementById('m-lt-badge');
+            if (badge) badge.textContent = `[${config.badge}]`;
+
+            const procSelect = document.getElementById('m-process');
+            procSelect.innerHTML = config.steps.map(s => {
+                const isSelected = (currentValue === s.code || currentValue === s.name) ? 'selected' : '';
+                return `<option value="${s.code}" ${isSelected}>${s.name}</option>`;
+            }).join('');
+        }
+
+        function onModelInputChange() {
+            const modelVal = document.getElementById('m-model').value.trim();
+            const currentProc = document.getElementById('m-process').value;
+            updateProcessDropdownForModel(modelVal, currentProc);
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             await Promise.all([loadBays(), syncMpsPlan()]);
@@ -775,7 +889,9 @@
                         `;
                     } else {
                         card.className = 'bay-card';
-                        const procInfo = PROCESS_MAP[bay.currentProcess] || { name: bay.currentProcess || '조립 중', color: '#475569' };
+                        const modelCfg = getProcessConfigForModel(bay.model);
+                        const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
+                        const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
 
                         card.innerHTML = `
                             <div class="bay-card-top">
@@ -791,9 +907,9 @@
                                 <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
                             </div>
 
-                            <div class="bay-process-badge" style="border-left: 3px solid ${procInfo.color};">
+                            <div class="bay-process-badge" style="border-left: 3px solid var(--primary);">
                                 <span>⚙️</span>
-                                <span>[${bay.currentProcess || 'BASE'}] ${procInfo.name}</span>
+                                <span style="font-size: 0.725rem; font-weight: 700;">${procText}</span>
                             </div>
 
                             <div class="bay-footer">
@@ -846,10 +962,12 @@
             document.getElementById('m-serial').value = bay.serial || '';
             document.getElementById('m-customer').value = bay.customer || '';
             document.getElementById('m-worker').value = bay.worker || '';
-            document.getElementById('m-process').value = bay.currentProcess || 'BASE';
             document.getElementById('m-salesdoc').value = bay.salesDoc || '';
             document.getElementById('m-spec').value = bay.spec || '';
             document.getElementById('m-issue').value = bay.issue || '';
+
+            // Update process dropdown based on model
+            updateProcessDropdownForModel(bay.model, bay.currentProcess || 'BASE');
 
             document.getElementById('edit-modal').style.display = 'flex';
         }
@@ -890,6 +1008,9 @@
             document.getElementById('m-serial').value = m.serial || '';
             document.getElementById('m-customer').value = m.customer || '';
             document.getElementById('m-salesdoc').value = m.salesDoc || '';
+
+            // Automatically switch process steps for this model!
+            updateProcessDropdownForModel(m.model, '');
         }
 
         // Save Current Bay
