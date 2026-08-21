@@ -136,13 +136,22 @@ app.get('/api/mps-plan-machines', (req, res) => {
             if (cells.length < 5) continue;
             if (map.deletedItem !== -1 && (cells[map.deletedItem] || '').toUpperCase() === 'X') continue;
 
-            const ver = cells[map.ver] || '';
-            let shift = 'MC1직';
-            if (ver.includes('0AM2') || ver.includes('2직')) shift = 'MC2직';
-            else if (ver.includes('0AM3') || ver.includes('3직')) shift = 'MC3직';
-            else if (ver.includes('0AM4') || ver.includes('4직')) shift = 'MC4직';
+            const ver = (cells[map.ver] || '').toUpperCase();
+            let shift = null;
+            if (ver.includes('0AM1') || ver.includes('0AMA') || ver.includes('MC1') || ver.includes('MC 1')) {
+                shift = 'MC1직';
+            } else if (ver.includes('0AM2') || ver.includes('MC2') || ver.includes('MC 2')) {
+                shift = 'MC2직';
+            } else if (ver.includes('0AM3') || ver.includes('MC3') || ver.includes('MC 3')) {
+                shift = 'MC3직';
+            } else if (ver.includes('0AM4') || ver.includes('MC4') || ver.includes('MC 4')) {
+                shift = 'MC4직';
+            }
 
-            const monVal = cells[map.mon] || '';
+            // MC 1~4직이 아닌 타 라인(TC, VC 등) 기종은 완전 제외
+            if (!shift) continue;
+
+            const monVal = (cells[map.mon] || '').toString().trim();
             let mNum = null;
             const dateDigits = monVal.replace(/[^0-9]/g, '');
             if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6));

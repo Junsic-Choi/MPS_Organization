@@ -565,9 +565,17 @@
             </div>
 
             <div class="modal-body">
-                <!-- 1. MPS Machine Quick Selection -->
+                <!-- 1. MPS Machine Quick Selection & Month Filter -->
                 <div class="form-group">
-                    <label class="form-label">⚡ 최신 MPS 생산계획 장비 선택 (자동 입력)</label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                        <label class="form-label" style="margin-bottom: 0;">⚡ 최신 MPS 생산계획 장비 선택 (자동 입력)</label>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="font-size: 0.775rem; font-weight: 700; color: var(--text-secondary);">📅 생산월:</span>
+                            <select class="form-select" id="m-month-filter" style="width: auto; padding: 0.2rem 0.6rem; font-size: 0.775rem; font-weight: 700; border-color: var(--primary);" onchange="updateMpsDropdown()">
+                                <option value="ALL">전체 월</option>
+                            </select>
+                        </div>
+                    </div>
                     <select class="form-select" id="m-mps-select" onchange="onMpsSelectChange()">
                         <option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>
                     </select>
@@ -809,6 +817,8 @@
             document.getElementById('stat-issue-bays').textContent = `${issueCount} 건`;
         }
 
+        let activeModalFilteredMachines = [];
+
         // Open Edit Modal for a Bay
         function openEditModal(bay) {
             activeEditingBayId = bay.id;
@@ -816,14 +826,20 @@
             document.getElementById('m-title').textContent = `지번 ${bay.bay} 편집 & 배정`;
             document.getElementById('m-sub').textContent = `소속: ${bay.shift}`;
 
-            // Populate MPS Select Dropdown for this shift
-            const mpsSelect = document.getElementById('m-mps-select');
+            // Populate Month Filter for this shift's machines
             const shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
-
-            mpsSelect.innerHTML = '<option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>' +
-                shiftMachines.map((m, idx) => {
-                    return `<option value="${idx}">[${m.month}] ${m.model} | S/O: ${m.serial || '-'} | ${m.customer || '고객사 미지정'}</option>`;
+            const monthFilter = document.getElementById('m-month-filter');
+            
+            const months = [...new Set(shiftMachines.map(m => m.month).filter(Boolean))].sort();
+            
+            monthFilter.innerHTML = `<option value="ALL">전체 월 (총 ${shiftMachines.length}대)</option>` +
+                months.map(mon => {
+                    const count = shiftMachines.filter(m => m.month === mon).length;
+                    return `<option value="${mon}">${mon} (${count}대)</option>`;
                 }).join('');
+
+            // Update Dropdown with initial filter
+            updateMpsDropdown();
 
             // Fill inputs with current bay data
             document.getElementById('m-model').value = bay.model || '';
@@ -838,16 +854,37 @@
             document.getElementById('edit-modal').style.display = 'flex';
         }
 
-        function onMpsSelectChange() {
-            const idx = document.getElementById('m-mps-select').value;
-            if (idx === '') return;
-
+        function updateMpsDropdown() {
             const bay = allBays.find(b => b.id === activeEditingBayId);
             if (!bay) return;
 
-            const shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
-            const m = shiftMachines[idx];
-            if (!m) return;
+            const selectedMonth = document.getElementById('m-month-filter').value;
+            let shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
+
+            if (selectedMonth !== 'ALL') {
+                shiftMachines = shiftMachines.filter(m => m.month === selectedMonth);
+            }
+
+            activeModalFilteredMachines = shiftMachines;
+
+            const mpsSelect = document.getElementById('m-mps-select');
+            if (shiftMachines.length === 0) {
+                mpsSelect.innerHTML = '<option value="">-- 해당 조건에 일치하는 계획 장비가 없습니다 --</option>';
+                return;
+            }
+
+            mpsSelect.innerHTML = '<option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>' +
+                shiftMachines.map((m, idx) => {
+                    const serialText = m.serial ? `S/O: ${m.serial}` : '시리얼 미지정';
+                    return `<option value="${idx}">[${m.month}] ${m.model} | ${serialText} | ${m.customer || '고객사 미지정'}</option>`;
+                }).join('');
+        }
+
+        function onMpsSelectChange() {
+            const idx = document.getElementById('m-mps-select').value;
+            if (idx === '' || !activeModalFilteredMachines[idx]) return;
+
+            const m = activeModalFilteredMachines[idx];
 
             document.getElementById('m-model').value = m.model || '';
             document.getElementById('m-serial').value = m.serial || '';
