@@ -438,18 +438,26 @@ function processMpsFile(input, rules = {}) {
         }
 
         // Standardize Site
-        if (siteMaster[verCode]) finalSite = siteMaster[verCode];
-        else if (siteMaster[plCode]) finalSite = siteMaster[plCode];
-        else if (siteMaster[finalSite]) finalSite = siteMaster[finalSite];
+        if (verCode && siteMaster[verCode]) {
+            finalSite = siteMaster[verCode];
+        } else if (foundMeta && foundMeta.site) {
+            finalSite = foundMeta.site;
+        } else if (siteMaster[finalSite]) {
+            finalSite = siteMaster[finalSite];
+        }
         
-        if (plCode === 'I0215001') finalSite = 'LEO';
-        if (plCode === 'I0169394' || verCode === '9ACE') finalSite = '지티테크';
+        if (verCode === '9ACE') finalSite = '지티테크';
+        if (verCode === '9AYA' || pName.toUpperCase().startsWith('LEO') || mModel.toUpperCase().startsWith('LEO')) {
+            finalSite = 'LEO';
+        }
         
         if (finalSite === '1842' || finalSite === 1842 || finalSite.includes('성주')) finalSite = '성주';
         else if (finalSite === '1840' || finalSite === 1840 || finalSite.includes('남산')) finalSite = '남산';
 
         finalSite = finalSite.replace(/^\d+\.\s*/, '').trim();
-        if (finalSite.includes('LEO')) finalSite = 'LEO';
+        if (finalSite.includes('LEO') && !pName.toUpperCase().startsWith('LEO') && !mModel.toUpperCase().startsWith('LEO') && verCode !== '9AYA') {
+            finalSite = (row[mSiteIdx] === 1842 || row[mSiteIdx] === '1842') ? '성주' : '남산';
+        }
         if (finalSite.includes('지티')) finalSite = '지티테크';
         
         if (pName || mModel) {
