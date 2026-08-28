@@ -1965,8 +1965,8 @@
                     const timeEl = document.getElementById('mes-sync-time');
                     if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
 
-                    alert(`⚡ [MES 실시간 실적 동기화 완료]\n\n• 총 MES 데이터: ${json.totalMesRecords || 0}건\n• MC직 실가동 장비: ${json.validMcMachinesCount || 0}대 (노란색 하이라이트)\n• 배정 지번 공정 갱신: ${json.updatedBaysCount || 0}대\n\n좌측 대기 풀에 노란색 [🟡 현공정] 장비들이 로드되었습니다. 마우스로 원하는 지번에 끌어다 놓으세요!`);
-                    showToast(`⚡ MES 실적 동기화 완료! (MC 실가동 ${json.validMcMachinesCount || 0}대 최신화)`);
+                    alert(`⚡ [MES 실시간 실적 & 실제 지번 자동배치 완료]\n\n• MC직 실가동 장비: ${json.validMcMachinesCount || 0}대\n• 🎯 실제 지번 자동 배치: ${json.autoAssignedBaysCount || 0}대\n• ⚙️ 실시간 공정 갱신: ${json.updatedBaysCount || 0}대\n\nMES에 등록된 실제 지번(C11, D17, B9, A1 등)에 장비가 자동 배치되었으며, 노란색 실시간 공정 하이라이트가 켜졌습니다!`);
+                    showToast(`⚡ MES 동기화 완료! (${json.autoAssignedBaysCount || 0}개 지번 자동 배치)`);
                 } else {
                     alert(`⚠️ MES 실시간 조회 실패:\n\n${json.error || '인증 토큰이 만료되었거나 올바르지 않습니다.'}\n\n[확인]을 누르시면 MES 연동 설정 창이 열립니다.`);
                     openMesModal();

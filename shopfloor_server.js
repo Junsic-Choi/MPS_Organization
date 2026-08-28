@@ -16,19 +16,19 @@ const DATA_FILE = path.join(__dirname, 'shopfloor_data.json');
 function getDefaultBays() {
     const bays = [];
     
-    // MC 1직 (E구역 1~10, F구역 1~6)
-    for (let i = 1; i <= 10; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
-    for (let i = 1; i <= 6; i++) bays.push({ id: `mc1-f${i}`, shift: 'MC1직', bay: `F${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 1직 (E구역 1~13, F구역 1~13)
+    for (let i = 1; i <= 13; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 13; i++) bays.push({ id: `mc1-f${i}`, shift: 'MC1직', bay: `F${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 2직 (C구역 1~12, D구역 1~12)
-    for (let i = 1; i <= 12; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
-    for (let i = 1; i <= 12; i++) bays.push({ id: `mc2-d${i}`, shift: 'MC2직', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 2직 (C구역 1~19, D구역 1~19)
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-d${i}`, shift: 'MC2직', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 3직 (B구역 1~10)
-    for (let i = 1; i <= 10; i++) bays.push({ id: `mc3-b${i}`, shift: 'MC3직', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 3직 (B구역 1~19)
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc3-b${i}`, shift: 'MC3직', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 4직 (A구역 1~10)
-    for (let i = 1; i <= 10; i++) bays.push({ id: `mc4-a${i}`, shift: 'MC4직', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 4직 (A구역 1~19)
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc4-a${i}`, shift: 'MC4직', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
     return bays;
 }
@@ -181,7 +181,7 @@ app.post('/api/mes-sync', async (req, res) => {
             let parsed = typeof req.body.rawJson === 'string' ? JSON.parse(req.body.rawJson) : req.body.rawJson;
             mesItems = Array.isArray(parsed) ? parsed : (parsed.OUT_DATA || (parsed.InDataList && parsed.InDataList.OUT_DATA) || []);
         } else {
-            // 2. Fetch from remote MES API
+            // 2. Fetch from remote MES API using DUAL Queries (Progress + Physical Bay Location)
             const authHeader = req.headers['authorization'] || req.body.token || '';
             const now = new Date();
             const yyyy = now.getFullYear();
@@ -192,7 +192,8 @@ app.post('/api/mes-sync', async (req, res) => {
             const fromYm = `${yyyy}${mm}`;
             const toYm = `${nextYyyy}${nextMm}`;
 
-            const payload = req.body.payload || {
+            // Query 1: Progress & Real-time Active Process (CUR_PROC_ID)
+            const payloadProgress = {
                 BizActId: "BR_DNS_MES_SEL_ProdProgressStatus_Assy",
                 InDataList: {
                     IN_DATA: [
@@ -218,38 +219,77 @@ app.post('/api/mes-sync', async (req, res) => {
                 port: "8082"
             };
 
-            const headers = {
-                'Content-Type': 'application/json'
+            // Query 2: Physical Bay Locations (GI_LOC_ID) across all departments
+            const payloadLocation = {
+                BizActId: "BR_DNS_MES_GET_GIProdOrderOper",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            ENTERPRISE_ID: "1800",
+                            PLANT_ID: "1840",
+                            LANG_ID: "ko-KR",
+                            PROD_ORD_ID: "",
+                            PROD_MDL_ID: null,
+                            PROD_YYYYMM_FROM: fromYm,
+                            PROD_YYYYMM_TO: toYm,
+                            ORD_TYPE_CODE: "A",
+                            WC_ID: null,
+                            MTRL_ID: "",
+                            DEPT_VENDOR_CHK: null,
+                            DEPT_VENDOR_ID: null,
+                            EXCLD_GI_END: null
+                        }
+                    ]
+                },
+                OutData: "OUT_DATA,OUT_GPES",
+                port: "8082"
             };
+
+            const headers = { 'Content-Type': 'application/json' };
             if (authHeader) {
                 headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
             }
 
             try {
-                const mesRes = await fetch('http://mes.dn-solutions.com:8081/api/json/query', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(payload)
-                });
+                const [resProgress, resLoc] = await Promise.all([
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadProgress) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadLocation) }).catch(e => null)
+                ]);
 
-                if (mesRes.ok) {
-                    const mesJson = await mesRes.json();
+                if (resProgress && resProgress.ok) {
+                    const mesJson = await resProgress.json();
                     mesItems = mesJson.OUT_DATA || (mesJson.InDataList && mesJson.InDataList.OUT_DATA) || [];
-                } else {
-                    const errText = await mesRes.text().catch(() => '');
-                    console.warn(`[MES] Server response status: ${mesRes.status} - ${errText}`);
-                    if (mesRes.status === 401) {
-                        return res.json({
-                            success: false,
-                            error: 'MES 인증 토큰(Bearer Token)이 만료되었거나 유효하지 않습니다. 최신 토큰을 설정해주세요.',
-                            status: 401
-                        });
-                    }
+                } else if (resProgress && resProgress.status === 401) {
+                    return res.json({
+                        success: false,
+                        error: 'MES 인증 토큰(Bearer Token)이 만료되었거나 유효하지 않습니다. 최신 토큰을 설정해주세요.',
+                        status: 401
+                    });
+                }
+
+                if (resLoc && resLoc.ok) {
+                    const locJson = await resLoc.json();
+                    const locRows = locJson.OUT_DATA || [];
+                    console.log(`[MES] Fetched ${locRows.length} physical bay location records from Query 2`);
+
+                    // Map bay locations by Order ID and Serial
+                    locRows.forEach(r => {
+                        const ordKey = (r.PROD_ORD_ID || '').trim();
+                        const serialKey = (r.PROD_MDL_CNT || '').trim();
+                        const loc = (r.GI_LOC_ID || '').trim().toUpperCase();
+
+                        if (loc) {
+                            if (ordKey) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                            if (serialKey) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                        }
+                    });
                 }
             } catch (fetchErr) {
                 console.warn('[MES] Remote connection warning:', fetchErr.message);
             }
         }
+
+        const locBayMap = new Map();
 
         if (mesItems.length === 0) {
             return res.json({ 
@@ -259,12 +299,13 @@ app.post('/api/mes-sync', async (req, res) => {
             });
         }
 
-        // Load existing bays
+        // Load existing bays (or initialize full template)
         let bays = [];
         if (fs.existsSync(DATA_FILE)) {
             const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
             bays = data.bays || [];
-        } else {
+        }
+        if (bays.length < 50) {
             bays = getDefaultBays();
         }
 
@@ -272,29 +313,30 @@ app.post('/api/mes-sync', async (req, res) => {
         function classifyMcShift(item) {
             const mdl = (item.PROD_MDL_NAME || item.MTRL_ID || '').toUpperCase();
             const wc = (item.WC_ID || '').toUpperCase();
+            const ver = (item.PROD_VER_ID || '').toUpperCase();
 
             // 1. Strict Exclusion of TC/Lathe models
-            if (mdl.includes('DNX') || mdl.includes('LYNX') || mdl.includes('PUMA') || mdl.includes('TW') || mdl.includes('TT') || mdl.includes('TL') || wc.includes('TC')) {
+            if (mdl.includes('DNX') || mdl.includes('LYNX') || mdl.includes('PUMA') || mdl.includes('TW') || mdl.includes('TT') || mdl.includes('TL') || wc.includes('TC') || ver.includes('0AT')) {
                 return null;
             }
 
             // 2. MC 4직: DHF 8000, NHP 8000, HM 1000, HM 1250, XC 4000
-            if (mdl.includes('DHF') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('HM 1') || mdl.includes('HM1') || mdl.includes('XC') || wc === 'A10MC40') {
+            if (mdl.includes('DHF') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('HM 1') || mdl.includes('HM1') || mdl.includes('XC') || wc === 'A10MC40' || /0AM4|0AMD/.test(ver)) {
                 return 'MC4직';
             }
 
             // 3. MC 3직: NHM 5000/6300/8000, NHP 5500/6300
-            if (mdl.includes('NHM') || mdl.includes('NHP 55') || mdl.includes('NHP55') || mdl.includes('NHP 63') || mdl.includes('NHP63') || wc === 'A10MC30') {
+            if (mdl.includes('NHM') || mdl.includes('NHP 55') || mdl.includes('NHP55') || mdl.includes('NHP 63') || mdl.includes('NHP63') || wc === 'A10MC30' || /0AM3|0AMC/.test(ver)) {
                 return 'MC3직';
             }
 
             // 4. MC 2직: DVF 4000/5000/6500/8000 (5축기)
-            if (mdl.includes('DVF') || wc === 'A10MC20') {
+            if (mdl.includes('DVF') || wc === 'A10MC20' || ver.includes('0AM2')) {
                 return 'MC2직';
             }
 
             // 5. MC 1직: NHP 4000/5000, NHC 4000/5000, HC 400/500
-            if (mdl.includes('NHP 4') || mdl.includes('NHP4') || mdl.includes('NHP 50') || mdl.includes('NHP50') || mdl.includes('NHC') || mdl.includes('HC 4') || mdl.includes('HC 5') || wc === 'A10MC10') {
+            if (mdl.includes('NHP 4') || mdl.includes('NHP4') || mdl.includes('NHP 50') || mdl.includes('NHP50') || mdl.includes('NHC') || mdl.includes('HC 4') || mdl.includes('HC 5') || wc === 'A10MC10' || /0AM1|0AMA|0AMB/.test(ver)) {
                 return 'MC1직';
             }
 
@@ -309,70 +351,109 @@ app.post('/api/mes-sync', async (req, res) => {
             return null;
         }
 
-        // Group unique machines from MES
+        // Group unique machines from MES & Attach physical Bay Location (GI_LOC_ID)
         const machineMap = new Map();
         mesItems.forEach(i => {
             const shift = classifyMcShift(i);
             if (!shift) return; // Skip TC/non-MC
 
             const serial = i.PROD_MDL_ID ? `${i.PROD_MDL_ID}-${i.PROD_MDL_CNT}` : (i.PROD_MDL_CNT || '');
-            const key = i.PROD_ORD_ID || serial;
+            const ordKey = (i.PROD_ORD_ID || '').trim();
+            const serialKey = (i.PROD_MDL_CNT || '').trim();
+            const key = ordKey || serial;
+
+            const locInfo = (ordKey && locBayMap.get(ordKey)) || (serialKey && locBayMap.get(serialKey)) || {};
+
             if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
                 machineMap.set(key, {
                     ...i,
                     shift,
                     serial,
                     model: i.PROD_MDL_NAME || i.MTRL_ID,
-                    salesDoc: i.PROD_ORD_ID
+                    salesDoc: i.PROD_ORD_ID,
+                    loc: locInfo.loc || '',
+                    area: locInfo.area || ''
                 });
             }
         });
 
         const mesMachines = [...machineMap.values()];
 
-        // DO NOT arbitrarily assign bays!
-        // Only update bays that ALREADY have an assigned machine (match by serial or order)
+        // Smart Physical Bay Allocation
+        // 1. Auto-assign machines to matching bays (e.g. GI_LOC_ID 'C11' -> Bay 'C11', 'D17' -> Bay 'D17', 'B9' -> 'B9')
+        let autoAssignedCount = 0;
         let updatedCount = 0;
         let shippedCount = 0;
+
         bays.forEach(targetBay => {
-            if (!targetBay.assigned) return; // Keep empty bays intact
-
-            const baySerial = (targetBay.serial || '').trim();
-            const bayOrder = (targetBay.salesDoc || '').trim();
-
-            const match = mesMachines.find(m => {
-                if (baySerial && (m.serial === baySerial || m.PROD_MDL_CNT === baySerial)) return true;
-                if (bayOrder && m.salesDoc === bayOrder) return true;
-                return false;
+            const bayName = targetBay.bay.toUpperCase();
+            
+            // Look for an MES machine assigned to this exact physical bay location
+            const locMatch = mesMachines.find(m => {
+                if (!m.loc) return false;
+                const mLoc = m.loc.toUpperCase().replace(/[\s\-_()동구역]/g, '');
+                return mLoc === bayName || m.loc === targetBay.bay;
             });
 
-            if (match) {
-                targetBay.currentProcess = match.CUR_PROC_ID || match.PROC_ID || targetBay.currentProcess || 'BASE';
-                targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
-                targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
-                targetBay.spec = match.MTRL_ID || targetBay.spec;
-                targetBay.isShipped = false;
-                if (match.PROD_ORD_STATUS_NAME) {
-                    targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
-                }
+            if (locMatch) {
+                targetBay.assigned = true;
+                targetBay.model = locMatch.model;
+                targetBay.serial = locMatch.serial;
+                targetBay.salesDoc = locMatch.salesDoc || '';
+                targetBay.customer = locMatch.customer || '';
+                targetBay.currentProcess = locMatch.CUR_PROC_ID || locMatch.PROC_ID || 'BASE';
+                targetBay.startDate = locMatch.START_PLAN_DATE || targetBay.startDate;
+                targetBay.deliveryDate = locMatch.SHIP_TARGET_DATE || targetBay.deliveryDate;
+                targetBay.spec = locMatch.MTRL_ID || targetBay.spec;
                 targetBay.source = 'MES';
-                updatedCount++;
-            } else if (targetBay.source === 'MES') {
-                // Was active in MES previously, but now no longer in active assembly (shipped/complete!)
-                targetBay.isShipped = true;
-                targetBay.issue = '🏁 조립 및 출하 완료 (MES 종료)';
-                shippedCount++;
+                targetBay.isShipped = false;
+                if (locMatch.PROD_ORD_STATUS_NAME) {
+                    targetBay.issue = `[상태: ${locMatch.PROD_ORD_STATUS_NAME}]`;
+                }
+                autoAssignedCount++;
+                return;
+            }
+
+            // 2. If bay was already assigned manually, sync its in-progress stage
+            if (targetBay.assigned) {
+                const baySerial = (targetBay.serial || '').trim();
+                const bayOrder = (targetBay.salesDoc || '').trim();
+
+                const match = mesMachines.find(m => {
+                    if (baySerial && (m.serial === baySerial || m.PROD_MDL_CNT === baySerial)) return true;
+                    if (bayOrder && m.salesDoc === bayOrder) return true;
+                    return false;
+                });
+
+                if (match) {
+                    targetBay.currentProcess = match.CUR_PROC_ID || match.PROC_ID || targetBay.currentProcess || 'BASE';
+                    targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
+                    targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
+                    targetBay.spec = match.MTRL_ID || targetBay.spec;
+                    targetBay.isShipped = false;
+                    if (match.PROD_ORD_STATUS_NAME) {
+                        targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
+                    }
+                    targetBay.source = 'MES';
+                    updatedCount++;
+                } else if (targetBay.source === 'MES') {
+                    // Shipped
+                    targetBay.isShipped = true;
+                    targetBay.issue = '🏁 조립 및 출하 완료 (MES 종료)';
+                    shippedCount++;
+                }
             }
         });
 
         // Save updated bays
         fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
-        console.log(`[MES] Synced ${updatedCount} assigned bays (${shippedCount} shipped) from ${mesMachines.length} valid MC machines`);
+        console.log(`[MES] Synced: ${autoAssignedCount} bays auto-placed from GI_LOC_ID, ${updatedCount} bays stage-updated, ${shippedCount} shipped`);
 
         res.json({
             success: true,
             totalMesRecords: mesItems.length,
             validMcMachinesCount: mesMachines.length,
+            autoAssignedBaysCount: autoAssignedCount,
             updatedBaysCount: updatedCount,
             shippedBaysCount: shippedCount,
             mesMachines,
