@@ -1417,7 +1417,135 @@
             }
         }
 
+        // Render Shopfloor Bays
+        function renderBays() {
+            const container = document.getElementById('main-container');
+            if (!container) return;
+            container.innerHTML = '';
 
+            const searchVal = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+
+            const shifts = ['MC1직', 'MC2직', 'MC3직', 'MC4직'];
+            const targetShifts = currentShift === 'ALL' ? shifts : [currentShift];
+
+            let totalCount = allBays.length;
+            let activeCount = 0;
+            let emptyCount = 0;
+            let issueCount = 0;
+
+            targetShifts.forEach(shiftName => {
+                let badgeClass = 'badge-mc1';
+                if (shiftName === 'MC2직') badgeClass = 'badge-mc2';
+                else if (shiftName === 'MC3직') badgeClass = 'badge-mc3';
+                else if (shiftName === 'MC4직') badgeClass = 'badge-mc4';
+
+                const shiftBays = allBays.filter(b => b.shift === shiftName);
+
+                const filteredBays = shiftBays.filter(b => {
+                    if (!searchVal) return true;
+                    const str = `${b.bay} ${b.model || ''} ${b.serial || ''} ${b.customer || ''} ${b.worker || ''} ${b.spec || ''} ${b.issue || ''}`.toLowerCase();
+                    return str.includes(searchVal);
+                });
+
+                if (filteredBays.length === 0 && currentShift !== 'ALL') return;
+
+                const section = document.createElement('section');
+                section.className = 'shift-section';
+
+                const activeInShift = shiftBays.filter(b => b.assigned).length;
+
+                section.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-title">${shiftName} 조립 지번 현황</span>
+                        <span class="header-badge ${badgeClass}">${activeInShift}대 가동 중 / 총 ${shiftBays.length}개 지번</span>
+                    </div>
+                    <div class="bay-grid" id="grid-${shiftName}"></div>
+                `;
+
+                const grid = section.querySelector(`#grid-${shiftName}`);
+
+                filteredBays.forEach(bay => {
+                    if (bay.assigned) {
+                        activeCount++;
+                        if (bay.issue && bay.issue.trim()) issueCount++;
+                    } else {
+                        emptyCount++;
+                    }
+
+                    const card = document.createElement('div');
+                    card.id = `bay-card-${bay.id}`;
+
+                    // Drag & Drop event listeners on bay card
+                    card.ondragover = (e) => onBayDragOver(e, bay.id);
+                    card.ondragleave = (e) => onBayDragLeave(e, bay.id);
+                    card.ondrop = (e) => onBayDrop(e, bay.id);
+
+                    if (!bay.assigned) {
+                        card.className = 'bay-card empty';
+                        card.innerHTML = `
+                            <div style="font-weight: 800; font-family: 'JetBrains Mono'; font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.25rem;">지번 ${bay.bay}</div>
+                            <div style="font-size: 0.8rem; font-weight: 600;">+ 빈 지번 (장비를 끌어다 놓으세요)</div>
+                        `;
+                    } else {
+                        card.className = 'bay-card';
+                        card.draggable = true;
+                        card.ondragstart = (e) => onBayDragStart(e, bay.id);
+
+                        const modelCfg = getProcessConfigForModel(bay.model);
+                        const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
+                        const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
+
+                        const sourceBadge = bay.source === 'MES'
+                            ? `<span style="font-size: 0.65rem; font-weight: 800; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간</span>`
+                            : `<span style="font-size: 0.65rem; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">✏️ 수기</span>`;
+
+                        card.innerHTML = `
+                            <div class="bay-card-top">
+                                <span class="bay-num-badge">지번 ${bay.bay}</span>
+                                <span class="bay-worker-badge">👷 ${bay.worker || '작업자 미지정'}</span>
+                                ${sourceBadge}
+                            </div>
+
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <span class="bay-model">${bay.model || '-'}</span>
+                                    <span class="bay-serial">호기: ${bay.serial || '-'}</span>
+                                </div>
+                                <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
+                            </div>
+
+                            <div class="bay-process-badge" style="border-left: 3px solid var(--primary);">
+                                <span>⚙️</span>
+                                <span style="font-size: 0.725rem; font-weight: 700;">${procText}</span>
+                            </div>
+
+                            <div class="bay-footer">
+                                ${bay.spec ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">⚡ ${bay.spec}</div>` : ''}
+                                ${bay.issue ? `<div style="color: var(--danger); font-weight: 700;">⚠️ ${bay.issue}</div>` : ''}
+                            </div>
+                        `;
+                    }
+
+                    card.onclick = () => openEditModal(bay);
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(section);
+            });
+
+            // Update stats
+            const totalEl = document.getElementById('stat-total-bays');
+            const activeEl = document.getElementById('stat-active-bays');
+            const emptyEl = document.getElementById('stat-empty-bays');
+            const issueEl = document.getElementById('stat-issue-bays');
+            if (totalEl) totalEl.textContent = totalCount;
+            if (activeEl) activeEl.textContent = `${activeCount} 대`;
+            if (emptyEl) emptyEl.textContent = `${emptyCount} 개`;
+            if (issueEl) issueEl.textContent = `${issueCount} 건`;
+
+            // Also render pool
+            renderPool();
+        }
 
         function switchModalSource(src) {
             currentModalSource = src;
