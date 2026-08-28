@@ -580,19 +580,22 @@
             </div>
 
             <div class="modal-body">
-                <!-- 1. MPS Machine Quick Selection & Month Filter -->
-                <div class="form-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                        <label class="form-label" style="margin-bottom: 0;">⚡ 최신 MPS 생산계획 장비 선택 (자동 입력)</label>
-                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="font-size: 0.775rem; font-weight: 700; color: var(--text-secondary);">📅 생산월:</span>
-                            <select class="form-select" id="m-month-filter" style="width: auto; padding: 0.2rem 0.6rem; font-size: 0.775rem; font-weight: 700; border-color: var(--primary);" onchange="updateMpsDropdown()">
+                <!-- 1. Machine Quick Selection (MPS Plan or MES Actuals) -->
+                <div class="form-group" style="background: #f8fafc; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem; flex-wrap: wrap; gap: 0.3rem;">
+                        <div style="display: flex; gap: 0.3rem;">
+                            <button type="button" id="btn-src-mps" class="btn" style="padding: 0.25rem 0.6rem; font-size: 0.775rem; font-weight: 700; background: var(--primary); color: white;" onclick="switchModalSource('MPS')">📋 MPS 계획에서 선택</button>
+                            <button type="button" id="btn-src-mes" class="btn" style="padding: 0.25rem 0.6rem; font-size: 0.775rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1; color: #475569;" onclick="switchModalSource('MES')">⚡ MES 실시간 장비에서 선택</button>
+                        </div>
+                        <div id="m-month-filter-wrap" style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">📅 생산월:</span>
+                            <select class="form-select" id="m-month-filter" style="width: auto; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 700; border-color: var(--primary);" onchange="updateMpsDropdown()">
                                 <option value="ALL">전체 월</option>
                             </select>
                         </div>
                     </div>
-                    <select class="form-select" id="m-mps-select" onchange="onMpsSelectChange()">
-                        <option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>
+                    <select class="form-select" id="m-mps-select" onchange="onMpsSelectChange()" style="font-weight: 600; font-size: 0.825rem;">
+                        <option value="">-- 목록에서 장비를 선택하시면 아래 항목들이 자동 입력됩니다 --</option>
                     </select>
                 </div>
 
@@ -1058,6 +1061,32 @@
         }
 
         let activeModalFilteredMachines = [];
+        let currentModalSource = 'MPS';
+        let mesMachines = [];
+
+        function switchModalSource(src) {
+            currentModalSource = src;
+            const btnMps = document.getElementById('btn-src-mps');
+            const btnMes = document.getElementById('btn-src-mes');
+            const monthWrap = document.getElementById('m-month-filter-wrap');
+
+            if (src === 'MPS') {
+                btnMps.style.background = 'var(--primary)';
+                btnMps.style.color = 'white';
+                btnMes.style.background = '#ffffff';
+                btnMes.style.border = '1px solid #cbd5e1';
+                btnMes.style.color = '#475569';
+                if (monthWrap) monthWrap.style.display = 'flex';
+            } else {
+                btnMes.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
+                btnMes.style.color = 'white';
+                btnMps.style.background = '#ffffff';
+                btnMps.style.border = '1px solid #cbd5e1';
+                btnMps.style.color = '#475569';
+                if (monthWrap) monthWrap.style.display = 'none';
+            }
+            updateMpsDropdown();
+        }
 
         // Open Edit Modal for a Bay
         function openEditModal(bay) {
@@ -1078,8 +1107,8 @@
                     return `<option value="${mon}">${mon} (${count}대)</option>`;
                 }).join('');
 
-            // Update Dropdown with initial filter
-            updateMpsDropdown();
+            // Reset modal source to MPS
+            switchModalSource('MPS');
 
             // Fill inputs with current bay data
             document.getElementById('m-model').value = bay.model || '';
@@ -1104,26 +1133,45 @@
             const bay = allBays.find(b => b.id === activeEditingBayId);
             if (!bay) return;
 
-            const selectedMonth = document.getElementById('m-month-filter').value;
-            let shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
-
-            if (selectedMonth !== 'ALL') {
-                shiftMachines = shiftMachines.filter(m => m.month === selectedMonth);
-            }
-
-            activeModalFilteredMachines = shiftMachines;
-
             const mpsSelect = document.getElementById('m-mps-select');
-            if (shiftMachines.length === 0) {
-                mpsSelect.innerHTML = '<option value="">-- 해당 조건에 일치하는 계획 장비가 없습니다 --</option>';
-                return;
-            }
 
-            mpsSelect.innerHTML = '<option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>' +
-                shiftMachines.map((m, idx) => {
-                    const serialText = m.serial ? `S/O: ${m.serial}` : '시리얼 미지정';
-                    return `<option value="${idx}">[${m.month}] ${m.model} | ${serialText} | ${m.customer || '고객사 미지정'}</option>`;
-                }).join('');
+            if (currentModalSource === 'MPS') {
+                const selectedMonth = document.getElementById('m-month-filter').value;
+                let shiftMachines = mpsMachines.filter(m => m.shift === bay.shift);
+
+                if (selectedMonth !== 'ALL') {
+                    shiftMachines = shiftMachines.filter(m => m.month === selectedMonth);
+                }
+
+                activeModalFilteredMachines = shiftMachines;
+
+                if (shiftMachines.length === 0) {
+                    mpsSelect.innerHTML = '<option value="">-- 해당 조건에 일치하는 MPS 계획 장비가 없습니다 --</option>';
+                    return;
+                }
+
+                mpsSelect.innerHTML = '<option value="">-- MPS 계획 장비 목록에서 선택 (또는 직접 입력) --</option>' +
+                    shiftMachines.map((m, idx) => {
+                        const serialText = m.serial ? `S/O: ${m.serial}` : '시리얼 미지정';
+                        return `<option value="${idx}">[${m.month}] ${m.model} | ${serialText} | ${m.customer || '고객사 미지정'}</option>`;
+                    }).join('');
+            } else {
+                // MES Realtime Machines for this Shift
+                let shiftMachines = mesMachines.filter(m => m.shift === bay.shift);
+                activeModalFilteredMachines = shiftMachines;
+
+                if (shiftMachines.length === 0) {
+                    mpsSelect.innerHTML = '<option value="">-- MES 실시간 가동 중인 해당 직의 장비가 없습니다 (상단 MES 동기화 필요) --</option>';
+                    return;
+                }
+
+                mpsSelect.innerHTML = '<option value="">-- MES 실시간 조립 진행 장비에서 선택 --</option>' +
+                    shiftMachines.map((m, idx) => {
+                        const procText = m.CUR_PROC_ID ? `[현공정: ${m.CUR_PROC_ID}]` : '[시작]';
+                        const serialText = m.serial ? `S/O: ${m.serial}` : '시리얼 미지정';
+                        return `<option value="${idx}">${procText} ${m.model} | ${serialText} | 착수: ${m.START_PLAN_DATE || '-'}</option>`;
+                    }).join('');
+            }
         }
 
         function onMpsSelectChange() {
@@ -1136,9 +1184,13 @@
             document.getElementById('m-serial').value = m.serial || '';
             document.getElementById('m-customer').value = m.customer || '';
             document.getElementById('m-salesdoc').value = m.salesDoc || '';
+            if (m.spec || m.MTRL_ID) {
+                document.getElementById('m-spec').value = m.spec || m.MTRL_ID || '';
+            }
 
             // Automatically switch process steps for this model!
-            updateProcessDropdownForModel(m.model, '');
+            const targetProc = m.CUR_PROC_ID || m.PROC_ID || '';
+            updateProcessDropdownForModel(m.model, targetProc);
         }
 
         // Save Current Bay
@@ -1313,12 +1365,13 @@
                 const json = await res.json();
                 if (json.success && Array.isArray(json.bays)) {
                     allBays = json.bays;
+                    mesMachines = json.mesMachines || [];
                     renderBays();
                     const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                     const timeEl = document.getElementById('mes-sync-time');
                     if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
 
-                    alert(`⚡ [MES 실적 반영 완료]\n\n붙여넣은 총 ${outData.length}건 중 남산 MC 공장 지번 ${json.matchedBaysCount}대가 성공적으로 자동 갱신되었습니다!`);
+                    alert(`⚡ [MES 실적 반영 완료]\n\n• 총 MES 데이터: ${outData.length}건\n• MC직 가동 장비: ${json.validMcMachinesCount || 0}대\n• 배정 지번 공정 갱신: ${json.updatedBaysCount || 0}대\n\n(각 지번을 클릭하여 장비를 배정할 때 [⚡ MES 실시간 장비에서 선택] 탭에서 가동 중인 MC 장비를 자유롭게 선택하실 수 있습니다)`);
                 } else {
                     alert('지번 반영 실패: ' + (json.error || '알 수 없는 오류'));
                 }
@@ -1347,14 +1400,15 @@
                 const json = await res.json();
                 if (json.success && Array.isArray(json.bays)) {
                     allBays = json.bays;
+                    mesMachines = json.mesMachines || [];
                     renderBays();
                     
                     const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                     const timeEl = document.getElementById('mes-sync-time');
                     if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
 
-                    alert(`⚡ [MES 실시간 실적 동기화 완료]\n\n총 ${json.totalMesRecords || 0}건의 MES 데이터 중 남산 MC 공장 지번 ${json.matchedBaysCount}대가 실시간 자동 갱신되었습니다!`);
-                    showToast(`⚡ MES 실적 동기화 완료! (${json.matchedBaysCount}개 지번 자동 갱신)`);
+                    alert(`⚡ [MES 실시간 실적 동기화 완료]\n\n• 총 MES 데이터: ${json.totalMesRecords || 0}건\n• MC직 가동 장비: ${json.validMcMachinesCount || 0}대\n• 배정 지번 공정 갱신: ${json.updatedBaysCount || 0}대\n\n(각 지번을 클릭하여 장비를 배정할 때 [⚡ MES 실시간 장비에서 선택] 탭에서 가동 중인 MC 장비를 자유롭게 선택하실 수 있습니다)`);
+                    showToast(`⚡ MES 실적 동기화 완료! (MC 장비 ${json.validMcMachinesCount || 0}대 최신화)`);
                 } else {
                     alert(`⚠️ MES 실시간 조회 실패:\n\n${json.error || '인증 토큰이 만료되었거나 올바르지 않습니다.'}\n\n[확인]을 누르시면 MES 연동 설정 창이 열립니다.`);
                     openMesModal();

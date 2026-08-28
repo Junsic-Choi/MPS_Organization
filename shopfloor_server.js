@@ -268,83 +268,106 @@ app.post('/api/mes-sync', async (req, res) => {
             bays = getDefaultBays();
         }
 
-        // Filter MC-relevant records and group by unique machine
-        const mcItems = mesItems.filter(i => (i.WC_ID || '').includes('MC') || (i.PROD_MDL_NAME || '').startsWith('N') || (i.PROD_MDL_NAME || '').startsWith('D') || (i.PROD_MDL_NAME || '').startsWith('H'));
-        
+        // Strict MC Classifier
+        function classifyMcShift(item) {
+            const mdl = (item.PROD_MDL_NAME || item.MTRL_ID || '').toUpperCase();
+            const wc = (item.WC_ID || '').toUpperCase();
+
+            // 1. Strict Exclusion of TC/Lathe models
+            if (mdl.includes('DNX') || mdl.includes('LYNX') || mdl.includes('PUMA') || mdl.includes('TW') || mdl.includes('TT') || mdl.includes('TL') || wc.includes('TC')) {
+                return null;
+            }
+
+            // 2. MC 4직: DHF 8000, NHP 8000, HM 1000, HM 1250, XC 4000
+            if (mdl.includes('DHF') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('HM 1') || mdl.includes('HM1') || mdl.includes('XC') || wc === 'A10MC40') {
+                return 'MC4직';
+            }
+
+            // 3. MC 3직: NHM 5000/6300/8000, NHP 5500/6300
+            if (mdl.includes('NHM') || mdl.includes('NHP 55') || mdl.includes('NHP55') || mdl.includes('NHP 63') || mdl.includes('NHP63') || wc === 'A10MC30') {
+                return 'MC3직';
+            }
+
+            // 4. MC 2직: DVF 4000/5000/6500/8000 (5축기)
+            if (mdl.includes('DVF') || wc === 'A10MC20') {
+                return 'MC2직';
+            }
+
+            // 5. MC 1직: NHP 4000/5000, NHC 4000/5000, HC 400/500
+            if (mdl.includes('NHP 4') || mdl.includes('NHP4') || mdl.includes('NHP 50') || mdl.includes('NHP50') || mdl.includes('NHC') || mdl.includes('HC 4') || mdl.includes('HC 5') || wc === 'A10MC10') {
+                return 'MC1직';
+            }
+
+            // Other MC lines
+            if (wc === 'A10MCE0' || wc === 'Q10MC00' || wc === 'A10MC51') {
+                if (mdl.includes('DVF')) return 'MC2직';
+                if (mdl.includes('NHM')) return 'MC3직';
+                if (mdl.includes('DHF') || mdl.includes('HM')) return 'MC4직';
+                if (mdl.includes('NHP') || mdl.includes('NHC') || mdl.includes('HC')) return 'MC1직';
+            }
+
+            return null;
+        }
+
+        // Group unique machines from MES
         const machineMap = new Map();
-        mcItems.forEach(i => {
-            const key = i.PROD_ORD_ID || (i.PROD_MDL_ID + '-' + i.PROD_MDL_CNT);
+        mesItems.forEach(i => {
+            const shift = classifyMcShift(i);
+            if (!shift) return; // Skip TC/non-MC
+
+            const serial = i.PROD_MDL_ID ? `${i.PROD_MDL_ID}-${i.PROD_MDL_CNT}` : (i.PROD_MDL_CNT || '');
+            const key = i.PROD_ORD_ID || serial;
             if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
-                machineMap.set(key, i);
+                machineMap.set(key, {
+                    ...i,
+                    shift,
+                    serial,
+                    model: i.PROD_MDL_NAME || i.MTRL_ID,
+                    salesDoc: i.PROD_ORD_ID
+                });
             }
         });
 
-        const uniqueMachines = [...machineMap.values()];
+        const mesMachines = [...machineMap.values()];
 
-        // Separate into 4 MC shifts
-        const shiftGroups = {
-            'MC1직': [],
-            'MC2직': [],
-            'MC3직': [],
-            'MC4직': []
-        };
+        // DO NOT arbitrarily assign bays!
+        // Only update bays that ALREADY have an assigned machine (match by serial or order)
+        let updatedCount = 0;
+        bays.forEach(targetBay => {
+            if (!targetBay.assigned) return; // Keep empty bays intact
 
-        uniqueMachines.forEach(m => {
-            const mdl = (m.PROD_MDL_NAME || m.MTRL_ID || '').toUpperCase();
-            const wc = (m.WC_ID || '').toUpperCase();
-            if (wc === 'A10MC40' || mdl.includes('NHP8') || mdl.includes('DHF8') || mdl.includes('HM1') || mdl.includes('XC4')) {
-                shiftGroups['MC4직'].push(m);
-            } else if (wc === 'A10MC30' || mdl.includes('NHM') || mdl.includes('NHP55') || mdl.includes('NHP63')) {
-                shiftGroups['MC3직'].push(m);
-            } else if (wc === 'A10MC20' || mdl.includes('DVF')) {
-                shiftGroups['MC2직'].push(m);
-            } else {
-                shiftGroups['MC1직'].push(m);
-            }
-        });
+            const baySerial = (targetBay.serial || '').trim();
+            const bayOrder = (targetBay.salesDoc || '').trim();
 
-        let matchedCount = 0;
-
-        // Populate bays per shift
-        ['MC1직', 'MC2직', 'MC3직', 'MC4직'].forEach(shiftName => {
-            const shiftBays = bays.filter(b => b.shift === shiftName);
-            const machines = shiftGroups[shiftName] || [];
-
-            shiftBays.forEach((targetBay, idx) => {
-                const item = machines[idx];
-                if (item) {
-                    targetBay.assigned = true;
-                    targetBay.model = item.PROD_MDL_NAME || item.MTRL_ID || targetBay.model;
-                    
-                    const serialNo = (item.PROD_MDL_ID && item.PROD_MDL_CNT) 
-                        ? `${item.PROD_MDL_ID}-${item.PROD_MDL_CNT}` 
-                        : (item.PROD_MDL_CNT || targetBay.serial);
-                    targetBay.serial = serialNo || targetBay.serial;
-
-                    targetBay.currentProcess = item.CUR_PROC_ID || item.PROC_ID || 'BASE';
-                    targetBay.salesDoc = item.PROD_ORD_ID || targetBay.salesDoc;
-                    targetBay.startDate = item.START_PLAN_DATE || targetBay.startDate;
-                    targetBay.deliveryDate = item.SHIP_TARGET_DATE || targetBay.deliveryDate;
-                    targetBay.spec = item.MTRL_ID || targetBay.spec;
-                    
-                    if (item.LOT_STATUS_CODE && item.LOT_STATUS_CODE !== 'NONE') {
-                        targetBay.issue = `[상태: ${item.PROD_ORD_STATUS_NAME || item.LOT_STATUS_CODE}]`;
-                    }
-
-                    targetBay.source = 'MES';
-                    matchedCount++;
-                }
+            const match = mesMachines.find(m => {
+                if (baySerial && (m.serial === baySerial || m.PROD_MDL_CNT === baySerial)) return true;
+                if (bayOrder && m.salesDoc === bayOrder) return true;
+                return false;
             });
+
+            if (match) {
+                targetBay.currentProcess = match.CUR_PROC_ID || match.PROC_ID || targetBay.currentProcess || 'BASE';
+                targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
+                targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
+                targetBay.spec = match.MTRL_ID || targetBay.spec;
+                if (match.PROD_ORD_STATUS_NAME) {
+                    targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
+                }
+                targetBay.source = 'MES';
+                updatedCount++;
+            }
         });
 
         // Save updated bays
         fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
-        console.log(`[MES] Synced ${matchedCount} bays from ${uniqueMachines.length} unique MC machines (${mesItems.length} total MES records)`);
+        console.log(`[MES] Synced ${updatedCount} assigned bays from ${mesMachines.length} valid MC machines`);
 
         res.json({
             success: true,
             totalMesRecords: mesItems.length,
-            matchedBaysCount: matchedCount,
+            validMcMachinesCount: mesMachines.length,
+            updatedBaysCount: updatedCount,
+            mesMachines,
             bays
         });
     } catch (err) {
