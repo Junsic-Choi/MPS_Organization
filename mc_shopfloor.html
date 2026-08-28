@@ -197,10 +197,118 @@
         }
 
         /* Stats Cards */
+        /* 2-Column Split Workspace Layout */
+        .workspace-container {
+            display: flex;
+            gap: 1.25rem;
+            padding: 1rem 1.5rem 3rem;
+            align-items: flex-start;
+        }
+
+        /* Left Pool Sidebar: Unassigned Machine Pool */
+        .pool-sidebar {
+            width: 320px;
+            min-width: 300px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            position: sticky;
+            top: 5rem;
+            max-height: calc(100vh - 6.5rem);
+        }
+
+        .pool-header {
+            padding: 0.85rem 1rem;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .pool-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .pool-shift-chip {
+            padding: 0.2rem 0.55rem;
+            border-radius: 9999px;
+            font-size: 0.725rem;
+            font-weight: 700;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .pool-shift-chip.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+        }
+
+        .pool-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-height: 250px;
+            max-height: calc(100vh - 280px);
+            transition: background-color 0.2s;
+        }
+
+        .pool-list.drag-over-pool {
+            background-color: #fee2e2;
+            border: 2px dashed #ef4444;
+            border-radius: 8px;
+        }
+
+        .pool-item {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0.6rem 0.75rem;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .pool-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px -1px rgba(0,0,0,0.1);
+            border-color: var(--primary);
+        }
+
+        .pool-item:active {
+            cursor: grabbing;
+        }
+
+        /* Right Bays Area */
+        .bays-area {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
         .stats-grid {
-            padding: 1.25rem 2rem 0.5rem;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
         }
 
@@ -229,7 +337,6 @@
 
         /* Main Content Grid */
         .main-container {
-            padding: 1rem 2rem 4rem;
             display: flex;
             flex-direction: column;
             gap: 2rem;
@@ -266,7 +373,7 @@
             gap: 1rem;
         }
 
-        /* Bay Station Cards */
+        /* Bay Station Cards with Drag & Drop */
         .bay-card {
             background: var(--bg-surface);
             border: 1px solid var(--border-color);
@@ -286,6 +393,13 @@
             border-color: var(--primary);
         }
 
+        .bay-card.drag-over {
+            border: 2px dashed var(--primary) !important;
+            background: #eff6ff !important;
+            transform: scale(1.02);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+        }
+
         .bay-card.empty {
             background: #fafafa;
             border: 1px dashed #cbd5e1;
@@ -298,6 +412,12 @@
         .bay-card.empty:hover {
             background: #f8fafc;
             border-color: var(--primary);
+        }
+
+        .bay-card.empty.drag-over {
+            border: 2px dashed #16a34a !important;
+            background: #f0fdf4 !important;
+        }
             color: var(--primary);
         }
 
@@ -531,42 +651,91 @@
         </div>
     </nav>
 
-    <!-- Summary Stats -->
-    <section class="stats-grid">
-        <div class="stat-card">
-            <div>
-                <div class="stat-label">전체 지번 (Total Bays)</div>
-                <div class="stat-val" id="stat-total-bays">0</div>
-            </div>
-            <span style="font-size: 1.4rem;">📍</span>
-        </div>
-        <div class="stat-card">
-            <div>
-                <div class="stat-label">조립 진행 (Active)</div>
-                <div class="stat-val" id="stat-active-bays" style="color: var(--primary);">0 대</div>
-            </div>
-            <span style="font-size: 1.4rem;">⚙️</span>
-        </div>
-        <div class="stat-card">
-            <div>
-                <div class="stat-label">빈 지번 (Empty Slots)</div>
-                <div class="stat-val" id="stat-empty-bays" style="color: var(--text-muted);">0 개</div>
-            </div>
-            <span style="font-size: 1.4rem;">⚪</span>
-        </div>
-        <div class="stat-card">
-            <div>
-                <div class="stat-label">특이사항 / 이슈 지번</div>
-                <div class="stat-val" id="stat-issue-bays" style="color: var(--warning);">0 건</div>
-            </div>
-            <span style="font-size: 1.4rem;">⚠️</span>
-        </div>
-    </section>
+    <!-- 2-Column Split Workspace Layout (Drag & Drop) -->
+    <div class="workspace-container">
+        <!-- Left Pool Sidebar: Unassigned Machine Pool -->
+        <aside class="pool-sidebar" id="pool-sidebar">
+            <div class="pool-header">
+                <div class="pool-title-row">
+                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                        <span style="font-size: 1.1rem;">📦</span>
+                        <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">대조립 대기 장비 풀</span>
+                    </div>
+                    <span id="pool-count-badge" style="font-size: 0.75rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.15rem 0.5rem; border-radius: 9999px;">0대</span>
+                </div>
+                
+                <!-- Source Toggle: MPS vs MES -->
+                <div style="display: flex; gap: 0.3rem; margin-bottom: 0.5rem;">
+                    <button id="pool-btn-mps" class="btn" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; font-weight: 700; background: var(--primary); color: white;" onclick="setPoolSource('MPS')">📋 MPS 계획</button>
+                    <button id="pool-btn-mes" class="btn" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1; color: #475569;" onclick="setPoolSource('MES')">⚡ MES 실시간</button>
+                </div>
 
-    <!-- Main Grid Content -->
-    <main class="main-container" id="main-container">
-        <!-- Dynamic Shift Sections Injected Here -->
-    </main>
+                <!-- Shift Filter Chips -->
+                <div style="display: flex; gap: 0.25rem; overflow-x: auto; margin-bottom: 0.5rem; padding-bottom: 0.2rem;">
+                    <button class="pool-shift-chip active" id="chip-ALL" onclick="setPoolShift('ALL')">전체</button>
+                    <button class="pool-shift-chip" id="chip-MC1직" onclick="setPoolShift('MC1직')">MC1직</button>
+                    <button class="pool-shift-chip" id="chip-MC2직" onclick="setPoolShift('MC2직')">MC2직</button>
+                    <button class="pool-shift-chip" id="chip-MC3직" onclick="setPoolShift('MC3직')">MC3직</button>
+                    <button class="pool-shift-chip" id="chip-MC4직" onclick="setPoolShift('MC4직')">MC4직</button>
+                </div>
+
+                <!-- Pool Search -->
+                <input type="text" id="pool-search-input" class="form-input" style="padding: 0.3rem 0.6rem; font-size: 0.775rem;" placeholder="기종, 호기, 오더 검색..." oninput="renderPool()">
+            </div>
+
+            <!-- Pool Drop Zone for Unassigning -->
+            <div class="pool-list" id="pool-list" 
+                 ondragover="onPoolDragOver(event)" 
+                 ondragleave="onPoolDragLeave(event)" 
+                 ondrop="onPoolDrop(event)">
+                <!-- Pool Item Cards Injected Dynamically -->
+            </div>
+            
+            <div style="padding: 0.5rem 0.75rem; background: #f8fafc; border-top: 1px solid var(--border-color); font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
+                💡 장비를 마우스로 잡아 <b>우측 지번으로 드래그</b>하세요.
+            </div>
+        </aside>
+
+        <!-- Right Bays Area -->
+        <section class="bays-area">
+            <!-- Summary Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">전체 지번 (Total Bays)</div>
+                        <div class="stat-val" id="stat-total-bays">0</div>
+                    </div>
+                    <span style="font-size: 1.4rem;">📍</span>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">조립 진행 (Active)</div>
+                        <div class="stat-val" id="stat-active-bays" style="color: var(--primary);">0 대</div>
+                    </div>
+                    <span style="font-size: 1.4rem;">⚙️</span>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">빈 지번 (Empty Slots)</div>
+                        <div class="stat-val" id="stat-empty-bays" style="color: var(--text-muted);">0 개</div>
+                    </div>
+                    <span style="font-size: 1.4rem;">⚪</span>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">특이사항 / 이슈 지번</div>
+                        <div class="stat-val" id="stat-issue-bays" style="color: var(--warning);">0 건</div>
+                    </div>
+                    <span style="font-size: 1.4rem;">⚠️</span>
+                </div>
+            </div>
+
+            <!-- Main Grid Content -->
+            <main class="main-container" id="main-container">
+                <!-- Dynamic Shift Sections Injected Here -->
+            </main>
+        </section>
+    </div>
 
     <!-- Bay Edit Modal -->
     <div class="modal-overlay" id="edit-modal" onclick="closeModal(event)">
@@ -947,122 +1116,308 @@
             renderBays();
         }
 
-        // Render Shopfloor Bays
-        function renderBays() {
-            const container = document.getElementById('main-container');
-            container.innerHTML = '';
+        // Pool State
+        let currentPoolSource = 'MPS';
+        let currentPoolShift = 'ALL';
+        let activePoolFilteredMachines = [];
 
-            const searchVal = (document.getElementById('search-input').value || '').trim().toLowerCase();
-
-            const shifts = ['MC1직', 'MC2직', 'MC3직', 'MC4직'];
-            const targetShifts = currentShift === 'ALL' ? shifts : [currentShift];
-
-            let totalCount = allBays.length;
-            let activeCount = 0;
-            let emptyCount = 0;
-            let issueCount = 0;
-
-            targetShifts.forEach(shiftName => {
-                let badgeClass = 'badge-mc1';
-                if (shiftName === 'MC2직') badgeClass = 'badge-mc2';
-                else if (shiftName === 'MC3직') badgeClass = 'badge-mc3';
-                else if (shiftName === 'MC4직') badgeClass = 'badge-mc4';
-
-                const shiftBays = allBays.filter(b => b.shift === shiftName);
-
-                const filteredBays = shiftBays.filter(b => {
-                    if (!searchVal) return true;
-                    const str = `${b.bay} ${b.model || ''} ${b.serial || ''} ${b.customer || ''} ${b.worker || ''} ${b.spec || ''} ${b.issue || ''}`.toLowerCase();
-                    return str.includes(searchVal);
-                });
-
-                if (filteredBays.length === 0 && currentShift !== 'ALL') return;
-
-                const section = document.createElement('section');
-                section.className = 'shift-section';
-
-                const activeInShift = shiftBays.filter(b => b.assigned).length;
-
-                section.innerHTML = `
-                    <div class="section-header">
-                        <span class="section-title">${shiftName} 조립 지번 현황</span>
-                        <span class="header-badge ${badgeClass}">${activeInShift}대 가동 중 / 총 ${shiftBays.length}개 지번</span>
-                    </div>
-                    <div class="bay-grid" id="grid-${shiftName}"></div>
-                `;
-
-                const grid = section.querySelector(`#grid-${shiftName}`);
-
-                filteredBays.forEach(bay => {
-                    if (bay.assigned) {
-                        activeCount++;
-                        if (bay.issue && bay.issue.trim()) issueCount++;
-                    } else {
-                        emptyCount++;
-                    }
-
-                    const card = document.createElement('div');
-
-                    if (!bay.assigned) {
-                        card.className = 'bay-card empty';
-                        card.innerHTML = `
-                            <div style="font-weight: 800; font-family: 'JetBrains Mono'; font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.25rem;">지번 ${bay.bay}</div>
-                            <div style="font-size: 0.8rem; font-weight: 600;">+ 빈 지번 (클릭하여 배정)</div>
-                        `;
-                    } else {
-                        card.className = 'bay-card';
-                        const modelCfg = getProcessConfigForModel(bay.model);
-                        const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
-                        const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
-
-                        const sourceBadge = bay.source === 'MES'
-                            ? `<span style="font-size: 0.65rem; font-weight: 800; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간</span>`
-                            : `<span style="font-size: 0.65rem; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">✏️ 수기</span>`;
-
-                        card.innerHTML = `
-                            <div class="bay-card-top">
-                                <span class="bay-num-badge">지번 ${bay.bay}</span>
-                                <span class="bay-worker-badge">👷 ${bay.worker || '작업자 미지정'}</span>
-                                ${sourceBadge}
-                            </div>
-
-                            <div>
-                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                                    <span class="bay-model">${bay.model || '-'}</span>
-                                    <span class="bay-serial">호기: ${bay.serial || '-'}</span>
-                                </div>
-                                <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
-                            </div>
-
-                            <div class="bay-process-badge" style="border-left: 3px solid var(--primary);">
-                                <span>⚙️</span>
-                                <span style="font-size: 0.725rem; font-weight: 700;">${procText}</span>
-                            </div>
-
-                            <div class="bay-footer">
-                                ${bay.spec ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">⚡ ${bay.spec}</div>` : ''}
-                                ${bay.issue ? `<div style="color: var(--danger); font-weight: 700;">⚠️ ${bay.issue}</div>` : ''}
-                            </div>
-                        `;
-                    }
-
-                    card.onclick = () => openEditModal(bay);
-                    grid.appendChild(card);
-                });
-
-                container.appendChild(section);
-            });
-
-            // Update stats
-            document.getElementById('stat-total-bays').textContent = totalCount;
-            document.getElementById('stat-active-bays').textContent = `${activeCount} 대`;
-            document.getElementById('stat-empty-bays').textContent = `${emptyCount} 개`;
-            document.getElementById('stat-issue-bays').textContent = `${issueCount} 건`;
+        function setPoolSource(src) {
+            currentPoolSource = src;
+            const btnMps = document.getElementById('pool-btn-mps');
+            const btnMes = document.getElementById('pool-btn-mes');
+            if (src === 'MPS') {
+                btnMps.style.background = 'var(--primary)';
+                btnMps.style.color = 'white';
+                btnMes.style.background = '#ffffff';
+                btnMes.style.border = '1px solid #cbd5e1';
+                btnMes.style.color = '#475569';
+            } else {
+                btnMes.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
+                btnMes.style.color = 'white';
+                btnMps.style.background = '#ffffff';
+                btnMps.style.border = '1px solid #cbd5e1';
+                btnMps.style.color = '#475569';
+            }
+            renderPool();
         }
 
-        let activeModalFilteredMachines = [];
-        let currentModalSource = 'MPS';
-        let mesMachines = [];
+        function setPoolShift(shift) {
+            currentPoolShift = shift;
+            document.querySelectorAll('.pool-shift-chip').forEach(c => c.classList.remove('active'));
+            const chip = document.getElementById(`chip-${shift}`);
+            if (chip) chip.classList.add('active');
+            renderPool();
+        }
+
+        // Render Left Pool List
+        function renderPool() {
+            const listEl = document.getElementById('pool-list');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+
+            const searchVal = (document.getElementById('pool-search-input')?.value || '').trim().toLowerCase();
+            const sourceList = currentPoolSource === 'MPS' ? mpsMachines : mesMachines;
+
+            // Filter out machines already assigned to any bay
+            const assignedSerials = new Set();
+            const assignedOrders = new Set();
+            allBays.forEach(b => {
+                if (b.assigned) {
+                    if (b.serial) assignedSerials.add(b.serial.trim());
+                    if (b.salesDoc) assignedOrders.add(b.salesDoc.trim());
+                }
+            });
+
+            let unassigned = sourceList.filter(m => {
+                const serial = (m.serial || m.PROD_MDL_CNT || '').trim();
+                const order = (m.salesDoc || m.PROD_ORD_ID || '').trim();
+                if (serial && assignedSerials.has(serial)) return false;
+                if (order && assignedOrders.has(order)) return false;
+                return true;
+            });
+
+            // Filter by Shift
+            if (currentPoolShift !== 'ALL') {
+                unassigned = unassigned.filter(m => m.shift === currentPoolShift);
+            }
+
+            // Filter by Search text
+            if (searchVal) {
+                unassigned = unassigned.filter(m => {
+                    const str = `${m.model || m.PROD_MDL_NAME || ''} ${m.serial || ''} ${m.salesDoc || m.PROD_ORD_ID || ''} ${m.customer || ''}`.toLowerCase();
+                    return str.includes(searchVal);
+                });
+            }
+
+            activePoolFilteredMachines = unassigned;
+            const badgeEl = document.getElementById('pool-count-badge');
+            if (badgeEl) badgeEl.textContent = `${unassigned.length}대`;
+
+            if (unassigned.length === 0) {
+                listEl.innerHTML = `
+                    <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                        <div>✨</div>
+                        <div style="margin-top: 0.4rem; font-weight: 600;">대기 중인 미배정 장비가 없습니다.</div>
+                        <div style="font-size: 0.725rem; color: #94a3b8; margin-top: 0.2rem;">(모두 배정되었거나 동기화 필요)</div>
+                    </div>
+                `;
+                return;
+            }
+
+            unassigned.forEach((m, idx) => {
+                const card = document.createElement('div');
+                card.className = 'pool-item';
+                card.draggable = true;
+
+                const modelName = m.model || m.PROD_MDL_NAME || m.MTRL_ID || '미확인 기종';
+                const serialNo = m.serial || (m.PROD_MDL_ID ? `${m.PROD_MDL_ID}-${m.PROD_MDL_CNT}` : m.PROD_MDL_CNT) || '시리얼 미지정';
+                const orderNo = m.salesDoc || m.PROD_ORD_ID || '';
+                const custName = m.customer || '고객사 정보 없음';
+                const shiftBadge = m.shift ? `<span style="font-size: 0.65rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 4px;">${m.shift}</span>` : '';
+                
+                const procBadge = m.CUR_PROC_ID 
+                    ? `<span style="font-size: 0.65rem; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 0.05rem 0.35rem; border-radius: 4px;">⚡ 현공정: ${m.CUR_PROC_ID}</span>`
+                    : (m.month ? `<span style="font-size: 0.65rem; font-weight: 600; color: #64748b;">📅 ${m.month}</span>` : '');
+
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 800; font-size: 0.85rem; color: var(--text-main);">${modelName}</span>
+                        ${shiftBadge}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 0.725rem;">
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--text-secondary);">호기: ${serialNo}</span>
+                        ${procBadge}
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        🏢 ${custName} ${orderNo ? `(${orderNo})` : ''}
+                    </div>
+                `;
+
+                card.ondragstart = (e) => onPoolItemDragStart(e, idx);
+                listEl.appendChild(card);
+            });
+        }
+
+        // Drag & Drop Handlers for Pool Item
+        function onPoolItemDragStart(e, poolIdx) {
+            const item = activePoolFilteredMachines[poolIdx];
+            if (!item) return;
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                type: 'FROM_POOL',
+                item: {
+                    ...item,
+                    source: currentPoolSource === 'MES' ? 'MES' : 'MPS'
+                }
+            }));
+            e.dataTransfer.effectAllowed = 'copyMove';
+        }
+
+        // Drag & Drop Handlers for Bay Card
+        function onBayDragStart(e, bayId) {
+            const bay = allBays.find(b => b.id === bayId);
+            if (!bay || !bay.assigned) return;
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                type: 'FROM_BAY',
+                bayId: bayId
+            }));
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function onBayDragOver(e, bayId) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const el = document.getElementById(`bay-card-${bayId}`);
+            if (el) el.classList.add('drag-over');
+        }
+
+        function onBayDragLeave(e, bayId) {
+            const el = document.getElementById(`bay-card-${bayId}`);
+            if (el) el.classList.remove('drag-over');
+        }
+
+        async function onBayDrop(e, targetBayId) {
+            e.preventDefault();
+            const el = document.getElementById(`bay-card-${targetBayId}`);
+            if (el) el.classList.remove('drag-over');
+
+            const targetBay = allBays.find(b => b.id === targetBayId);
+            if (!targetBay) return;
+
+            let dragData;
+            try {
+                dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
+            } catch (err) {
+                return;
+            }
+
+            if (dragData.type === 'FROM_POOL') {
+                const item = dragData.item;
+                targetBay.assigned = true;
+                targetBay.model = item.model || item.PROD_MDL_NAME || item.MTRL_ID || '';
+                targetBay.serial = item.serial || (item.PROD_MDL_ID ? `${item.PROD_MDL_ID}-${item.PROD_MDL_CNT}` : item.PROD_MDL_CNT) || '';
+                targetBay.salesDoc = item.salesDoc || item.PROD_ORD_ID || '';
+                targetBay.customer = item.customer || '';
+                targetBay.spec = item.spec || item.MTRL_ID || '';
+                targetBay.currentProcess = item.CUR_PROC_ID || item.PROC_ID || item.currentProcess || 'BASE';
+                targetBay.startDate = item.startDate || item.START_PLAN_DATE || '';
+                targetBay.deliveryDate = item.deliveryDate || item.SHIP_TARGET_DATE || '';
+                targetBay.source = item.source || (currentPoolSource === 'MES' ? 'MES' : 'MPS');
+
+                await saveAllBays(true); // silent auto-save
+                renderBays();
+                renderPool();
+                showToast(`✨ [지번 ${targetBay.bay}] ${targetBay.model} (${targetBay.serial || '시리얼 미지정'}) 배정 완료!`);
+            } else if (dragData.type === 'FROM_BAY') {
+                const sourceBayId = dragData.bayId;
+                if (sourceBayId === targetBayId) return;
+
+                const sourceBay = allBays.find(b => b.id === sourceBayId);
+                if (!sourceBay) return;
+
+                // Swap the two bays!
+                const temp = {
+                    assigned: targetBay.assigned,
+                    model: targetBay.model,
+                    serial: targetBay.serial,
+                    salesDoc: targetBay.salesDoc,
+                    customer: targetBay.customer,
+                    worker: targetBay.worker,
+                    currentProcess: targetBay.currentProcess,
+                    spec: targetBay.spec,
+                    issue: targetBay.issue,
+                    startDate: targetBay.startDate,
+                    deliveryDate: targetBay.deliveryDate,
+                    source: targetBay.source
+                };
+
+                targetBay.assigned = sourceBay.assigned;
+                targetBay.model = sourceBay.model;
+                targetBay.serial = sourceBay.serial;
+                targetBay.salesDoc = sourceBay.salesDoc;
+                targetBay.customer = sourceBay.customer;
+                targetBay.worker = sourceBay.worker;
+                targetBay.currentProcess = sourceBay.currentProcess;
+                targetBay.spec = sourceBay.spec;
+                targetBay.issue = sourceBay.issue;
+                targetBay.startDate = sourceBay.startDate;
+                targetBay.deliveryDate = sourceBay.deliveryDate;
+                targetBay.source = sourceBay.source;
+
+                sourceBay.assigned = temp.assigned;
+                sourceBay.model = temp.model;
+                sourceBay.serial = temp.serial;
+                sourceBay.salesDoc = temp.salesDoc;
+                sourceBay.customer = temp.customer;
+                sourceBay.worker = temp.worker;
+                sourceBay.currentProcess = temp.currentProcess;
+                sourceBay.spec = temp.spec;
+                sourceBay.issue = temp.issue;
+                sourceBay.startDate = temp.startDate;
+                sourceBay.deliveryDate = temp.deliveryDate;
+                sourceBay.source = temp.source;
+
+                await saveAllBays(true);
+                renderBays();
+                renderPool();
+                showToast(`🔄 [지번 ${sourceBay.bay} ↔ ${targetBay.bay}] 장비 이동/맞교환 완료!`);
+            }
+        }
+
+        // Drag & Drop Handlers for Dropping back to Pool (Unassigning)
+        function onPoolDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const el = document.getElementById('pool-list');
+            if (el) el.classList.add('drag-over-pool');
+        }
+
+        function onPoolDragLeave(e) {
+            const el = document.getElementById('pool-list');
+            if (el) el.classList.remove('drag-over-pool');
+        }
+
+        async function onPoolDrop(e) {
+            e.preventDefault();
+            const el = document.getElementById('pool-list');
+            if (el) el.classList.remove('drag-over-pool');
+
+            let dragData;
+            try {
+                dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
+            } catch (err) {
+                return;
+            }
+
+            if (dragData.type === 'FROM_BAY') {
+                const bayId = dragData.bayId;
+                const bay = allBays.find(b => b.id === bayId);
+                if (!bay || !bay.assigned) return;
+
+                const prevModel = bay.model;
+                const bayNum = bay.bay;
+
+                // Reset bay to empty
+                bay.assigned = false;
+                bay.model = '';
+                bay.serial = '';
+                bay.salesDoc = '';
+                bay.customer = '';
+                bay.worker = '';
+                bay.currentProcess = 'BASE';
+                bay.spec = '';
+                bay.issue = '';
+                bay.startDate = '';
+                bay.deliveryDate = '';
+                bay.source = 'MANUAL';
+
+                await saveAllBays(true);
+                renderBays();
+                renderPool();
+                showToast(`🗑️ [지번 ${bayNum}] ${prevModel} 배정 취소 (빈 지번 복귀)!`);
+            }
+        }
+
+
 
         function switchModalSource(src) {
             currentModalSource = src;
