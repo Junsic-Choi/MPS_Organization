@@ -173,6 +173,7 @@ app.post('/api/shopfloor/move-bay', (req, res) => {
 app.post('/api/mes-sync', async (req, res) => {
     try {
         let mesItems = [];
+        const locBayMap = new Map();
 
         // 1. If client provided manual raw OUT_DATA or raw JSON directly
         if (Array.isArray(req.body.outData) && req.body.outData.length > 0) {
@@ -289,8 +290,6 @@ app.post('/api/mes-sync', async (req, res) => {
             }
         }
 
-        const locBayMap = new Map();
-
         if (mesItems.length === 0) {
             return res.json({ 
                 success: false, 
@@ -299,15 +298,22 @@ app.post('/api/mes-sync', async (req, res) => {
             });
         }
 
-        // Load existing bays (or initialize full template)
+        // Load existing bays (and ensure full template coverage)
         let bays = [];
         if (fs.existsSync(DATA_FILE)) {
-            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-            bays = data.bays || [];
+            try {
+                const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+                bays = data.bays || [];
+            } catch (e) {
+                bays = [];
+            }
         }
-        if (bays.length < 50) {
-            bays = getDefaultBays();
-        }
+        const defaultBays = getDefaultBays();
+        defaultBays.forEach(def => {
+            if (!bays.some(b => b.id === def.id || (b.shift === def.shift && b.bay === def.bay))) {
+                bays.push(def);
+            }
+        });
 
         // Strict MC Classifier
         function classifyMcShift(item) {
