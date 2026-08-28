@@ -1502,6 +1502,9 @@
                         card.ondragstart = (e) => onBayDragStart(e, bay.id);
 
                         const isMes = bay.source === 'MES';
+                        const modelCfg = getProcessConfigForModel(bay.model);
+                        const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
+                        const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
 
                         let sourceBadge = '';
                         let processBadgeHtml = '';
