@@ -1209,22 +1209,32 @@
                 card.className = 'pool-item';
                 card.draggable = true;
 
+                const isMes = currentPoolSource === 'MES' || !!m.CUR_PROC_ID;
                 const modelName = m.model || m.PROD_MDL_NAME || m.MTRL_ID || '미확인 기종';
                 const serialNo = m.serial || (m.PROD_MDL_ID ? `${m.PROD_MDL_ID}-${m.PROD_MDL_CNT}` : m.PROD_MDL_CNT) || '시리얼 미지정';
                 const orderNo = m.salesDoc || m.PROD_ORD_ID || '';
                 const custName = m.customer || '고객사 정보 없음';
-                const shiftBadge = m.shift ? `<span style="font-size: 0.65rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 4px;">${m.shift}</span>` : '';
-                
-                const procBadge = m.CUR_PROC_ID 
-                    ? `<span style="font-size: 0.65rem; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 0.05rem 0.35rem; border-radius: 4px;">⚡ 현공정: ${m.CUR_PROC_ID}</span>`
-                    : (m.month ? `<span style="font-size: 0.65rem; font-weight: 600; color: #64748b;">📅 ${m.month}</span>` : '');
+
+                let shiftBadge = '';
+                let procBadge = '';
+
+                if (isMes) {
+                    card.style.borderLeft = '4px solid #f59e0b';
+                    card.style.background = '#fffdf5';
+                    shiftBadge = `<span style="font-size: 0.65rem; font-weight: 800; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 0.05rem 0.35rem; border-radius: 4px;">⚡ MES ${m.shift || ''}</span>`;
+                    procBadge = `<span style="font-size: 0.725rem; font-weight: 800; background: #fef08a; color: #854d0e; border: 1px solid #eab308; padding: 0.15rem 0.5rem; border-radius: 4px; box-shadow: 0 1px 2px rgba(234, 179, 8, 0.25);">🟡 현공정: ${m.CUR_PROC_ID || '조립가동'}</span>`;
+                } else {
+                    card.style.borderLeft = '4px solid var(--primary)';
+                    shiftBadge = m.shift ? `<span style="font-size: 0.65rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 4px;">${m.shift}</span>` : '';
+                    procBadge = m.month ? `<span style="font-size: 0.65rem; font-weight: 600; color: #64748b;">📅 ${m.month}</span>` : '';
+                }
 
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: 800; font-size: 0.85rem; color: var(--text-main);">${modelName}</span>
                         ${shiftBadge}
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 0.725rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 0.725rem; margin: 0.15rem 0;">
                         <span style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--text-secondary);">호기: ${serialNo}</span>
                         ${procBadge}
                     </div>
@@ -1491,13 +1501,34 @@
                         card.draggable = true;
                         card.ondragstart = (e) => onBayDragStart(e, bay.id);
 
-                        const modelCfg = getProcessConfigForModel(bay.model);
-                        const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
-                        const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
+                        const isMes = bay.source === 'MES';
 
-                        const sourceBadge = bay.source === 'MES'
-                            ? `<span style="font-size: 0.65rem; font-weight: 800; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간</span>`
-                            : `<span style="font-size: 0.65rem; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">✏️ 수기</span>`;
+                        let sourceBadge = '';
+                        let processBadgeHtml = '';
+
+                        if (isMes) {
+                            card.style.borderLeft = '4px solid #f59e0b';
+                            card.style.background = '#fffdf7';
+                            sourceBadge = `<span style="font-size: 0.65rem; font-weight: 800; color: #854d0e; background: #fef3c7; border: 1px solid #fde68a; padding: 0.1rem 0.45rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간 가동</span>`;
+                            processBadgeHtml = `
+                                <div class="bay-process-badge" style="background: #fef9c3; border: 1px solid #fde047; border-left: 4px solid #eab308; padding: 0.45rem 0.6rem; border-radius: 6px; box-shadow: 0 1px 3px rgba(234, 179, 8, 0.2);">
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <span style="font-size: 0.85rem;">🟡</span>
+                                        <span style="font-size: 0.775rem; font-weight: 800; color: #713f12;">⚡ [${bay.currentProcess || '조립가동'}] 실시간 공정 진행 중</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            card.style.borderLeft = '4px solid var(--primary)';
+                            card.style.background = 'var(--bg-surface)';
+                            sourceBadge = `<span style="font-size: 0.65rem; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">📋 MPS 계획</span>`;
+                            processBadgeHtml = `
+                                <div class="bay-process-badge" style="border-left: 3px solid var(--primary); padding: 0.4rem 0.6rem;">
+                                    <span>⚙️</span>
+                                    <span style="font-size: 0.725rem; font-weight: 700;">${procText}</span>
+                                </div>
+                            `;
+                        }
 
                         card.innerHTML = `
                             <div class="bay-card-top">
@@ -1514,10 +1545,7 @@
                                 <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
                             </div>
 
-                            <div class="bay-process-badge" style="border-left: 3px solid var(--primary);">
-                                <span>⚙️</span>
-                                <span style="font-size: 0.725rem; font-weight: 700;">${procText}</span>
-                            </div>
+                            ${processBadgeHtml}
 
                             <div class="bay-footer">
                                 ${bay.spec ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">⚡ ${bay.spec}</div>` : ''}
