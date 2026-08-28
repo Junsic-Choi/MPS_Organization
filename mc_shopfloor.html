@@ -498,13 +498,14 @@
             <!-- 계획 관리 그룹 -->
             <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;">
                 <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">📋 계획:</span>
-                <button class="btn" onclick="syncMpsPlan()" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1;" title="SAP 1840 생산계획표를 읽어 배정 후보 목록을 갱신합니다">🔄 MPS 배정계획 갱신</button>
+                <button class="btn" id="mps-sync-btn" onclick="syncMpsPlan()" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1;" title="SAP 1840 생산계획표를 읽어 배정 후보 목록을 갱신합니다">🔄 MPS 배정계획 갱신</button>
             </div>
 
             <!-- 현장 실적 그룹 -->
             <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
                 <span style="font-size: 0.75rem; font-weight: 700; color: var(--primary);">🏭 실적:</span>
-                <button class="btn" onclick="syncMesActuals()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; font-weight: 700; padding: 0.35rem 0.8rem; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);" title="사내 MES API를 호출하여 공장 실제 호기/공정/지번 실적을 실시간 동기화합니다">⚡ MES 실시간 실적 동기화</button>
+                <button class="btn" id="mes-sync-btn" onclick="syncMesActuals()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; font-weight: 700; padding: 0.35rem 0.8rem; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);" title="사내 MES API를 호출하여 공장 실제 호기/공정/지번 실적을 실시간 동기화합니다">⚡ MES 실시간 실적 동기화</button>
+                <button class="btn" onclick="openMesModal()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;" title="MES 토큰 및 연동 설정">⚙️</button>
                 <span id="mes-sync-time" style="font-size: 0.7rem; font-weight: 600; color: var(--primary);"></span>
             </div>
 
@@ -673,6 +674,61 @@
         </div>
     </div>
 
+    <!-- MES Settings & Sync Modal -->
+    <div class="modal-overlay" id="mes-modal" onclick="closeMesModal(event)">
+        <div class="modal-card" style="max-width: 650px;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="color: #0284c7;">⚡ 사내 MES 실시간 실적 연동 설정</h3>
+                    <p class="modal-subtitle">사내 MES(http://mes.dn-solutions.com:8081)의 조립 실적을 실시간으로 동기화합니다.</p>
+                </div>
+                <button class="close-btn" onclick="closeMesModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Tab Switching -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem;">
+                    <button id="mes-tab-btn-token" class="btn" style="background: #0284c7; color: white; font-weight: 700;" onclick="switchMesTab('token')">🔑 1. MES 인증 토큰(Bearer)으로 실시간 연동</button>
+                    <button id="mes-tab-btn-json" class="btn" style="background: #f1f5f9; color: #475569; font-weight: 600;" onclick="switchMesTab('json')">📋 2. MES 데이터(JSON) 직접 붙여넣기</button>
+                </div>
+
+                <!-- Tab 1: Token -->
+                <div id="mes-tab-token">
+                    <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.8rem; line-height: 1.5; color: #0369a1;">
+                        💡 <strong>토큰 확인 방법</strong>: MES 화면에서 <code>F12</code> &rarr; <code>Network</code> &rarr; <code>query</code> 클릭 &rarr; <code>Headers</code> &rarr; <code>Request Headers</code>의 <strong>Authorization</strong> (또는 <code>Bearer eyJ...</code>) 값을 복사해 아래에 붙여넣으세요.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" style="font-weight: 700;">MES Authorization Bearer Token</label>
+                        <input type="text" class="form-input" id="mes-token-input" placeholder="Bearer eyJhbGciOi... (또는 eyJ... 로 시작하는 토큰)">
+                    </div>
+
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.825rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                            <input type="checkbox" id="mes-remember-token" checked> 이 브라우저에 토큰 저장 (다음부터 버튼 한 번으로 자동 동기화)
+                        </label>
+                    </div>
+
+                    <button class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0284c7, #0369a1);" onclick="runMesSyncWithToken()">🚀 MES 실시간 조회 & 지번 자동 동기화</button>
+                </div>
+
+                <!-- Tab 2: Raw JSON -->
+                <div id="mes-tab-json" style="display: none;">
+                    <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.8rem; line-height: 1.5; color: #854d0e;">
+                        📋 <strong>데이터 붙여넣기 방법</strong>: 개발자 도구의 <code>Response</code> 탭 또는 <code>Preview</code>의 <code>OUT_DATA</code> 내용을 복사하여 아래에 붙여넣으면 즉시 0.1초 만에 파싱되어 지번에 반영됩니다.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" style="font-weight: 700;">MES 응답 JSON 또는 OUT_DATA 붙여넣기</label>
+                        <textarea class="form-textarea" id="mes-json-input" rows="8" placeholder='{"OUT_DATA": [{"WC_ID": "A10MCE0", "PROD_MDL_NAME": "NHM 5000", ...}]}' style="font-family: monospace; font-size: 0.75rem;"></textarea>
+                    </div>
+
+                    <button class="btn btn-success" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; font-weight: 700;" onclick="runMesSyncWithJson()">⚡ 붙여넣은 데이터 파싱 & 지번 즉시 반영</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="toast">알림 메시지</div>
 
     <script>
@@ -814,7 +870,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            await Promise.all([loadBays(), syncMpsPlan()]);
+            await Promise.all([loadBays(), syncMpsPlan(false)]);
             renderBays();
             
             // Heartbeat
@@ -839,16 +895,36 @@
         }
 
         // Fetch MPS Planned Machines from Server (Port 8895)
-        async function syncMpsPlan() {
+        async function syncMpsPlan(isManual = true) {
+            const btn = document.getElementById('mps-sync-btn');
+            if (btn && isManual) {
+                btn.textContent = '⏳ 계획 조회 중...';
+                btn.disabled = true;
+            }
             try {
                 const res = await fetch('/api/mps-plan-machines');
                 const json = await res.json();
                 if (json.success && Array.isArray(json.machines)) {
                     mpsMachines = json.machines;
+                    if (isManual) {
+                        alert(`📋 [MPS 배정계획 갱신 완료]\n\n총 ${mpsMachines.length}건의 MC직 생산계획 장비가 성공적으로 동기화되었습니다!\n\n각 지번(Bay)을 클릭하여 장비를 배정할 때 최신 계획 목록에서 선택하실 수 있습니다.`);
+                    }
                     showToast(`최신 MPS 계획 장비 ${mpsMachines.length}건을 동기화했습니다.`);
+                } else {
+                    if (isManual) {
+                        alert('⚠️ MPS 계획 파일을 읽지 못했습니다. (sap_1840.mhtml 파일을 확인해주세요)');
+                    }
                 }
             } catch (e) {
                 console.warn('MPS plan sync warning:', e);
+                if (isManual) {
+                    alert('MPS 계획 동기화 중 오류가 발생했습니다: ' + e.message);
+                }
+            } finally {
+                if (btn && isManual) {
+                    btn.textContent = '🔄 MPS 배정계획 갱신';
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -1136,14 +1212,128 @@
             activeEditingBayId = null;
         }
 
-        // Sync MES Actual Performance API
+        // MES Modal Controls
+        function openMesModal() {
+            const savedToken = localStorage.getItem('mes_bearer_token') || '';
+            document.getElementById('mes-token-input').value = savedToken;
+            document.getElementById('mes-modal').style.display = 'flex';
+        }
+
+        function closeMesModal(e) {
+            document.getElementById('mes-modal').style.display = 'none';
+        }
+
+        function switchMesTab(tab) {
+            const tokenTab = document.getElementById('mes-tab-token');
+            const jsonTab = document.getElementById('mes-tab-json');
+            const btnToken = document.getElementById('mes-tab-btn-token');
+            const btnJson = document.getElementById('mes-tab-btn-json');
+
+            if (tab === 'token') {
+                tokenTab.style.display = 'block';
+                jsonTab.style.display = 'none';
+                btnToken.style.background = '#0284c7';
+                btnToken.style.color = 'white';
+                btnJson.style.background = '#f1f5f9';
+                btnJson.style.color = '#475569';
+            } else {
+                tokenTab.style.display = 'none';
+                jsonTab.style.display = 'block';
+                btnJson.style.background = '#0284c7';
+                btnJson.style.color = 'white';
+                btnToken.style.background = '#f1f5f9';
+                btnToken.style.color = '#475569';
+            }
+        }
+
+        // Top Header MES Button
         async function syncMesActuals() {
+            const savedToken = localStorage.getItem('mes_bearer_token');
+            if (!savedToken) {
+                // Open modal if no token configured yet
+                openMesModal();
+                return;
+            }
+            await executeMesSync(savedToken);
+        }
+
+        async function runMesSyncWithToken() {
+            const rawToken = document.getElementById('mes-token-input').value.trim();
+            if (!rawToken) {
+                alert('MES 토큰(Bearer Token)을 입력해주세요.');
+                return;
+            }
+            const token = rawToken.startsWith('Bearer ') ? rawToken : `Bearer ${rawToken}`;
+            if (document.getElementById('mes-remember-token').checked) {
+                localStorage.setItem('mes_bearer_token', token);
+            }
+            closeMesModal();
+            await executeMesSync(token);
+        }
+
+        async function runMesSyncWithJson() {
+            const rawText = document.getElementById('mes-json-input').value.trim();
+            if (!rawText) {
+                alert('MES 응답 JSON 또는 OUT_DATA를 붙여넣어주세요.');
+                return;
+            }
             try {
-                showToast('⚡ MES 실시간 조립 실적을 동기화하는 중입니다...');
+                let parsed = JSON.parse(rawText);
+                let outData = [];
+                if (Array.isArray(parsed)) {
+                    outData = parsed;
+                } else if (parsed.OUT_DATA && Array.isArray(parsed.OUT_DATA)) {
+                    outData = parsed.OUT_DATA;
+                } else if (parsed.InDataList && parsed.InDataList.OUT_DATA) {
+                    outData = parsed.InDataList.OUT_DATA;
+                }
+
+                if (outData.length === 0) {
+                    alert('붙여넣은 JSON에서 OUT_DATA 배열을 찾을 수 없습니다.');
+                    return;
+                }
+
+                closeMesModal();
+                showToast('⚡ 붙여넣은 MES 데이터로 지번을 갱신하는 중입니다...');
+                
                 const res = await fetch('/api/mes-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ outData })
+                });
+                const json = await res.json();
+                if (json.success && Array.isArray(json.bays)) {
+                    allBays = json.bays;
+                    renderBays();
+                    const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                    const timeEl = document.getElementById('mes-sync-time');
+                    if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
+
+                    alert(`⚡ [MES 실적 반영 완료]\n\n붙여넣은 총 ${outData.length}건 중 남산 MC 공장 지번 ${json.matchedBaysCount}대가 성공적으로 자동 갱신되었습니다!`);
+                } else {
+                    alert('지번 반영 실패: ' + (json.error || '알 수 없는 오류'));
+                }
+            } catch (e) {
+                alert('올바른 JSON 형식이 아닙니다: ' + e.message);
+            }
+        }
+
+        async function executeMesSync(token) {
+            const btn = document.getElementById('mes-sync-btn');
+            if (btn) {
+                btn.textContent = '⏳ MES 조회 중...';
+                btn.disabled = true;
+            }
+            showToast('⚡ MES 실시간 조립 실적을 조회하는 중입니다...');
+
+            try {
+                const res = await fetch('/api/mes-sync', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': token 
+                    },
+                    body: JSON.stringify({ token })
                 });
                 const json = await res.json();
                 if (json.success && Array.isArray(json.bays)) {
@@ -1154,13 +1344,20 @@
                     const timeEl = document.getElementById('mes-sync-time');
                     if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
 
-                    showToast(`⚡ MES 실적 동기화 완료! (총 ${json.matchedBaysCount}개 지번 자동 갱신)`);
+                    alert(`⚡ [MES 실시간 실적 동기화 완료]\n\n총 ${json.totalMesRecords || 0}건의 MES 데이터 중 남산 MC 공장 지번 ${json.matchedBaysCount}대가 실시간 자동 갱신되었습니다!`);
+                    showToast(`⚡ MES 실적 동기화 완료! (${json.matchedBaysCount}개 지번 자동 갱신)`);
                 } else {
-                    showToast(json.error || 'MES 데이터를 수신하지 못했습니다.');
+                    alert(`⚠️ MES 실시간 조회 실패:\n\n${json.error || '인증 토큰이 만료되었거나 올바르지 않습니다.'}\n\n[확인]을 누르시면 MES 연동 설정 창이 열립니다.`);
+                    openMesModal();
                 }
             } catch (e) {
                 console.error('MES sync error:', e);
-                showToast('MES 동기화 중 통신 오류가 발생했습니다.');
+                alert(`MES 동기화 통신 오류: ${e.message}\n\n사내망 연결 상태를 확인해주세요.`);
+            } finally {
+                if (btn) {
+                    btn.textContent = '⚡ MES 실시간 실적 동기화';
+                    btn.disabled = false;
+                }
             }
         }
 

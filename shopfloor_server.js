@@ -210,7 +210,15 @@ app.post('/api/mes-sync', async (req, res) => {
                 const mesJson = await mesRes.json();
                 mesItems = mesJson.OUT_DATA || (mesJson.InDataList && mesJson.InDataList.OUT_DATA) || [];
             } else {
-                console.warn(`[MES] Server response status: ${mesRes.status}`);
+                const errText = await mesRes.text().catch(() => '');
+                console.warn(`[MES] Server response status: ${mesRes.status} - ${errText}`);
+                if (mesRes.status === 401) {
+                    return res.json({
+                        success: false,
+                        error: 'MES 인증 토큰(Bearer Token)이 만료되었거나 유효하지 않습니다. 최신 토큰을 설정해주세요.',
+                        status: 401
+                    });
+                }
             }
         } catch (fetchErr) {
             console.warn('[MES] Remote connection warning:', fetchErr.message);
