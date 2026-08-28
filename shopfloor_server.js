@@ -183,7 +183,14 @@ app.post('/api/mes-sync', async (req, res) => {
         } else {
             // 2. Fetch from remote MES API
             const authHeader = req.headers['authorization'] || req.body.token || '';
-            const yyyymm = req.body.yyyymm || new Date().toISOString().slice(0, 7).replace('-', '');
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const nextMm = String((now.getMonth() + 2) > 12 ? 1 : (now.getMonth() + 2)).padStart(2, '0');
+            const nextYyyy = (now.getMonth() + 2) > 12 ? (yyyy + 1) : yyyy;
+
+            const fromYm = `${yyyy}${mm}`;
+            const toYm = `${nextYyyy}${nextMm}`;
 
             const payload = req.body.payload || {
                 BizActId: "BR_DNS_MES_SEL_ProdProgressStatus_Assy",
@@ -193,7 +200,17 @@ app.post('/api/mes-sync', async (req, res) => {
                             ENTERPRISE_ID: "1800",
                             PLANT_ID: "1840",
                             DEPT_ID: null,
-                            PROD_YYYYMM_FROM: yyyymm
+                            PROD_YYYYMM_FROM: fromYm,
+                            PROD_YYYYMM_TO: toYm,
+                            ISFIRST: "FIRST",
+                            ISINCLUDE_PLAN: "Y",
+                            ISINCLUDE_START: "Y",
+                            ISINCLUDE_COMPLETE_OPER: "N",
+                            ISINCLUDE_COMPLETE: "Y",
+                            INCLUDE_OTHERDEPT: "Y",
+                            ISINCLUDE_PARALLEL: "Y",
+                            LANG_ID: "ko-KR",
+                            ORD_TYPE_CODE: "A"
                         }
                     ]
                 },
@@ -251,56 +268,78 @@ app.post('/api/mes-sync', async (req, res) => {
             bays = getDefaultBays();
         }
 
-        let matchedCount = 0;
-
-        // Parse Work Center (WC_ID) to bay matching
-        const normalizeBayKey = (wc) => {
-            if (!wc) return null;
-            const clean = wc.toUpperCase().trim();
-            
-            // Match Patterns like E1~E10, F1~F6, C1~C12, D1~D12, B1~B10, A1~A10
-            const m = clean.match(/([A-F])(0?[1-9]|1[0-2])/);
-            if (m) {
-                const zone = m[1];
-                const num = parseInt(m[2], 10);
-                return `${zone}${num}`;
+        // Filter MC-relevant records and group by unique machine
+        const mcItems = mesItems.filter(i => (i.WC_ID || '').includes('MC') || (i.PROD_MDL_NAME || '').startsWith('N') || (i.PROD_MDL_NAME || '').startsWith('D') || (i.PROD_MDL_NAME || '').startsWith('H'));
+        
+        const machineMap = new Map();
+        mcItems.forEach(i => {
+            const key = i.PROD_ORD_ID || (i.PROD_MDL_ID + '-' + i.PROD_MDL_CNT);
+            if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
+                machineMap.set(key, i);
             }
-            return null;
+        });
+
+        const uniqueMachines = [...machineMap.values()];
+
+        // Separate into 4 MC shifts
+        const shiftGroups = {
+            'MC1직': [],
+            'MC2직': [],
+            'MC3직': [],
+            'MC4직': []
         };
 
-        mesItems.forEach(item => {
-            const bayCode = normalizeBayKey(item.WC_ID);
-            if (!bayCode) return;
-
-            // Find matching bay in bays list
-            const targetBay = bays.find(b => b.bay.toUpperCase() === bayCode);
-            if (targetBay) {
-                targetBay.assigned = true;
-                targetBay.model = item.PROD_MDL_NAME || item.MTRL_ID || targetBay.model;
-                
-                const serialNo = (item.PROD_MDL_ID && item.PROD_MDL_CNT) 
-                    ? `${item.PROD_MDL_ID}-${item.PROD_MDL_CNT}` 
-                    : (item.PROD_MDL_CNT || targetBay.serial);
-                targetBay.serial = serialNo || targetBay.serial;
-
-                targetBay.currentProcess = item.CUR_PROC_ID || item.PROC_ID || targetBay.currentProcess || 'BASE';
-                targetBay.salesDoc = item.PROD_ORD_ID || targetBay.salesDoc;
-                targetBay.startDate = item.START_PLAN_DATE || targetBay.startDate;
-                targetBay.deliveryDate = item.SHIP_TARGET_DATE || targetBay.deliveryDate;
-                targetBay.spec = item.MTRL_ID || targetBay.spec;
-                
-                if (item.LOT_STATUS_CODE && item.LOT_STATUS_CODE !== 'NONE') {
-                    targetBay.issue = `[${item.PROD_ORD_STATUS_NAME || item.LOT_STATUS_CODE}]`;
-                }
-
-                targetBay.source = 'MES';
-                matchedCount++;
+        uniqueMachines.forEach(m => {
+            const mdl = (m.PROD_MDL_NAME || m.MTRL_ID || '').toUpperCase();
+            const wc = (m.WC_ID || '').toUpperCase();
+            if (wc === 'A10MC40' || mdl.includes('NHP8') || mdl.includes('DHF8') || mdl.includes('HM1') || mdl.includes('XC4')) {
+                shiftGroups['MC4직'].push(m);
+            } else if (wc === 'A10MC30' || mdl.includes('NHM') || mdl.includes('NHP55') || mdl.includes('NHP63')) {
+                shiftGroups['MC3직'].push(m);
+            } else if (wc === 'A10MC20' || mdl.includes('DVF')) {
+                shiftGroups['MC2직'].push(m);
+            } else {
+                shiftGroups['MC1직'].push(m);
             }
+        });
+
+        let matchedCount = 0;
+
+        // Populate bays per shift
+        ['MC1직', 'MC2직', 'MC3직', 'MC4직'].forEach(shiftName => {
+            const shiftBays = bays.filter(b => b.shift === shiftName);
+            const machines = shiftGroups[shiftName] || [];
+
+            shiftBays.forEach((targetBay, idx) => {
+                const item = machines[idx];
+                if (item) {
+                    targetBay.assigned = true;
+                    targetBay.model = item.PROD_MDL_NAME || item.MTRL_ID || targetBay.model;
+                    
+                    const serialNo = (item.PROD_MDL_ID && item.PROD_MDL_CNT) 
+                        ? `${item.PROD_MDL_ID}-${item.PROD_MDL_CNT}` 
+                        : (item.PROD_MDL_CNT || targetBay.serial);
+                    targetBay.serial = serialNo || targetBay.serial;
+
+                    targetBay.currentProcess = item.CUR_PROC_ID || item.PROC_ID || 'BASE';
+                    targetBay.salesDoc = item.PROD_ORD_ID || targetBay.salesDoc;
+                    targetBay.startDate = item.START_PLAN_DATE || targetBay.startDate;
+                    targetBay.deliveryDate = item.SHIP_TARGET_DATE || targetBay.deliveryDate;
+                    targetBay.spec = item.MTRL_ID || targetBay.spec;
+                    
+                    if (item.LOT_STATUS_CODE && item.LOT_STATUS_CODE !== 'NONE') {
+                        targetBay.issue = `[상태: ${item.PROD_ORD_STATUS_NAME || item.LOT_STATUS_CODE}]`;
+                    }
+
+                    targetBay.source = 'MES';
+                    matchedCount++;
+                }
+            });
         });
 
         // Save updated bays
         fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
-        console.log(`[MES] Synced ${matchedCount} bays from ${mesItems.length} MES records`);
+        console.log(`[MES] Synced ${matchedCount} bays from ${uniqueMachines.length} unique MC machines (${mesItems.length} total MES records)`);
 
         res.json({
             success: true,
