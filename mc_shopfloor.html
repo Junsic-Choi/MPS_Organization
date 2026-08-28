@@ -220,6 +220,36 @@
             position: sticky;
             top: 5rem;
             max-height: calc(100vh - 6.5rem);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .pool-sidebar.collapsed {
+            display: none !important;
+        }
+
+        .pool-floating-toggle {
+            position: fixed;
+            left: 1.25rem;
+            bottom: 1.5rem;
+            z-index: 999;
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 0.825rem;
+            padding: 0.55rem 1rem;
+            border-radius: 9999px;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .pool-floating-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.55);
         }
 
         .pool-header {
@@ -630,6 +660,7 @@
             </div>
 
             <div style="display: flex; gap: 0.4rem;">
+                <button id="btn-toggle-pool" class="btn" style="background: #e0f2fe; color: #0284c7; font-weight: 800; border: 1px solid #bae6fd; font-size: 0.8rem; padding: 0.35rem 0.75rem;" onclick="togglePoolSidebar()">📦 대기 풀 닫기 ◀</button>
                 <button class="btn btn-success" onclick="saveAllBays()">💾 전체 저장</button>
                 <button class="btn btn-primary" onclick="exportExcel()">📥 엑셀 내보내기</button>
             </div>
@@ -663,6 +694,12 @@
         </div>
     </nav>
 
+    <!-- Floating Toggle Button when Pool is Collapsed -->
+    <div id="floating-pool-toggle" class="pool-floating-toggle" style="display: none;" onclick="togglePoolSidebar(true)">
+        <span>📦</span>
+        <span>대기 장비 풀 열기 (</span><span id="floating-pool-count">0대</span><span>) ▶</span>
+    </div>
+
     <!-- 2-Column Split Workspace Layout (Drag & Drop) -->
     <div class="workspace-container">
         <!-- Left Pool Sidebar: Unassigned Machine Pool -->
@@ -673,7 +710,10 @@
                         <span style="font-size: 1.1rem;">📦</span>
                         <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">대조립 대기 장비 풀</span>
                     </div>
-                    <span id="pool-count-badge" style="font-size: 0.75rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.15rem 0.5rem; border-radius: 9999px;">0대</span>
+                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                        <span id="pool-count-badge" style="font-size: 0.75rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.15rem 0.5rem; border-radius: 9999px;">0대</span>
+                        <button class="btn" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; font-weight: 700; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px;" onclick="togglePoolSidebar(false)" title="대기 풀 숨기기">✕ 닫기</button>
+                    </div>
                 </div>
                 
                 <!-- Source Toggle: MPS vs MES -->
@@ -1212,13 +1252,50 @@
             renderBays();
         }
 
-        // Pool State
+        // Pool State & Performance Optimization
+        let isPoolSidebarOpen = true;
         let currentPoolSource = 'MPS';
         let currentPoolShift = 'ALL';
         let activePoolFilteredMachines = [];
+        let poolRenderLimit = 30;
+
+        function togglePoolSidebar(forceState) {
+            if (typeof forceState === 'boolean') {
+                isPoolSidebarOpen = forceState;
+            } else {
+                isPoolSidebarOpen = !isPoolSidebarOpen;
+            }
+
+            const sidebar = document.getElementById('pool-sidebar');
+            const floatingBtn = document.getElementById('floating-pool-toggle');
+            const toggleBtn = document.getElementById('btn-toggle-pool');
+
+            if (sidebar) {
+                if (isPoolSidebarOpen) {
+                    sidebar.classList.remove('collapsed');
+                } else {
+                    sidebar.classList.add('collapsed');
+                }
+            }
+
+            if (floatingBtn) {
+                floatingBtn.style.display = isPoolSidebarOpen ? 'none' : 'flex';
+            }
+
+            if (toggleBtn) {
+                toggleBtn.textContent = isPoolSidebarOpen ? '📦 대기 풀 닫기 ◀' : '📦 대기 풀 열기 ▶';
+                toggleBtn.style.background = isPoolSidebarOpen ? '#e0f2fe' : '#0284c7';
+                toggleBtn.style.color = isPoolSidebarOpen ? '#0284c7' : '#ffffff';
+            }
+
+            if (isPoolSidebarOpen) {
+                renderPool();
+            }
+        }
 
         function setPoolSource(src) {
             currentPoolSource = src;
+            poolRenderLimit = 30;
             const btnMps = document.getElementById('pool-btn-mps');
             const btnMes = document.getElementById('pool-btn-mes');
             if (src === 'MPS') {
@@ -1239,18 +1316,21 @@
 
         function setPoolShift(shift) {
             currentPoolShift = shift;
+            poolRenderLimit = 30;
             document.querySelectorAll('.pool-shift-chip').forEach(c => c.classList.remove('active'));
             const chip = document.getElementById(`chip-${shift}`);
             if (chip) chip.classList.add('active');
             renderPool();
         }
 
-        // Render Left Pool List
+        function loadMorePoolItems() {
+            poolRenderLimit += 30;
+            renderPool();
+        }
+
+        // Render Left Pool List (Ultra-Optimized)
         function renderPool() {
             const listEl = document.getElementById('pool-list');
-            if (!listEl) return;
-            listEl.innerHTML = '';
-
             const searchVal = (document.getElementById('pool-search-input')?.value || '').trim().toLowerCase();
             const sourceList = currentPoolSource === 'MPS' ? mpsMachines : mesMachines;
 
@@ -1286,18 +1366,90 @@
             }
 
             activePoolFilteredMachines = unassigned;
+            
+            // Update Badges & Floating Count
             const badgeEl = document.getElementById('pool-count-badge');
+            const floatCountEl = document.getElementById('floating-pool-count');
             if (badgeEl) badgeEl.textContent = `${unassigned.length}대`;
+            if (floatCountEl) floatCountEl.textContent = `${unassigned.length}대`;
+
+            // If sidebar is closed, skip building DOM nodes entirely
+            if (!isPoolSidebarOpen || !listEl) return;
+
+            listEl.innerHTML = '';
 
             if (unassigned.length === 0) {
                 listEl.innerHTML = `
                     <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
                         <div>✨</div>
                         <div style="margin-top: 0.4rem; font-weight: 600;">대기 중인 미배정 장비가 없습니다.</div>
-                        <div style="font-size: 0.725rem; color: #94a3b8; margin-top: 0.2rem;">(모두 배정되었거나 동기화 필요)</div>
+                        <div style="font-size: 0.725rem; color: #94a3b8; margin-top: 0.2rem;">(모두 배정되었거나 필터를 확인하세요)</div>
                     </div>
                 `;
                 return;
+            }
+
+            // Render up to poolRenderLimit items to prevent DOM bloat
+            const visibleItems = unassigned.slice(0, poolRenderLimit);
+
+            visibleItems.forEach((m) => {
+                const card = document.createElement('div');
+                card.className = 'pool-item';
+                card.draggable = true;
+
+                const isMes = currentPoolSource === 'MES' || !!m.CUR_PROC_ID;
+                const modelName = m.model || m.PROD_MDL_NAME || m.MTRL_ID || '미확인 기종';
+                const serialNo = m.serial || (m.PROD_MDL_ID ? `${m.PROD_MDL_ID}-${m.PROD_MDL_CNT}` : m.PROD_MDL_CNT) || '시리얼 미지정';
+                const orderNo = m.salesDoc || m.PROD_ORD_ID || '';
+                const custName = m.customer || '고객사 정보 없음';
+
+                let shiftBadge = '';
+                let procBadge = '';
+
+                if (isMes) {
+                    card.style.borderLeft = '4px solid #f59e0b';
+                    card.style.background = '#fffdf5';
+                    shiftBadge = `<span style="font-size: 0.65rem; font-weight: 800; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 0.05rem 0.35rem; border-radius: 4px;">⚡ MES ${m.shift || ''}</span>`;
+                    procBadge = `<span style="font-size: 0.725rem; font-weight: 800; background: #fef08a; color: #854d0e; border: 1px solid #eab308; padding: 0.15rem 0.5rem; border-radius: 4px; box-shadow: 0 1px 2px rgba(234, 179, 8, 0.25);">🟡 현공정: ${m.CUR_PROC_ID || '조립가동'}</span>`;
+                } else {
+                    card.style.borderLeft = '4px solid var(--primary)';
+                    shiftBadge = m.shift ? `<span style="font-size: 0.65rem; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 4px;">${m.shift}</span>` : '';
+                    procBadge = m.month ? `<span style="font-size: 0.65rem; font-weight: 600; color: #64748b;">📅 ${m.month}</span>` : '';
+                }
+
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 800; font-size: 0.85rem; color: var(--text-main);">${modelName}</span>
+                        ${shiftBadge}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 0.725rem; margin: 0.15rem 0;">
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--text-secondary);">호기: ${serialNo}</span>
+                        ${procBadge}
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        🏢 ${custName} ${orderNo ? `(${orderNo})` : ''}
+                    </div>
+                `;
+
+                card.ondragstart = (e) => onPoolItemDragStart(e, m);
+                listEl.appendChild(card);
+            });
+
+            // Load More button if remaining
+            if (unassigned.length > poolRenderLimit) {
+                const moreBtn = document.createElement('button');
+                moreBtn.className = 'btn';
+                moreBtn.style.width = '100%';
+                moreBtn.style.padding = '0.5rem';
+                moreBtn.style.fontSize = '0.75rem';
+                moreBtn.style.fontWeight = '700';
+                moreBtn.style.marginTop = '0.5rem';
+                moreBtn.style.background = '#f1f5f9';
+                moreBtn.style.color = '#0284c7';
+                moreBtn.style.border = '1px dashed #cbd5e1';
+                moreBtn.textContent = `➕ 대기 장비 더보기 (+${Math.min(30, unassigned.length - poolRenderLimit)}대 / 남은 ${unassigned.length - poolRenderLimit}대)`;
+                moreBtn.onclick = loadMorePoolItems;
+                listEl.appendChild(moreBtn);
             }
 
             unassigned.forEach((m, idx) => {
