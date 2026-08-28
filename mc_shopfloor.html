@@ -1501,6 +1501,7 @@
                         card.draggable = true;
                         card.ondragstart = (e) => onBayDragStart(e, bay.id);
 
+                        const isShipped = bay.isShipped === true;
                         const isMes = bay.source === 'MES';
                         const modelCfg = getProcessConfigForModel(bay.model);
                         const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
@@ -1509,7 +1510,20 @@
                         let sourceBadge = '';
                         let processBadgeHtml = '';
 
-                        if (isMes) {
+                        if (isShipped) {
+                            card.style.borderLeft = '4px solid #8b5cf6';
+                            card.style.background = '#faf5ff';
+                            sourceBadge = `<span style="font-size: 0.65rem; font-weight: 800; color: #6d28d9; background: #ede9fe; border: 1px solid #c4b5fd; padding: 0.1rem 0.45rem; border-radius: 4px; margin-left: auto;">🚚 출하/조립완료</span>`;
+                            processBadgeHtml = `
+                                <div class="bay-process-badge" style="background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #8b5cf6; padding: 0.45rem 0.6rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(139, 92, 246, 0.15);">
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <span style="font-size: 0.85rem;">🏁</span>
+                                        <span style="font-size: 0.775rem; font-weight: 800; color: #5b21b6;">조립 및 출하 완료 (MES 종료)</span>
+                                    </div>
+                                    <button class="btn" style="padding: 0.2rem 0.55rem; font-size: 0.7rem; font-weight: 800; background: #8b5cf6; color: white; border-radius: 4px; border: none; cursor: pointer;" onclick="event.stopPropagation(); quickClearBay('${bay.id}')">🧹 비우기</button>
+                                </div>
+                            `;
+                        } else if (isMes) {
                             card.style.borderLeft = '4px solid #f59e0b';
                             card.style.background = '#fffdf7';
                             sourceBadge = `<span style="font-size: 0.65rem; font-weight: 800; color: #854d0e; background: #fef3c7; border: 1px solid #fde68a; padding: 0.1rem 0.45rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간 가동</span>`;
@@ -1764,8 +1778,36 @@
             }
         }
 
+        // Quick Clear Bay for Shipped items (원클릭 비우기)
+        async function quickClearBay(bayId) {
+            const bay = allBays.find(b => b.id === bayId);
+            if (!bay) return;
+
+            const bayNum = bay.bay;
+            const modelName = bay.model;
+
+            bay.assigned = false;
+            bay.model = '';
+            bay.serial = '';
+            bay.customer = '';
+            bay.worker = '';
+            bay.currentProcess = 'BASE';
+            bay.salesDoc = '';
+            bay.spec = '';
+            bay.issue = '';
+            bay.startDate = '';
+            bay.deliveryDate = '';
+            bay.source = 'MANUAL';
+            bay.isShipped = false;
+
+            renderBays();
+            renderPool();
+            await saveAllBays(true);
+            showToast(`✨ [지번 ${bayNum}] ${modelName} 지번 비우기 완료! (새 장비 배정 가능)`);
+        }
+
         // Save All Bays to Server (Persistence)
-        async function saveAllBays() {
+        async function saveAllBays(silent = false) {
             try {
                 const res = await fetch('/api/shopfloor/save', {
                     method: 'POST',
@@ -1773,12 +1815,12 @@
                     body: JSON.stringify({ bays: allBays })
                 });
                 const json = await res.json();
-                if (json.success) {
+                if (json.success && !silent) {
                     showToast('전체 지번 데이터가 서버에 안전하게 저장되었습니다.');
                 }
             } catch (e) {
                 console.error('Save failed:', e);
-                showToast('저장 중 오류가 발생했습니다.');
+                if (!silent) showToast('저장 중 오류가 발생했습니다.');
             }
         }
 

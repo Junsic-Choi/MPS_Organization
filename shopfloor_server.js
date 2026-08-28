@@ -333,6 +333,7 @@ app.post('/api/mes-sync', async (req, res) => {
         // DO NOT arbitrarily assign bays!
         // Only update bays that ALREADY have an assigned machine (match by serial or order)
         let updatedCount = 0;
+        let shippedCount = 0;
         bays.forEach(targetBay => {
             if (!targetBay.assigned) return; // Keep empty bays intact
 
@@ -350,23 +351,30 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
                 targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                 targetBay.spec = match.MTRL_ID || targetBay.spec;
+                targetBay.isShipped = false;
                 if (match.PROD_ORD_STATUS_NAME) {
                     targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
                 }
                 targetBay.source = 'MES';
                 updatedCount++;
+            } else if (targetBay.source === 'MES') {
+                // Was active in MES previously, but now no longer in active assembly (shipped/complete!)
+                targetBay.isShipped = true;
+                targetBay.issue = '🏁 조립 및 출하 완료 (MES 종료)';
+                shippedCount++;
             }
         });
 
         // Save updated bays
         fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
-        console.log(`[MES] Synced ${updatedCount} assigned bays from ${mesMachines.length} valid MC machines`);
+        console.log(`[MES] Synced ${updatedCount} assigned bays (${shippedCount} shipped) from ${mesMachines.length} valid MC machines`);
 
         res.json({
             success: true,
             totalMesRecords: mesItems.length,
             validMcMachinesCount: mesMachines.length,
             updatedBaysCount: updatedCount,
+            shippedBaysCount: shippedCount,
             mesMachines,
             bays
         });
