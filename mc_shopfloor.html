@@ -636,18 +636,31 @@
         </div>
     </header>
 
-    <!-- Filter Bar -->
-    <nav class="filter-bar">
-        <div class="shift-tabs">
-            <button class="shift-tab active" onclick="setShift('ALL')">전체 공장 보기</button>
-            <button class="shift-tab" onclick="setShift('MC1직')">MC 1직 (C동 / D·E구역)</button>
-            <button class="shift-tab" onclick="setShift('MC2직')">MC 2직 (MC동 / C·D구역)</button>
-            <button class="shift-tab" onclick="setShift('MC3직')">MC 3직 (MC동 / A·B구역)</button>
-            <button class="shift-tab" onclick="setShift('MC4직')">MC 4직 (FA동 / A·B·C·D구역)</button>
+    <!-- Filter Bar with 2-Tier Shift & Zone Sub-filters -->
+    <nav class="filter-bar" style="display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+            <div class="shift-tabs" id="main-shift-tabs">
+                <button class="shift-tab active" onclick="setShift('ALL', this)">전체 공장 보기</button>
+                <button class="shift-tab" onclick="setShift('MC1직', this)">MC 1직 (C동)</button>
+                <button class="shift-tab" onclick="setShift('MC2직', this)">MC 2직 (MC동)</button>
+                <button class="shift-tab" onclick="setShift('MC3직', this)">MC 3직 (MC동)</button>
+                <button class="shift-tab" onclick="setShift('MC4직', this)">MC 4직 (FA동)</button>
+            </div>
+
+            <div>
+                <input type="text" class="search-input" id="search-input" placeholder="지번, 기종, 호기, 작업자 검색..." oninput="renderBays()">
+            </div>
         </div>
 
-        <div>
-            <input type="text" class="search-input" id="search-input" placeholder="지번, 기종, 호기, 작업자 검색..." oninput="renderBays()">
+        <!-- Zone Sub-Filter Chips Bar -->
+        <div id="zone-subfilter-bar" style="display: flex; align-items: center; gap: 0.5rem; overflow-x: auto; padding-top: 0.35rem; border-top: 1px dashed #e2e8f0; width: 100%;">
+            <span style="font-size: 0.775rem; font-weight: 800; color: #64748b; white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
+                <span>📍</span>
+                <span>세부 구역(Zone) 필터:</span>
+            </span>
+            <div id="zone-chips-container" style="display: flex; gap: 0.35rem; overflow-x: auto;">
+                <!-- Zone chips dynamically injected -->
+            </div>
         </div>
     </nav>
 
@@ -1051,6 +1064,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            updateZoneChips();
             await Promise.all([loadBays(), syncMpsPlan(false)]);
             renderBays();
             
@@ -1109,10 +1123,96 @@
             }
         }
 
-        function setShift(shift) {
+        let currentZone = 'ALL';
+
+        function updateZoneChips() {
+            const container = document.getElementById('zone-chips-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            let zones = [];
+            if (currentShift === 'MC1직') {
+                zones = [
+                    { id: 'ALL', label: 'C동 전체 (24개 지번)' },
+                    { id: 'D', label: '📍 D구역 (D1~D14)' },
+                    { id: 'E', label: '📍 E구역 (E1~E10)' }
+                ];
+            } else if (currentShift === 'MC2직') {
+                zones = [
+                    { id: 'ALL', label: 'MC동 전체 (38개 지번)' },
+                    { id: 'C', label: '📍 C구역 (C1~C19)' },
+                    { id: 'D', label: '📍 D구역 (D1~D19)' }
+                ];
+            } else if (currentShift === 'MC3직') {
+                zones = [
+                    { id: 'ALL', label: 'MC동 전체 (37개 지번)' },
+                    { id: 'B', label: '📍 B구역 (B1~B19)' },
+                    { id: 'A', label: '📍 A구역 (A1~A18)' }
+                ];
+            } else if (currentShift === 'MC4직') {
+                zones = [
+                    { id: 'ALL', label: 'FA동 전체 (41개 지번)' },
+                    { id: 'A', label: '📍 A구역 (A1~A14)' },
+                    { id: 'B', label: '📍 B구역 (B1~B12)' },
+                    { id: 'C', label: '📍 C구역 (C5~C13)' },
+                    { id: 'D', label: '📍 D구역 (D1~D6)' }
+                ];
+            } else {
+                zones = [
+                    { id: 'ALL', label: '전체 공장 보기' },
+                    { id: 'A', label: '📍 A구역' },
+                    { id: 'B', label: '📍 B구역' },
+                    { id: 'C', label: '📍 C구역' },
+                    { id: 'D', label: '📍 D구역' },
+                    { id: 'E', label: '📍 E구역' }
+                ];
+            }
+
+            zones.forEach(z => {
+                const btn = document.createElement('button');
+                const isAct = currentZone === z.id;
+                btn.className = 'btn';
+                btn.style.padding = '0.25rem 0.75rem';
+                btn.style.fontSize = '0.75rem';
+                btn.style.fontWeight = isAct ? '800' : '600';
+                btn.style.borderRadius = '9999px';
+                btn.style.whiteSpace = 'nowrap';
+                btn.style.cursor = 'pointer';
+                btn.style.transition = 'all 0.2s';
+                
+                if (isAct) {
+                    btn.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
+                    btn.style.color = '#ffffff';
+                    btn.style.border = 'none';
+                    btn.style.boxShadow = '0 2px 4px rgba(2, 132, 199, 0.25)';
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = '#475569';
+                    btn.style.border = '1px solid #cbd5e1';
+                }
+
+                btn.textContent = z.label;
+                btn.onclick = () => setZone(z.id);
+                container.appendChild(btn);
+            });
+        }
+
+        function setShift(shift, el) {
             currentShift = shift;
-            document.querySelectorAll('.shift-tab').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            currentZone = 'ALL';
+            document.querySelectorAll('#main-shift-tabs .shift-tab').forEach(b => b.classList.remove('active'));
+            if (el) {
+                el.classList.add('active');
+            } else if (event && event.target && event.target.classList.contains('shift-tab')) {
+                event.target.classList.add('active');
+            }
+            updateZoneChips();
+            renderBays();
+        }
+
+        function setZone(zone) {
+            currentZone = zone;
+            updateZoneChips();
             renderBays();
         }
 
@@ -1458,33 +1558,48 @@
                     return str.includes(searchVal);
                 });
 
-                if (filteredBays.length === 0 && currentShift !== 'ALL') return;
+                // Group bays by Zone prefix (A, B, C, D, E...)
+                const zoneMap = new Map();
+                filteredBays.forEach(b => {
+                    const match = b.bay.match(/[A-F]/i);
+                    const zChar = match ? match[0].toUpperCase() : '기타';
+                    if (!zoneMap.has(zChar)) zoneMap.set(zChar, []);
+                    zoneMap.get(zChar).push(b);
+                });
 
-                const section = document.createElement('section');
-                section.className = 'shift-section';
+                // Render each physical Zone block
+                for (const [zChar, zoneBays] of zoneMap.entries()) {
+                    if (currentZone !== 'ALL' && zChar !== currentZone) continue;
 
-                const activeInShift = shiftBays.filter(b => b.assigned).length;
+                    const zoneSection = document.createElement('section');
+                    zoneSection.className = 'shift-section';
+                    zoneSection.style.marginBottom = '1.25rem';
 
-                section.innerHTML = `
-                    <div class="section-header">
-                        <span class="section-title">${shiftName} [${areaLabel}] 조립 지번 현황</span>
-                        <span class="header-badge ${badgeClass}">${activeInShift}대 가동 중 / 총 ${shiftBays.length}개 지번</span>
-                    </div>
-                    <div class="bay-grid" id="grid-${shiftName}"></div>
-                `;
+                    const activeInZone = zoneBays.filter(b => b.assigned).length;
 
-                const grid = section.querySelector(`#grid-${shiftName}`);
+                    zoneSection.innerHTML = `
+                        <div class="section-header" style="background: linear-gradient(90deg, #f8fafc, #ffffff); border-left: 4px solid var(--primary); padding: 0.5rem 0.85rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span class="section-title" style="font-size: 0.95rem;">📍 ${shiftName} [${zChar}구역] 조립 지번</span>
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">(${areaLabel})</span>
+                            </div>
+                            <span class="header-badge ${badgeClass}">${activeInZone}대 가동 중 / 총 ${zoneBays.length}개 지번</span>
+                        </div>
+                        <div class="bay-grid" id="grid-${shiftName}-${zChar}"></div>
+                    `;
 
-                filteredBays.forEach(bay => {
-                    if (bay.assigned) {
-                        activeCount++;
-                        if (bay.issue && bay.issue.trim()) issueCount++;
-                    } else {
-                        emptyCount++;
-                    }
+                    const grid = zoneSection.querySelector(`#grid-${shiftName}-${zChar}`);
 
-                    const card = document.createElement('div');
-                    card.id = `bay-card-${bay.id}`;
+                    zoneBays.forEach(bay => {
+                        if (bay.assigned) {
+                            activeCount++;
+                            if (bay.issue && bay.issue.trim()) issueCount++;
+                        } else {
+                            emptyCount++;
+                        }
+
+                        const card = document.createElement('div');
+                        card.id = `bay-card-${bay.id}`;
 
                     // Drag & Drop event listeners on bay card
                     card.ondragover = (e) => onBayDragOver(e, bay.id);
@@ -1576,8 +1691,9 @@
                     grid.appendChild(card);
                 });
 
-                container.appendChild(section);
-            });
+                container.appendChild(zoneSection);
+            }
+        });
 
             // Update stats
             const totalEl = document.getElementById('stat-total-bays');
