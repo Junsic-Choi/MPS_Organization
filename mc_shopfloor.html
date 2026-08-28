@@ -640,8 +640,7 @@
     <nav class="filter-bar" style="display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem 1.25rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
             <div class="shift-tabs" id="main-shift-tabs">
-                <button class="shift-tab active" onclick="setShift('ALL', this)">전체 공장 보기</button>
-                <button class="shift-tab" onclick="setShift('MC1직', this)">MC 1직 (C동)</button>
+                <button class="shift-tab active" onclick="setShift('MC1직', this)">MC 1직 (C동)</button>
                 <button class="shift-tab" onclick="setShift('MC2직', this)">MC 2직 (MC동)</button>
                 <button class="shift-tab" onclick="setShift('MC3직', this)">MC 3직 (MC동)</button>
                 <button class="shift-tab" onclick="setShift('MC4직', this)">MC 4직 (FA동)</button>
@@ -919,7 +918,7 @@
     <script>
         let allBays = [];
         let mpsMachines = [];
-        let currentShift = 'ALL';
+        let currentShift = 'MC1직';
         let activeEditingBayId = null;
 
         function showToast(msg) {
@@ -1123,7 +1122,7 @@
             }
         }
 
-        let currentZone = 'ALL';
+        let currentZone = 'D';
 
         function updateZoneChips() {
             const container = document.getElementById('zone-chips-container');
@@ -1133,47 +1132,40 @@
             let zones = [];
             if (currentShift === 'MC1직') {
                 zones = [
-                    { id: 'ALL', label: 'C동 전체 (24개 지번)' },
                     { id: 'D', label: '📍 D구역 (D1~D14)' },
-                    { id: 'E', label: '📍 E구역 (E1~E10)' }
+                    { id: 'E', label: '📍 E구역 (E1~E10)' },
+                    { id: 'F', label: '📍 F구역 (F1~F6)' }
                 ];
             } else if (currentShift === 'MC2직') {
                 zones = [
-                    { id: 'ALL', label: 'MC동 전체 (38개 지번)' },
                     { id: 'C', label: '📍 C구역 (C1~C19)' },
                     { id: 'D', label: '📍 D구역 (D1~D19)' }
                 ];
             } else if (currentShift === 'MC3직') {
                 zones = [
-                    { id: 'ALL', label: 'MC동 전체 (37개 지번)' },
                     { id: 'B', label: '📍 B구역 (B1~B19)' },
                     { id: 'A', label: '📍 A구역 (A1~A18)' }
                 ];
             } else if (currentShift === 'MC4직') {
                 zones = [
-                    { id: 'ALL', label: 'FA동 전체 (41개 지번)' },
                     { id: 'A', label: '📍 A구역 (A1~A14)' },
                     { id: 'B', label: '📍 B구역 (B1~B12)' },
                     { id: 'C', label: '📍 C구역 (C5~C13)' },
                     { id: 'D', label: '📍 D구역 (D1~D6)' }
                 ];
-            } else {
-                zones = [
-                    { id: 'ALL', label: '전체 공장 보기' },
-                    { id: 'A', label: '📍 A구역' },
-                    { id: 'B', label: '📍 B구역' },
-                    { id: 'C', label: '📍 C구역' },
-                    { id: 'D', label: '📍 D구역' },
-                    { id: 'E', label: '📍 E구역' }
-                ];
+            }
+
+            // Ensure currentZone is valid for this shift
+            if (!zones.some(z => z.id === currentZone)) {
+                currentZone = zones[0]?.id || 'D';
             }
 
             zones.forEach(z => {
                 const btn = document.createElement('button');
                 const isAct = currentZone === z.id;
                 btn.className = 'btn';
-                btn.style.padding = '0.25rem 0.75rem';
-                btn.style.fontSize = '0.75rem';
+                btn.style.padding = '0.3rem 0.85rem';
+                btn.style.fontSize = '0.8rem';
                 btn.style.fontWeight = isAct ? '800' : '600';
                 btn.style.borderRadius = '9999px';
                 btn.style.whiteSpace = 'nowrap';
@@ -1184,7 +1176,7 @@
                     btn.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
                     btn.style.color = '#ffffff';
                     btn.style.border = 'none';
-                    btn.style.boxShadow = '0 2px 4px rgba(2, 132, 199, 0.25)';
+                    btn.style.boxShadow = '0 2px 5px rgba(2, 132, 199, 0.3)';
                 } else {
                     btn.style.background = '#ffffff';
                     btn.style.color = '#475569';
@@ -1199,7 +1191,11 @@
 
         function setShift(shift, el) {
             currentShift = shift;
-            currentZone = 'ALL';
+            if (shift === 'MC1직') currentZone = 'D';
+            else if (shift === 'MC2직') currentZone = 'C';
+            else if (shift === 'MC3직') currentZone = 'B';
+            else if (shift === 'MC4직') currentZone = 'A';
+
             document.querySelectorAll('#main-shift-tabs .shift-tab').forEach(b => b.classList.remove('active'));
             if (el) {
                 el.classList.add('active');
@@ -1545,7 +1541,7 @@
 
             targetShifts.forEach(shiftName => {
                 let badgeClass = 'badge-mc1';
-                let areaLabel = 'C동 (D·E구역)';
+                let areaLabel = 'C동 (D·E·F구역)';
                 if (shiftName === 'MC2직') { badgeClass = 'badge-mc2'; areaLabel = 'MC동 (C·D구역)'; }
                 else if (shiftName === 'MC3직') { badgeClass = 'badge-mc3'; areaLabel = 'MC동 (A·B구역)'; }
                 else if (shiftName === 'MC4직') { badgeClass = 'badge-mc4'; areaLabel = 'FA동 (A·B·C·D구역)'; }

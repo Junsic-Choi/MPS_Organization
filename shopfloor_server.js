@@ -16,9 +16,10 @@ const DATA_FILE = path.join(__dirname, 'shopfloor_data.json');
 function getDefaultBays() {
     const bays = [];
     
-    // MC 1직 (C동) - D구역 1~14, E구역 1~10
+    // MC 1직 (C동) - D구역 1~14, E구역 1~10, F구역 1~6
     for (let i = 1; i <= 14; i++) bays.push({ id: `mc1-d${i}`, shift: 'MC1직', area: 'C동', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
     for (let i = 1; i <= 10; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', area: 'C동', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 6; i++) bays.push({ id: `mc1-f${i}`, shift: 'MC1직', area: 'C동', bay: `F${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
     // MC 2직 (MC동) - C구역 1~19, D구역 1~19
     for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', area: 'MC동', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
