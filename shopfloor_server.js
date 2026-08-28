@@ -172,67 +172,72 @@ app.post('/api/shopfloor/move-bay', (req, res) => {
 // 3-2. MES Actual Performance Sync API
 app.post('/api/mes-sync', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'] || req.body.token || '';
-        const yyyymm = req.body.yyyymm || new Date().toISOString().slice(0, 7).replace('-', '');
-
-        const payload = {
-            BizActId: "BR_DNS_MES_SEL_ProdProgressStatus_Assy",
-            InDataList: {
-                IN_DATA: [
-                    {
-                        ENTERPRISE_ID: "1800",
-                        PLANT_ID: "1840",
-                        DEPT_ID: null,
-                        PROD_YYYYMM_FROM: yyyymm
-                    }
-                ]
-            },
-            OutData: "OUT_DATA",
-            port: "8082"
-        };
-
-        const headers = {
-            'Content-Type': 'application/json'
-        };
-        if (authHeader) {
-            headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
-        }
-
         let mesItems = [];
-        try {
-            const mesRes = await fetch('http://mes.dn-solutions.com:8081/api/json/query', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(payload)
-            });
 
-            if (mesRes.ok) {
-                const mesJson = await mesRes.json();
-                mesItems = mesJson.OUT_DATA || (mesJson.InDataList && mesJson.InDataList.OUT_DATA) || [];
-            } else {
-                const errText = await mesRes.text().catch(() => '');
-                console.warn(`[MES] Server response status: ${mesRes.status} - ${errText}`);
-                if (mesRes.status === 401) {
-                    return res.json({
-                        success: false,
-                        error: 'MES 인증 토큰(Bearer Token)이 만료되었거나 유효하지 않습니다. 최신 토큰을 설정해주세요.',
-                        status: 401
-                    });
-                }
-            }
-        } catch (fetchErr) {
-            console.warn('[MES] Remote connection warning:', fetchErr.message);
-        }
-
-        // If client provided manual raw OUT_DATA array directly
+        // 1. If client provided manual raw OUT_DATA or raw JSON directly
         if (Array.isArray(req.body.outData) && req.body.outData.length > 0) {
             mesItems = req.body.outData;
+        } else if (req.body.rawJson) {
+            let parsed = typeof req.body.rawJson === 'string' ? JSON.parse(req.body.rawJson) : req.body.rawJson;
+            mesItems = Array.isArray(parsed) ? parsed : (parsed.OUT_DATA || (parsed.InDataList && parsed.InDataList.OUT_DATA) || []);
+        } else {
+            // 2. Fetch from remote MES API
+            const authHeader = req.headers['authorization'] || req.body.token || '';
+            const yyyymm = req.body.yyyymm || new Date().toISOString().slice(0, 7).replace('-', '');
+
+            const payload = req.body.payload || {
+                BizActId: "BR_DNS_MES_SEL_ProdProgressStatus_Assy",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            ENTERPRISE_ID: "1800",
+                            PLANT_ID: "1840",
+                            DEPT_ID: null,
+                            PROD_YYYYMM_FROM: yyyymm
+                        }
+                    ]
+                },
+                OutData: "OUT_DATA",
+                port: "8082"
+            };
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (authHeader) {
+                headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
+            }
+
+            try {
+                const mesRes = await fetch('http://mes.dn-solutions.com:8081/api/json/query', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (mesRes.ok) {
+                    const mesJson = await mesRes.json();
+                    mesItems = mesJson.OUT_DATA || (mesJson.InDataList && mesJson.InDataList.OUT_DATA) || [];
+                } else {
+                    const errText = await mesRes.text().catch(() => '');
+                    console.warn(`[MES] Server response status: ${mesRes.status} - ${errText}`);
+                    if (mesRes.status === 401) {
+                        return res.json({
+                            success: false,
+                            error: 'MES 인증 토큰(Bearer Token)이 만료되었거나 유효하지 않습니다. 최신 토큰을 설정해주세요.',
+                            status: 401
+                        });
+                    }
+                }
+            } catch (fetchErr) {
+                console.warn('[MES] Remote connection warning:', fetchErr.message);
+            }
         }
 
         if (mesItems.length === 0) {
             return res.json({ 
                 success: false, 
-                error: 'MES 데이터를 수신하지 못했습니다. (사내망 연결 또는 로그인 토큰을 확인해주세요)',
+                error: 'MES 데이터를 수신하지 못했습니다. (조회 조건 또는 로그인 토큰을 확인해주세요)',
                 count: 0 
             });
         }
