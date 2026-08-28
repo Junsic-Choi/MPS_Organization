@@ -494,10 +494,24 @@
             <span class="header-badge">Port 8895 (독립 운영)</span>
         </div>
 
-        <div class="header-actions">
-            <button class="btn" onclick="syncMpsPlan()">🔄 최신 MPS 계획 동기화</button>
-            <button class="btn btn-success" onclick="saveAllBays()">💾 전체 저장</button>
-            <button class="btn btn-primary" onclick="exportExcel()">📥 엑셀 내보내기</button>
+        <div class="header-actions" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <!-- 계획 관리 그룹 -->
+            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;">
+                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">📋 계획:</span>
+                <button class="btn" onclick="syncMpsPlan()" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1;" title="SAP 1840 생산계획표를 읽어 배정 후보 목록을 갱신합니다">🔄 MPS 배정계획 갱신</button>
+            </div>
+
+            <!-- 현장 실적 그룹 -->
+            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                <span style="font-size: 0.75rem; font-weight: 700; color: var(--primary);">🏭 실적:</span>
+                <button class="btn" onclick="syncMesActuals()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; font-weight: 700; padding: 0.35rem 0.8rem; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);" title="사내 MES API를 호출하여 공장 실제 호기/공정/지번 실적을 실시간 동기화합니다">⚡ MES 실시간 실적 동기화</button>
+                <span id="mes-sync-time" style="font-size: 0.7rem; font-weight: 600; color: var(--primary);"></span>
+            </div>
+
+            <div style="display: flex; gap: 0.4rem;">
+                <button class="btn btn-success" onclick="saveAllBays()">💾 전체 저장</button>
+                <button class="btn btn-primary" onclick="exportExcel()">📥 엑셀 내보내기</button>
+            </div>
         </div>
     </header>
 
@@ -624,6 +638,26 @@
                 <div class="form-group">
                     <label class="form-label">현장 특이사항 / 결품 ISSUE 메모</label>
                     <input type="text" class="form-input" id="m-issue" placeholder="예: 쿨러 8/25 입고 대기, ATC 결품 확인 중">
+                </div>
+
+                <!-- Move Bay / Swap Section -->
+                <div style="margin-top: 1.2rem; padding: 0.85rem; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #0f172a;">🚚 타 직 / 지번으로 장비 이동 (또는 맞교환)</span>
+                        <span style="font-size: 0.725rem; color: var(--text-secondary);">(대상 지점 점유 시 자동 맞교환)</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <select class="form-select" id="move-target-shift" style="flex: 1; min-width: 130px; font-size: 0.8rem; font-weight: 600;" onchange="updateMoveTargetBays()">
+                            <option value="MC1직">MC 1직 (E/F구역)</option>
+                            <option value="MC2직">MC 2직 (C/D구역)</option>
+                            <option value="MC3직">MC 3직 (B구역)</option>
+                            <option value="MC4직">MC 4직 (A구역)</option>
+                        </select>
+                        <select class="form-select" id="move-target-bay" style="flex: 1.4; min-width: 180px; font-size: 0.8rem; font-weight: 600;">
+                            <!-- Populated dynamically -->
+                        </select>
+                        <button class="btn" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; font-weight: 700; padding: 0.4rem 0.8rem; font-size: 0.8rem; white-space: nowrap;" onclick="executeMoveBay()">이동 실행 🚀</button>
+                    </div>
                 </div>
             </div>
 
@@ -893,10 +927,15 @@
                         const stepFound = modelCfg.steps.find(s => s.code === bay.currentProcess);
                         const procText = stepFound ? stepFound.name : `[${bay.currentProcess || 'BASE'}] 조립 진행`;
 
+                        const sourceBadge = bay.source === 'MES'
+                            ? `<span style="font-size: 0.65rem; font-weight: 800; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">🟢 MES 실시간</span>`
+                            : `<span style="font-size: 0.65rem; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: auto;">✏️ 수기</span>`;
+
                         card.innerHTML = `
                             <div class="bay-card-top">
                                 <span class="bay-num-badge">지번 ${bay.bay}</span>
                                 <span class="bay-worker-badge">👷 ${bay.worker || '작업자 미지정'}</span>
+                                ${sourceBadge}
                             </div>
 
                             <div>
@@ -968,6 +1007,10 @@
 
             // Update process dropdown based on model
             updateProcessDropdownForModel(bay.model, bay.currentProcess || 'BASE');
+
+            // Initialize Move Bay targets
+            document.getElementById('move-target-shift').value = bay.shift;
+            updateMoveTargetBays();
 
             document.getElementById('edit-modal').style.display = 'flex';
         }
@@ -1093,11 +1136,88 @@
             activeEditingBayId = null;
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        // Sync MES Actual Performance API
+        async function syncMesActuals() {
+            try {
+                showToast('⚡ MES 실시간 조립 실적을 동기화하는 중입니다...');
+                const res = await fetch('/api/mes-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const json = await res.json();
+                if (json.success && Array.isArray(json.bays)) {
+                    allBays = json.bays;
+                    renderBays();
+                    
+                    const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                    const timeEl = document.getElementById('mes-sync-time');
+                    if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
+
+                    showToast(`⚡ MES 실적 동기화 완료! (총 ${json.matchedBaysCount}개 지번 자동 갱신)`);
+                } else {
+                    showToast(json.error || 'MES 데이터를 수신하지 못했습니다.');
+                }
+            } catch (e) {
+                console.error('MES sync error:', e);
+                showToast('MES 동기화 중 통신 오류가 발생했습니다.');
+            }
+        }
+
+        // Populate Target Bay Select for Moving / Swapping
+        function updateMoveTargetBays() {
+            const currentBay = allBays.find(b => b.id === activeEditingBayId);
+            const targetShift = document.getElementById('move-target-shift').value;
+            const targetSelect = document.getElementById('move-target-bay');
+
+            const shiftBays = allBays.filter(b => b.shift === targetShift && (!currentBay || b.id !== currentBay.id));
+            
+            targetSelect.innerHTML = shiftBays.map(b => {
+                const status = b.assigned ? `[점유: ${b.model || '배정됨'}]` : `[⚪ 빈 지번]`;
+                return `<option value="${b.id}">지번 ${b.bay} ${status}</option>`;
+            }).join('');
+        }
+
+        // Execute Move Bay / Swap Bay
+        async function executeMoveBay() {
+            const targetBayId = document.getElementById('move-target-bay').value;
+            if (!activeEditingBayId || !targetBayId) {
+                return showToast('이동할 대상 지번을 선택해주세요.');
+            }
+
+            const srcBay = allBays.find(b => b.id === activeEditingBayId);
+            const tgtBay = allBays.find(b => b.id === targetBayId);
+
+            const isSwap = tgtBay && tgtBay.assigned;
+            const confirmMsg = isSwap
+                ? `지번 ${srcBay.bay}과 지번 ${tgtBay.bay}의 배정 장비를 서로 맞교환(Swap)하시겠습니까?`
+                : `지번 ${srcBay.bay}의 장비를 지번 ${tgtBay.bay}로 이동하시겠습니까?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch('/api/shopfloor/move-bay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sourceBayId: activeEditingBayId, targetBayId })
+                });
+                const json = await res.json();
+                if (json.success && Array.isArray(json.bays)) {
+                    allBays = json.bays;
+                    closeModal();
+                    renderBays();
+                    if (json.swapped) {
+                        showToast(`🚚 지번 ${srcBay.bay} ↔ ${tgtBay.bay} 맞교환이 완료되었습니다!`);
+                    } else {
+                        showToast(`🚚 지번 ${srcBay.bay} → ${tgtBay.bay} 이동이 완료되었습니다!`);
+                    }
+                } else {
+                    showToast(json.error || '지번 이동에 실패했습니다.');
+                }
+            } catch (e) {
+                console.error('Move bay error:', e);
+                showToast('지번 이동 중 오류가 발생했습니다.');
+            }
         }
 
         // Export Shopfloor to Excel

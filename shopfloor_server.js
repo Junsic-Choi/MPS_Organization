@@ -76,6 +76,231 @@ app.post('/api/shopfloor/save', (req, res) => {
     }
 });
 
+// 3-1. Move / Swap Bay API
+app.post('/api/shopfloor/move-bay', (req, res) => {
+    try {
+        const { sourceBayId, targetBayId } = req.body;
+        if (!sourceBayId || !targetBayId) {
+            return res.status(400).json({ success: false, error: 'sourceBayId and targetBayId required' });
+        }
+
+        let bays = [];
+        if (fs.existsSync(DATA_FILE)) {
+            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+            bays = data.bays || [];
+        } else {
+            bays = getDefaultBays();
+        }
+
+        const srcIndex = bays.findIndex(b => b.id === sourceBayId);
+        const tgtIndex = bays.findIndex(b => b.id === targetBayId);
+
+        if (srcIndex === -1 || tgtIndex === -1) {
+            return res.status(404).json({ success: false, error: 'Bay not found' });
+        }
+
+        const src = bays[srcIndex];
+        const tgt = bays[tgtIndex];
+
+        // Backup static properties
+        const srcMeta = { id: src.id, shift: src.shift, bay: src.bay };
+        const tgtMeta = { id: tgt.id, shift: tgt.shift, bay: tgt.bay };
+
+        // Data to transfer
+        const srcData = {
+            assigned: src.assigned,
+            model: src.model,
+            serial: src.serial,
+            salesDoc: src.salesDoc,
+            customer: src.customer,
+            worker: src.worker,
+            currentProcess: src.currentProcess,
+            spec: src.spec,
+            issue: src.issue,
+            startDate: src.startDate,
+            deliveryDate: src.deliveryDate,
+            source: src.source || 'MANUAL'
+        };
+
+        const tgtData = {
+            assigned: tgt.assigned,
+            model: tgt.model,
+            serial: tgt.serial,
+            salesDoc: tgt.salesDoc,
+            customer: tgt.customer,
+            worker: tgt.worker,
+            currentProcess: tgt.currentProcess,
+            spec: tgt.spec,
+            issue: tgt.issue,
+            startDate: tgt.startDate,
+            deliveryDate: tgt.deliveryDate,
+            source: tgt.source || 'MANUAL'
+        };
+
+        if (tgt.assigned) {
+            // Swap if target is already assigned
+            bays[srcIndex] = { ...srcMeta, ...tgtData };
+            bays[tgtIndex] = { ...tgtMeta, ...srcData };
+        } else {
+            // Move to empty target bay and clear source bay
+            bays[tgtIndex] = { ...tgtMeta, ...srcData };
+            bays[srcIndex] = {
+                ...srcMeta,
+                assigned: false,
+                model: '',
+                serial: '',
+                salesDoc: '',
+                customer: '',
+                worker: '',
+                currentProcess: 'BASE',
+                spec: '',
+                issue: '',
+                startDate: '',
+                deliveryDate: '',
+                source: 'MANUAL'
+            };
+        }
+
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
+        res.json({ success: true, bays, swapped: tgtData.assigned });
+    } catch (err) {
+        console.error('[shopfloor] Move bay failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 3-2. MES Actual Performance Sync API
+app.post('/api/mes-sync', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'] || req.body.token || '';
+        const yyyymm = req.body.yyyymm || new Date().toISOString().slice(0, 7).replace('-', '');
+
+        const payload = {
+            BizActId: "BR_DNS_MES_SEL_ProdProgressStatus_Assy",
+            InDataList: {
+                IN_DATA: [
+                    {
+                        ENTERPRISE_ID: "1800",
+                        PLANT_ID: "1840",
+                        DEPT_ID: null,
+                        PROD_YYYYMM_FROM: yyyymm
+                    }
+                ]
+            },
+            OutData: "OUT_DATA",
+            port: "8082"
+        };
+
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        if (authHeader) {
+            headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
+        }
+
+        let mesItems = [];
+        try {
+            const mesRes = await fetch('http://mes.dn-solutions.com:8081/api/json/query', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload)
+            });
+
+            if (mesRes.ok) {
+                const mesJson = await mesRes.json();
+                mesItems = mesJson.OUT_DATA || (mesJson.InDataList && mesJson.InDataList.OUT_DATA) || [];
+            } else {
+                console.warn(`[MES] Server response status: ${mesRes.status}`);
+            }
+        } catch (fetchErr) {
+            console.warn('[MES] Remote connection warning:', fetchErr.message);
+        }
+
+        // If client provided manual raw OUT_DATA array directly
+        if (Array.isArray(req.body.outData) && req.body.outData.length > 0) {
+            mesItems = req.body.outData;
+        }
+
+        if (mesItems.length === 0) {
+            return res.json({ 
+                success: false, 
+                error: 'MES 데이터를 수신하지 못했습니다. (사내망 연결 또는 로그인 토큰을 확인해주세요)',
+                count: 0 
+            });
+        }
+
+        // Load existing bays
+        let bays = [];
+        if (fs.existsSync(DATA_FILE)) {
+            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+            bays = data.bays || [];
+        } else {
+            bays = getDefaultBays();
+        }
+
+        let matchedCount = 0;
+
+        // Parse Work Center (WC_ID) to bay matching
+        const normalizeBayKey = (wc) => {
+            if (!wc) return null;
+            const clean = wc.toUpperCase().trim();
+            
+            // Match Patterns like E1~E10, F1~F6, C1~C12, D1~D12, B1~B10, A1~A10
+            const m = clean.match(/([A-F])(0?[1-9]|1[0-2])/);
+            if (m) {
+                const zone = m[1];
+                const num = parseInt(m[2], 10);
+                return `${zone}${num}`;
+            }
+            return null;
+        };
+
+        mesItems.forEach(item => {
+            const bayCode = normalizeBayKey(item.WC_ID);
+            if (!bayCode) return;
+
+            // Find matching bay in bays list
+            const targetBay = bays.find(b => b.bay.toUpperCase() === bayCode);
+            if (targetBay) {
+                targetBay.assigned = true;
+                targetBay.model = item.PROD_MDL_NAME || item.MTRL_ID || targetBay.model;
+                
+                const serialNo = (item.PROD_MDL_ID && item.PROD_MDL_CNT) 
+                    ? `${item.PROD_MDL_ID}-${item.PROD_MDL_CNT}` 
+                    : (item.PROD_MDL_CNT || targetBay.serial);
+                targetBay.serial = serialNo || targetBay.serial;
+
+                targetBay.currentProcess = item.CUR_PROC_ID || item.PROC_ID || targetBay.currentProcess || 'BASE';
+                targetBay.salesDoc = item.PROD_ORD_ID || targetBay.salesDoc;
+                targetBay.startDate = item.START_PLAN_DATE || targetBay.startDate;
+                targetBay.deliveryDate = item.SHIP_TARGET_DATE || targetBay.deliveryDate;
+                targetBay.spec = item.MTRL_ID || targetBay.spec;
+                
+                if (item.LOT_STATUS_CODE && item.LOT_STATUS_CODE !== 'NONE') {
+                    targetBay.issue = `[${item.PROD_ORD_STATUS_NAME || item.LOT_STATUS_CODE}]`;
+                }
+
+                targetBay.source = 'MES';
+                matchedCount++;
+            }
+        });
+
+        // Save updated bays
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ bays, updatedAt: new Date().toISOString() }, null, 2), 'utf8');
+        console.log(`[MES] Synced ${matchedCount} bays from ${mesItems.length} MES records`);
+
+        res.json({
+            success: true,
+            totalMesRecords: mesItems.length,
+            matchedBaysCount: matchedCount,
+            bays
+        });
+    } catch (err) {
+        console.error('[shopfloor] MES sync failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 4. Fetch MPS Planned Machines from local SAP files
 app.get('/api/mps-plan-machines', (req, res) => {
     try {
