@@ -639,11 +639,11 @@
     <!-- Filter Bar -->
     <nav class="filter-bar">
         <div class="shift-tabs">
-            <button class="shift-tab active" onclick="setShift('ALL')">전체 직 보기</button>
-            <button class="shift-tab" onclick="setShift('MC1직')">MC 1직 (E/F구역)</button>
-            <button class="shift-tab" onclick="setShift('MC2직')">MC 2직 (C/D구역)</button>
-            <button class="shift-tab" onclick="setShift('MC3직')">MC 3직 (B구역)</button>
-            <button class="shift-tab" onclick="setShift('MC4직')">MC 4직 (A구역)</button>
+            <button class="shift-tab active" onclick="setShift('ALL')">전체 공장 보기</button>
+            <button class="shift-tab" onclick="setShift('MC1직')">MC 1직 (C동 / D·E구역)</button>
+            <button class="shift-tab" onclick="setShift('MC2직')">MC 2직 (MC동 / C·D구역)</button>
+            <button class="shift-tab" onclick="setShift('MC3직')">MC 3직 (MC동 / A·B구역)</button>
+            <button class="shift-tab" onclick="setShift('MC4직')">MC 4직 (FA동 / A·B·C·D구역)</button>
         </div>
 
         <div>
@@ -1445,15 +1445,16 @@
 
             targetShifts.forEach(shiftName => {
                 let badgeClass = 'badge-mc1';
-                if (shiftName === 'MC2직') badgeClass = 'badge-mc2';
-                else if (shiftName === 'MC3직') badgeClass = 'badge-mc3';
-                else if (shiftName === 'MC4직') badgeClass = 'badge-mc4';
+                let areaLabel = 'C동 (D·E구역)';
+                if (shiftName === 'MC2직') { badgeClass = 'badge-mc2'; areaLabel = 'MC동 (C·D구역)'; }
+                else if (shiftName === 'MC3직') { badgeClass = 'badge-mc3'; areaLabel = 'MC동 (A·B구역)'; }
+                else if (shiftName === 'MC4직') { badgeClass = 'badge-mc4'; areaLabel = 'FA동 (A·B·C·D구역)'; }
 
                 const shiftBays = allBays.filter(b => b.shift === shiftName);
 
                 const filteredBays = shiftBays.filter(b => {
                     if (!searchVal) return true;
-                    const str = `${b.bay} ${b.model || ''} ${b.serial || ''} ${b.customer || ''} ${b.worker || ''} ${b.spec || ''} ${b.issue || ''}`.toLowerCase();
+                    const str = `${b.bay} ${b.area || ''} ${b.model || ''} ${b.serial || ''} ${b.customer || ''} ${b.worker || ''} ${b.spec || ''} ${b.issue || ''}`.toLowerCase();
                     return str.includes(searchVal);
                 });
 
@@ -1466,7 +1467,7 @@
 
                 section.innerHTML = `
                     <div class="section-header">
-                        <span class="section-title">${shiftName} 조립 지번 현황</span>
+                        <span class="section-title">${shiftName} [${areaLabel}] 조립 지번 현황</span>
                         <span class="header-badge ${badgeClass}">${activeInShift}대 가동 중 / 총 ${shiftBays.length}개 지번</span>
                     </div>
                     <div class="bay-grid" id="grid-${shiftName}"></div>

@@ -12,23 +12,27 @@ app.use(express.static(__dirname));
 
 const DATA_FILE = path.join(__dirname, 'shopfloor_data.json');
 
-// Default Bay Template if no data exists
+// Default Bay Template (Organized by Real MES Building and Bay Codes)
 function getDefaultBays() {
     const bays = [];
     
-    // MC 1직 (E구역 1~13, F구역 1~13)
-    for (let i = 1; i <= 13; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
-    for (let i = 1; i <= 13; i++) bays.push({ id: `mc1-f${i}`, shift: 'MC1직', bay: `F${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 1직 (C동) - D구역 1~14, E구역 1~10
+    for (let i = 1; i <= 14; i++) bays.push({ id: `mc1-d${i}`, shift: 'MC1직', area: 'C동', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 10; i++) bays.push({ id: `mc1-e${i}`, shift: 'MC1직', area: 'C동', bay: `E${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 2직 (C구역 1~19, D구역 1~19)
-    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
-    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-d${i}`, shift: 'MC2직', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 2직 (MC동) - C구역 1~19, D구역 1~19
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-c${i}`, shift: 'MC2직', area: 'MC동', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc2-d${i}`, shift: 'MC2직', area: 'MC동', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 3직 (B구역 1~19)
-    for (let i = 1; i <= 19; i++) bays.push({ id: `mc3-b${i}`, shift: 'MC3직', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 3직 (MC동) - B구역 1~19, A구역 1~18
+    for (let i = 1; i <= 19; i++) bays.push({ id: `mc3-b${i}`, shift: 'MC3직', area: 'MC동', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 18; i++) bays.push({ id: `mc3-a${i}`, shift: 'MC3직', area: 'MC동', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
-    // MC 4직 (A구역 1~19)
-    for (let i = 1; i <= 19; i++) bays.push({ id: `mc4-a${i}`, shift: 'MC4직', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    // MC 4직 (FA동) - A구역 1~14, B구역 1~12, C구역 5~13, D구역 1~6
+    for (let i = 1; i <= 14; i++) bays.push({ id: `mc4-a${i}`, shift: 'MC4직', area: 'FA동', bay: `A${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 12; i++) bays.push({ id: `mc4-b${i}`, shift: 'MC4직', area: 'FA동', bay: `B${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 5; i <= 13; i++) bays.push({ id: `mc4-c${i}`, shift: 'MC4직', area: 'FA동', bay: `C${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
+    for (let i = 1; i <= 6; i++) bays.push({ id: `mc4-d${i}`, shift: 'MC4직', area: 'FA동', bay: `D${i}`, assigned: false, model: '', serial: '', salesDoc: '', customer: '', worker: '', currentProcess: 'BASE', spec: '', issue: '', startDate: '', deliveryDate: '' });
 
     return bays;
 }
@@ -385,20 +389,35 @@ app.post('/api/mes-sync', async (req, res) => {
 
         const mesMachines = [...machineMap.values()];
 
+        // Clean Bay code extractor (e.g. "D17", "D1(C동)" -> "D17", "D1")
+        function extractBayCode(str) {
+            if (!str) return '';
+            const m = str.toString().toUpperCase().match(/([A-F]\d{1,2})/);
+            return m ? m[1] : str.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
         // Smart Physical Bay Allocation
-        // 1. Auto-assign machines to matching bays (e.g. GI_LOC_ID 'C11' -> Bay 'C11', 'D17' -> Bay 'D17', 'B9' -> 'B9')
         let autoAssignedCount = 0;
         let updatedCount = 0;
         let shippedCount = 0;
 
         bays.forEach(targetBay => {
-            const bayName = targetBay.bay.toUpperCase();
+            const targetBayCode = extractBayCode(targetBay.bay);
+            const targetShift = targetBay.shift;
+            const targetArea = targetBay.area;
             
-            // Look for an MES machine assigned to this exact physical bay location
+            // Look for an MES machine assigned to this exact physical bay location and shift
             const locMatch = mesMachines.find(m => {
                 if (!m.loc) return false;
-                const mLoc = m.loc.toUpperCase().replace(/[\s\-_()동구역]/g, '');
-                return mLoc === bayName || m.loc === targetBay.bay;
+                const mCode = extractBayCode(m.loc);
+                if (mCode !== targetBayCode) return false;
+                
+                // Match shift
+                if (m.shift && m.shift !== targetShift) return false;
+
+                // Match area if both specified
+                if (m.area && targetArea && m.area.includes(targetArea.substring(0, 1))) return true;
+                return true;
             });
 
             if (locMatch) {
@@ -436,11 +455,11 @@ app.post('/api/mes-sync', async (req, res) => {
                     targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
                     targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                     targetBay.spec = match.MTRL_ID || targetBay.spec;
+                    targetBay.source = 'MES';
                     targetBay.isShipped = false;
                     if (match.PROD_ORD_STATUS_NAME) {
                         targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
                     }
-                    targetBay.source = 'MES';
                     updatedCount++;
                 } else if (targetBay.source === 'MES') {
                     // Shipped
