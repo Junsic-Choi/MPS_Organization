@@ -446,13 +446,13 @@ app.get('/api/mps-plan-machines', (req, res) => {
 
             const ver = (cells[map.ver] || '').toUpperCase();
             let shift = null;
-            if (ver.includes('0AM1') || ver.includes('0AMA') || ver.includes('MC1') || ver.includes('MC 1')) {
+            if (/0AM1|0AMA|0AMB|MC1|MC 1/.test(ver)) {
                 shift = 'MC1직';
-            } else if (ver.includes('0AM2') || ver.includes('MC2') || ver.includes('MC 2')) {
+            } else if (/0AM2|MC2|MC 2/.test(ver)) {
                 shift = 'MC2직';
-            } else if (ver.includes('0AM3') || ver.includes('MC3') || ver.includes('MC 3')) {
+            } else if (/0AM3|0AMC|MC3|MC 3/.test(ver)) {
                 shift = 'MC3직';
-            } else if (ver.includes('0AM4') || ver.includes('MC4') || ver.includes('MC 4')) {
+            } else if (/0AM4|0AMD|MC4|MC 4/.test(ver)) {
                 shift = 'MC4직';
             }
 
