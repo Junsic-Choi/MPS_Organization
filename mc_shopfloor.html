@@ -737,6 +737,15 @@
         let currentShift = 'ALL';
         let activeEditingBayId = null;
 
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
         const MODEL_PROCESS_MASTER = {
             'NHP4000': {
                 name: 'NHP4000/5000, HC400/500 (15일 L/T)',
