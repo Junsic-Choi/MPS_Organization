@@ -648,8 +648,24 @@ app.post('/api/mes-sync', async (req, res) => {
                 return true;
             });
 
-            // Sort: isDaily first, then active process
+            // Check if machine is actually started / in active operation (Yellow/Purple status)
+            function hasRealActiveProcess(m) {
+                if (!m) return false;
+                const aOrd = (m.salesDoc || '').trim();
+                const aSerial = (m.PROD_MDL_CNT || m.serial || '').trim();
+                if (locBayMap.get(aOrd)?.isDaily || locBayMap.get(aSerial)?.isDaily) return true;
+
+                if (m.CUR_PROC_ID && m.CUR_PROC_ID.trim() && m.CUR_PROC_ID !== 'BASE') return true;
+                if (m.LOT_STATUS_CODE === 'START' || m.WO_STATUS_CODE === 'START' || m.PROC_STATUS_CODE === 'START') return true;
+                return false;
+            }
+
+            // Sort: 1. Real active running operation (Yellow/Purple) 2. isDaily 3. Higher Serial
             candidates.sort((a, b) => {
+                const aActive = hasRealActiveProcess(a) ? 1 : 0;
+                const bActive = hasRealActiveProcess(b) ? 1 : 0;
+                if (aActive !== bActive) return bActive - aActive;
+
                 const aOrd = (a.salesDoc || '').trim();
                 const bOrd = (b.salesDoc || '').trim();
                 const aSerial = (a.PROD_MDL_CNT || a.serial || '').trim();
@@ -658,6 +674,11 @@ app.post('/api/mes-sync', async (req, res) => {
                 const aDaily = (locBayMap.get(aOrd)?.isDaily || locBayMap.get(aSerial)?.isDaily) ? 1 : 0;
                 const bDaily = (locBayMap.get(bOrd)?.isDaily || locBayMap.get(bSerial)?.isDaily) ? 1 : 0;
                 if (aDaily !== bDaily) return bDaily - aDaily;
+
+                const aNum = parseInt(aSerial.replace(/\D/g, '')) || 0;
+                const bNum = parseInt(bSerial.replace(/\D/g, '')) || 0;
+                if (aNum !== bNum) return bNum - aNum;
+
                 return 0;
             });
 
