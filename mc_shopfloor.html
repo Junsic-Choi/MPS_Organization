@@ -655,6 +655,7 @@
             <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
                 <span style="font-size: 0.75rem; font-weight: 700; color: var(--primary);">🏭 실적:</span>
                 <button class="btn" id="mes-sync-btn" onclick="syncMesActuals()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; font-weight: 700; padding: 0.35rem 0.8rem; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);" title="사내 MES API를 호출하여 공장 실제 호기/공정/지번 실적을 실시간 동기화합니다">⚡ MES 실시간 실적 동기화</button>
+                <button id="btn-auto-sync" class="btn" onclick="toggleAutoSync()" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; font-weight: 700; background: #ffffff; color: #0284c7; border: 1px solid #bae6fd; border-radius: 6px; cursor: pointer; transition: all 0.2s;" title="5분마다 자동으로 MES 실시간 실적을 동기화합니다 (클릭하여 ON/OFF)">🔄 자동 동기화 ON (05:00)</button>
                 <button class="btn" onclick="openMesModal()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;" title="MES 토큰 및 연동 설정">⚙️</button>
                 <span id="mes-sync-time" style="font-size: 0.7rem; font-weight: 600; color: var(--primary);"></span>
             </div>
@@ -1116,6 +1117,7 @@
             updateZoneChips();
             await Promise.all([loadBays(), syncMpsPlan(false)]);
             renderBays();
+            initAutoSync();
             
             // Heartbeat
             fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
@@ -2163,6 +2165,10 @@
             const token = rawToken.startsWith('Bearer ') ? rawToken : `Bearer ${rawToken}`;
             if (document.getElementById('mes-remember-token').checked) {
                 localStorage.setItem('mes_bearer_token', token);
+                isAutoSyncEnabled = true;
+                localStorage.setItem('mes_auto_sync_enabled', 'true');
+                autoSyncSecondsLeft = 300;
+                updateAutoSyncButton();
             }
             closeMesModal();
             await executeMesSync(token);
@@ -2217,13 +2223,86 @@
             }
         }
 
-        async function executeMesSync(token) {
+        // ----------------------------------------------------
+        // 5-Minute MES Auto-Sync Controller
+        // ----------------------------------------------------
+        let autoSyncInterval = null;
+        let autoSyncSecondsLeft = 300; // 5분 = 300초
+        let isAutoSyncEnabled = localStorage.getItem('mes_auto_sync_enabled') !== 'false';
+
+        function initAutoSync() {
+            updateAutoSyncButton();
+            if (autoSyncInterval) clearInterval(autoSyncInterval);
+            autoSyncInterval = setInterval(() => {
+                const token = localStorage.getItem('mes_bearer_token');
+                if (!token || !isAutoSyncEnabled) {
+                    updateAutoSyncButton();
+                    return;
+                }
+
+                autoSyncSecondsLeft--;
+                if (autoSyncSecondsLeft <= 0) {
+                    autoSyncSecondsLeft = 300;
+                    executeMesSync(token, true); // 백그라운드 무소음 자동 갱신
+                }
+                updateAutoSyncButton();
+            }, 1000);
+        }
+
+        function updateAutoSyncButton() {
+            const btn = document.getElementById('btn-auto-sync');
+            if (!btn) return;
+            const token = localStorage.getItem('mes_bearer_token');
+
+            if (!token) {
+                btn.style.background = '#f1f5f9';
+                btn.style.color = '#94a3b8';
+                btn.style.borderColor = '#cbd5e1';
+                btn.innerHTML = '🔄 토큰 등록 시 5분 자동동기화';
+                return;
+            }
+
+            if (isAutoSyncEnabled) {
+                const mm = String(Math.floor(autoSyncSecondsLeft / 60)).padStart(2, '0');
+                const ss = String(autoSyncSecondsLeft % 60).padStart(2, '0');
+                btn.style.background = '#f0fdf4';
+                btn.style.color = '#15803d';
+                btn.style.borderColor = '#86efac';
+                btn.innerHTML = `🔄 자동 동기화 ON (${mm}:${ss})`;
+            } else {
+                btn.style.background = '#fef2f2';
+                btn.style.color = '#b91c1c';
+                btn.style.borderColor = '#fca5a5';
+                btn.innerHTML = '⏸️ 자동 동기화 OFF';
+            }
+        }
+
+        function toggleAutoSync() {
+            const token = localStorage.getItem('mes_bearer_token');
+            if (!token) {
+                openMesModal();
+                return;
+            }
+            isAutoSyncEnabled = !isAutoSyncEnabled;
+            localStorage.setItem('mes_auto_sync_enabled', isAutoSyncEnabled);
+            if (isAutoSyncEnabled) {
+                autoSyncSecondsLeft = 300;
+                showToast('✅ 5분 주기 MES 자동 동기화가 활성화되었습니다.');
+            } else {
+                showToast('⏸️ MES 자동 동기화가 일시 중지되었습니다.');
+            }
+            updateAutoSyncButton();
+        }
+
+        async function executeMesSync(token, isSilent = false) {
             const btn = document.getElementById('mes-sync-btn');
-            if (btn) {
+            if (btn && !isSilent) {
                 btn.textContent = '⏳ MES 조회 중...';
                 btn.disabled = true;
             }
-            showToast('⚡ MES 실시간 조립 실적을 조회하는 중입니다...');
+            if (!isSilent) {
+                showToast('⚡ MES 실시간 조립 실적을 조회하는 중입니다...');
+            }
 
             try {
                 const res = await fetch('/api/mes-sync', {
@@ -2245,17 +2324,29 @@
                     const timeEl = document.getElementById('mes-sync-time');
                     if (timeEl) timeEl.textContent = `(동기화: ${timeStr})`;
 
-                    alert(`⚡ [MES 실시간 실적 & 실제 지번 자동배치 완료]\n\n• MC직 실가동 장비: ${json.validMcMachinesCount || 0}대\n• 🎯 실제 지번 자동 배치: ${json.autoAssignedBaysCount || 0}대\n• ⚙️ 실시간 공정 갱신: ${json.updatedBaysCount || 0}대\n\nMES에 등록된 실제 지번(C11, D17, B9, A1 등)에 장비가 자동 배치되었으며, 노란색 실시간 공정 하이라이트가 켜졌습니다!`);
-                    showToast(`⚡ MES 동기화 완료! (${json.autoAssignedBaysCount || 0}개 지번 자동 배치)`);
+                    if (!isSilent) {
+                        alert(`⚡ [MES 실시간 실적 & 실제 지번 자동배치 완료]\n\n• MC직 실가동 장비: ${json.validMcMachinesCount || 0}대\n• 🎯 실제 지번 자동 배치: ${json.autoAssignedBaysCount || 0}대\n• ⚙️ 실시간 공정 갱신: ${json.updatedBaysCount || 0}대\n\nMES에 등록된 실제 지번(C11, D17, B9, A1 등)에 장비가 자동 배치되었으며, 노란색 실시간 공정 하이라이트가 켜졌습니다!`);
+                        showToast(`⚡ MES 동기화 완료! (${json.autoAssignedBaysCount || 0}개 지번 자동 배치)`);
+                    } else {
+                        showToast(`🔄 [5분 자동갱신] MES 최신 실적이 자동 동기화되었습니다 (${timeStr})`);
+                    }
                 } else {
-                    alert(`⚠️ MES 실시간 조회 실패:\n\n${json.error || '인증 토큰이 만료되었거나 올바르지 않습니다.'}\n\n[확인]을 누르시면 MES 연동 설정 창이 열립니다.`);
-                    openMesModal();
+                    if (!isSilent) {
+                        alert(`⚠️ MES 실시간 조회 실패:\n\n${json.error || '인증 토큰이 만료되었거나 올바르지 않습니다.'}\n\n[확인]을 누르시면 MES 연동 설정 창이 열립니다.`);
+                        openMesModal();
+                    } else {
+                        showToast('⚠️ [자동 갱신 일시중지] MES 토큰이 만료되었습니다. 새 토큰을 등록해주세요.');
+                        isAutoSyncEnabled = false;
+                        updateAutoSyncButton();
+                    }
                 }
             } catch (e) {
                 console.error('MES sync error:', e);
-                alert(`MES 동기화 통신 오류: ${e.message}\n\n사내망 연결 상태를 확인해주세요.`);
+                if (!isSilent) {
+                    alert(`MES 동기화 통신 오류: ${e.message}\n\n사내망 연결 상태를 확인해주세요.`);
+                }
             } finally {
-                if (btn) {
+                if (btn && !isSilent) {
                     btn.textContent = '⚡ MES 실시간 실적 동기화';
                     btn.disabled = false;
                 }
