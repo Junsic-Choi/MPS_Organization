@@ -337,16 +337,18 @@ app.post('/api/mes-sync', async (req, res) => {
                     try {
                         const gJson = await resWorkG.json();
                         const gRows = gJson.OUT_DATA || [];
-                        workorderRows.push(...gRows);
-                        console.log(`[MES] Fetched ${gRows.length} workorder records from CN0WBFAG`);
+                        const gGpes = gJson.OUT_GPES || [];
+                        workorderRows.push(...gRows, ...gGpes);
+                        console.log(`[MES] Fetched ${gRows.length} OUT_DATA + ${gGpes.length} OUT_GPES records from CN0WBFAG`);
                     } catch(e) {}
                 }
                 if (resWorkH && resWorkH.ok) {
                     try {
                         const hJson = await resWorkH.json();
                         const hRows = hJson.OUT_DATA || [];
-                        workorderRows.push(...hRows);
-                        console.log(`[MES] Fetched ${hRows.length} workorder records from CN0WBFAH`);
+                        const hGpes = hJson.OUT_GPES || [];
+                        workorderRows.push(...hRows, ...hGpes);
+                        console.log(`[MES] Fetched ${hRows.length} OUT_DATA + ${hGpes.length} OUT_GPES records from CN0WBFAH`);
                     } catch(e) {}
                 }
 
