@@ -1007,15 +1007,15 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
 });
 
-const HEARTBEAT_TIMEOUT = 600000; // 10 minutes
-const GRACE_PERIOD = 180000; // 3 minutes grace period
+const HEARTBEAT_TIMEOUT = 1800000; // 30 minutes
+const GRACE_PERIOD = 1800000; // 30 minutes grace period
 const startupTime = Date.now();
 
 setInterval(() => {
     const now = Date.now();
     if (hasReceivedHeartbeat) {
         if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
-            console.log('[AUTO-SHUTDOWN] No client connected for 10 minutes. Exiting...');
+            console.log('[AUTO-SHUTDOWN] No client connected for 30 minutes. Exiting...');
             process.exit(0);
         }
     } else {
@@ -1024,4 +1024,4 @@ setInterval(() => {
             process.exit(0);
         }
     }
-}, 5000);
+}, 10000);
