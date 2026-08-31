@@ -630,6 +630,9 @@ app.post('/api/mes-sync', async (req, res) => {
             return m ? m[1] : str.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
 
+        const machine653 = mesMachines.find(m => (m.serial && m.serial.includes('653')) || (m.salesDoc && m.salesDoc.includes('4157634')));
+        console.log('[DEBUG 653] in mesMachines:', machine653 ? { serial: machine653.serial, salesDoc: machine653.salesDoc, loc: machine653.loc, shift: machine653.shift, worker: machine653.worker, curProc: machine653.CUR_PROC_ID } : 'NOT FOUND IN mesMachines');
+
         // Smart Physical Bay Allocation
         let autoAssignedCount = 0;
         let updatedCount = 0;
@@ -648,6 +651,20 @@ app.post('/api/mes-sync', async (req, res) => {
                 if (m.shift && m.shift !== targetShift) return false;
                 return true;
             });
+
+            if (targetBayCode === 'C17') {
+                console.log('[DEBUG C17] candidates count:', candidates.length);
+                candidates.forEach((c, idx) => {
+                    console.log(`[DEBUG C17] cand #${idx}:`, {
+                        serial: c.serial,
+                        salesDoc: c.salesDoc,
+                        model: c.model,
+                        loc: c.loc,
+                        proc: c.CUR_PROC_ID,
+                        worker: c.worker
+                    });
+                });
+            }
 
             // Check if machine is actually started / in active operation (Yellow/Purple status)
             function hasRealActiveProcess(m) {
