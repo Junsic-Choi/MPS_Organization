@@ -1431,10 +1431,14 @@
                     procBadge = m.month ? `<span style="font-size: 0.65rem; font-weight: 600; color: #64748b;">📅 ${m.month}</span>` : '';
                 }
 
+                const planMon = m.planMonth || m.mon || m.month || '';
+                const monBadge = planMon ? `<span style="font-size: 0.65rem; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 3px; border: 1px solid #bae6fd;">📅 ${planMon}</span>` : '';
+
                 card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.3rem;">
                         <span style="font-weight: 800; font-size: 0.85rem; color: var(--text-main);">${modelName}</span>
                         <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            ${monBadge}
                             ${workerBadge}
                             ${shiftBadge}
                         </div>
@@ -1836,11 +1840,14 @@
                             </div>
 
                             <div>
-                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.35rem; flex-wrap: wrap;">
                                     <span class="bay-model">${bay.model || '-'}</span>
-                                    <span class="bay-serial">호기: ${bay.serial || '-'}</span>
+                                    ${bay.planMonth ? `<span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid #bae6fd;">📅 ${bay.planMonth}</span>` : ''}
                                 </div>
-                                <div class="bay-customer">🏢 ${bay.customer || '고객사 정보 없음'}</div>
+                                <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; display: flex; justify-content: space-between;">
+                                    <span>호기: <strong style="color: #1e293b;">${bay.serial || '-'}</strong></span>
+                                </div>
+                                <div class="bay-customer" style="margin-top: 0.25rem; font-weight: 600; color: ${bay.customer ? '#0f172a' : '#94a3b8'};">🏢 ${bay.customer || '고객사 정보 없음'}</div>
                             </div>
 
                             ${processBadgeHtml}

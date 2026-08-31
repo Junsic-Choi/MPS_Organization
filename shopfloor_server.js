@@ -593,6 +593,77 @@ app.post('/api/mes-sync', async (req, res) => {
             return null;
         }
 
+        // Helper: Parse SAP 1840 production schedule to map customer and planMonth
+        function loadSapMetaMap() {
+            const customerMap = new Map();
+            const monthMap = new Map();
+            try {
+                const sapPath = path.join(__dirname, 'sap_1840.mhtml');
+                if (!fs.existsSync(sapPath)) return { customerMap, monthMap };
+
+                const mhtml = fs.readFileSync(sapPath, 'utf8');
+                const decoded = mhtml
+                    .replace(/=\r?\n/g, '')
+                    .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+                const trMatches = decoded.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+                const rows = trMatches.map(tr => {
+                    const tdMatches = tr.match(/<t[dh][\s\S]*?<\/t[dh]>/gi) || [];
+                    return tdMatches.map(td => td.replace(/<[^>]+>/g, '').trim());
+                });
+
+                if (rows.length < 2) return { customerMap, monthMap };
+
+                let headerRow = rows[0];
+                let headerCells = headerRow.map(c => c.toUpperCase());
+                for (let i = 1; i < Math.min(10, rows.length); i++) {
+                    const cells = rows[i].map(c => c.toUpperCase());
+                    if (cells.some(c => c.includes('MATERIAL') || c.includes('PROD'))) {
+                        headerRow = rows[i];
+                        headerCells = cells;
+                        break;
+                    }
+                }
+
+                const findIdx = (keywords) => {
+                    let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                    if (idx !== -1) return idx;
+                    return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+                };
+
+                const map = {
+                    mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+                    customer: findIdx(['CUSTOMER NAME', 'CUSTOMER', '고객']),
+                    serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼', 'SERIAL']),
+                    order: findIdx(['ORDER', '오더']),
+                    salesDoc: findIdx(['S/O ORDER', 'SALES DOC', 'SALESDOC', '판매문서'])
+                };
+
+                const startIndex = rows.indexOf(headerRow) + 1;
+                for (let i = startIndex; i < rows.length; i++) {
+                    const cells = rows[i];
+                    if (cells.length < 5) continue;
+
+                    const cust = map.customer !== -1 ? (cells[map.customer] || '').trim() : '';
+                    const mon = map.mon !== -1 ? (cells[map.mon] || '').trim() : '';
+                    const serial = map.serial !== -1 ? (cells[map.serial] || '').trim() : '';
+                    const order = map.order !== -1 ? (cells[map.order] || '').trim() : '';
+                    const sDoc = map.salesDoc !== -1 ? (cells[map.salesDoc] || '').trim() : '';
+
+                    const keys = [serial, order, sDoc].filter(Boolean);
+                    keys.forEach(k => {
+                        if (cust && !customerMap.has(k)) customerMap.set(k, cust);
+                        if (mon && !monthMap.has(k)) monthMap.set(k, mon);
+                    });
+                }
+            } catch (e) {
+                console.warn('[SAP Meta Map] Warning:', e.message);
+            }
+            return { customerMap, monthMap };
+        }
+
+        const sapMeta = loadSapMetaMap();
+
         // Group unique machines from MES & Attach physical Bay Location (GI_LOC_ID)
         const machineMap = new Map();
         mesItems.forEach(i => {
@@ -602,10 +673,25 @@ app.post('/api/mes-sync', async (req, res) => {
             const serial = i.PROD_MDL_ID ? `${i.PROD_MDL_ID}-${i.PROD_MDL_CNT}` : (i.PROD_MDL_CNT || '');
             const ordKey = (i.PROD_ORD_ID || '').trim();
             const serialKey = (i.PROD_MDL_CNT || '').trim();
+            const fullSerial = (i.FULL_PROD_MDL_CNT || serial || '').trim();
             const key = ordKey || serial;
 
             const locInfo = (ordKey && locBayMap.get(ordKey)) || (serialKey && locBayMap.get(serialKey)) || {};
             const workerFound = (ordKey && workerMap.get(ordKey)) || (serialKey && workerMap.get(serialKey)) || i.WORKER_NAME || i.WORKER || i.USER_NAME || i.CHARGER || '';
+            const customerFound = i.CUST_NAME || i.CUSTOMER_NAME || i.CUSTOMER || i.BP_NAME || sapMeta.customerMap.get(ordKey) || sapMeta.customerMap.get(serialKey) || sapMeta.customerMap.get(fullSerial) || '';
+
+            let rawMon = i.PROD_YYYYMM || sapMeta.monthMap.get(ordKey) || sapMeta.monthMap.get(serialKey) || sapMeta.monthMap.get(fullSerial) || '';
+            let planMonth = '';
+            if (rawMon) {
+                const digits = rawMon.toString().replace(/\D/g, '');
+                if (digits.length >= 6) {
+                    planMonth = `${digits.slice(2, 4)}.${digits.slice(4, 6)}월분`;
+                } else if (digits.length === 4) {
+                    planMonth = `${digits.slice(0, 2)}.${digits.slice(2, 4)}월분`;
+                } else {
+                    planMonth = rawMon;
+                }
+            }
 
             if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
                 machineMap.set(key, {
@@ -614,6 +700,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     serial,
                     model: i.PROD_MDL_NAME || i.MTRL_ID,
                     salesDoc: i.PROD_ORD_ID,
+                    customer: customerFound,
+                    planMonth: planMonth,
                     loc: locInfo.loc || '',
                     area: locInfo.area || '',
                     worker: workerFound
@@ -715,7 +803,8 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.model = locMatch.model;
                 targetBay.serial = locMatch.serial;
                 targetBay.salesDoc = locMatch.salesDoc || '';
-                targetBay.customer = locMatch.customer || '';
+                targetBay.customer = locMatch.customer || targetBay.customer || '';
+                targetBay.planMonth = locMatch.planMonth || targetBay.planMonth || '';
                 targetBay.currentProcess = locMatch.CUR_PROC_ID || locMatch.PROC_ID || 'BASE';
                 targetBay.startDate = locMatch.START_PLAN_DATE || targetBay.startDate;
                 targetBay.deliveryDate = locMatch.SHIP_TARGET_DATE || targetBay.deliveryDate;
@@ -752,6 +841,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
                     targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                     targetBay.spec = match.MTRL_ID || targetBay.spec;
+                    targetBay.customer = match.customer || targetBay.customer || '';
+                    targetBay.planMonth = match.planMonth || targetBay.planMonth || '';
 
                     const ordKey = (match.salesDoc || '').trim();
                     const serialKey = (match.PROD_MDL_CNT || match.serial || '').trim();
