@@ -179,6 +179,7 @@ app.post('/api/mes-sync', async (req, res) => {
     try {
         let mesItems = [];
         const locBayMap = new Map();
+        const workerMap = new Map();
 
         // 1. If client provided manual raw OUT_DATA or raw JSON directly
         if (Array.isArray(req.body.outData) && req.body.outData.length > 0) {
@@ -309,8 +310,6 @@ app.post('/api/mes-sync', async (req, res) => {
             if (authHeader) {
                 headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
             }
-
-            const workerMap = new Map();
 
             try {
                 const [resProgress, resWorkG, resWorkH, resLoc] = await Promise.all([
