@@ -473,16 +473,17 @@ app.post('/api/mes-sync', async (req, res) => {
                     const loc = (r.GI_LOC_ID || r.LOC_ID || r.WORK_LOC_ID || '').trim().toUpperCase();
 
                     if (worker) {
-                        if (ordKey && !workerMap.has(ordKey)) workerMap.set(ordKey, worker);
-                        if (serialKey && !workerMap.has(serialKey)) workerMap.set(serialKey, worker);
-                        if (fullSerial && !workerMap.has(fullSerial)) workerMap.set(fullSerial, worker);
+                        if (ordKey) workerMap.set(ordKey, worker);
+                        if (serialKey) workerMap.set(serialKey, worker);
+                        if (fullSerial) workerMap.set(fullSerial, worker);
                     }
                     if (loc) {
+                        // MC 조립(CN0WBFAG, CN0WBFAH)에서 직접 지정된 최신 지번이므로 최우선 보존
                         if (ordKey && (!locBayMap.has(ordKey) || !locBayMap.get(ordKey).isDaily)) {
-                            locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                            locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isWorkorder: true, raw: r });
                         }
                         if (serialKey && (!locBayMap.has(serialKey) || !locBayMap.get(serialKey).isDaily)) {
-                            locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                            locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isWorkorder: true, raw: r });
                         }
                     }
                 });
@@ -492,17 +493,17 @@ app.post('/api/mes-sync', async (req, res) => {
                     const locJson = await resLoc.json();
                     locRows = locJson.OUT_DATA || [];
 
-                    // Map bay locations by Order ID and Serial
+                    // Map bay locations by Order ID and Serial ONLY IF not already assigned by Workorder/Daily
                     locRows.forEach(r => {
                         const ordKey = (r.PROD_ORD_ID || '').trim();
                         const serialKey = (r.PROD_MDL_CNT || '').trim();
                         const loc = (r.GI_LOC_ID || '').trim().toUpperCase();
 
                         if (loc) {
-                            if (ordKey && (!locBayMap.has(ordKey) || !locBayMap.get(ordKey).isDaily)) {
+                            if (ordKey && !locBayMap.has(ordKey)) {
                                 locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
                             }
-                            if (serialKey && (!locBayMap.has(serialKey) || !locBayMap.get(serialKey).isDaily)) {
+                            if (serialKey && !locBayMap.has(serialKey)) {
                                 locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
                             }
                         }
@@ -653,10 +654,18 @@ app.post('/api/mes-sync', async (req, res) => {
                 if (!m) return false;
                 const aOrd = (m.salesDoc || '').trim();
                 const aSerial = (m.PROD_MDL_CNT || m.serial || '').trim();
+
+                // If from Daily work result or Workorder with started operation
                 if (locBayMap.get(aOrd)?.isDaily || locBayMap.get(aSerial)?.isDaily) return true;
 
-                if (m.CUR_PROC_ID && m.CUR_PROC_ID.trim() && m.CUR_PROC_ID !== 'BASE') return true;
-                if (m.LOT_STATUS_CODE === 'START' || m.WO_STATUS_CODE === 'START' || m.PROC_STATUS_CODE === 'START') return true;
+                // Check actual start date / time presence (Yellow / Purple)
+                if (m.PROC_START_DTTM || m.WORK_START_DATE || m.ACT_START_DTTM) return true;
+                if (m.LOT_STATUS_CODE === 'START' || m.LOT_STATUS_CODE === 'RUN' || m.LOT_STATUS_CODE === 'CONT') return true;
+                if (m.PROC_STATUS_CODE === 'START' || m.PROC_STATUS_CODE === 'RUN' || m.PROC_STATUS_CODE === 'CONT') return true;
+
+                const raw = locBayMap.get(aOrd)?.raw || locBayMap.get(aSerial)?.raw;
+                if (raw && (raw.PROC_START_DTTM || raw.LOT_STATUS_CODE === 'START' || raw.WORK_START_DATE)) return true;
+
                 return false;
             }
 
