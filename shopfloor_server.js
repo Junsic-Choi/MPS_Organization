@@ -225,7 +225,61 @@ app.post('/api/mes-sync', async (req, res) => {
                 port: "8082"
             };
 
-            // Query 2: Physical Bay Locations (GI_LOC_ID) across all departments
+            // Query 2: Workorder Process & Workers (CN0WBFAG - MC1/2조립)
+            const payloadWorkorderG = {
+                BizActId: "BR_DNS_MES_GET_WorkorderProcess",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            ENTERPRISE_ID: "1800",
+                            PROD_ORD_ID: null,
+                            PLANT_ID: "1840",
+                            PROD_MDL_ID: null,
+                            PROD_YYYYMM_FROM: fromYm,
+                            PROD_YYYYMM_TO: toYm,
+                            ORD_TYPE_CODE: "A",
+                            MTRL_ID: null,
+                            START_PLAN_DATE_FROM: null,
+                            START_PLAN_DATE_TO: null,
+                            DEPT_VENDOR_CHK: "Y",
+                            DEPT_VENDOR_ID: "CN0WBFAG",
+                            LANG_ID: "ko-KR",
+                            EXCLD_PROC_END: "Y"
+                        }
+                    ]
+                },
+                OutData: "OUT_DATA,OUT_GPES",
+                port: "8082"
+            };
+
+            // Query 3: Workorder Process & Workers (CN0WBFAH - MC3/4조립)
+            const payloadWorkorderH = {
+                BizActId: "BR_DNS_MES_GET_WorkorderProcess",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            ENTERPRISE_ID: "1800",
+                            PROD_ORD_ID: null,
+                            PLANT_ID: "1840",
+                            PROD_MDL_ID: null,
+                            PROD_YYYYMM_FROM: fromYm,
+                            PROD_YYYYMM_TO: toYm,
+                            ORD_TYPE_CODE: "A",
+                            MTRL_ID: null,
+                            START_PLAN_DATE_FROM: null,
+                            START_PLAN_DATE_TO: null,
+                            DEPT_VENDOR_CHK: "Y",
+                            DEPT_VENDOR_ID: "CN0WBFAH",
+                            LANG_ID: "ko-KR",
+                            EXCLD_PROC_END: "Y"
+                        }
+                    ]
+                },
+                OutData: "OUT_DATA,OUT_GPES",
+                port: "8082"
+            };
+
+            // Query 4: Physical Bay Locations (GI_LOC_ID) across all departments
             const payloadLocation = {
                 BizActId: "BR_DNS_MES_GET_GIProdOrderOper",
                 InDataList: {
@@ -256,9 +310,13 @@ app.post('/api/mes-sync', async (req, res) => {
                 headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
             }
 
+            const workerMap = new Map();
+
             try {
-                const [resProgress, resLoc] = await Promise.all([
+                const [resProgress, resWorkG, resWorkH, resLoc] = await Promise.all([
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadProgress) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderG) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderH) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadLocation) }).catch(e => null)
                 ]);
 
@@ -273,10 +331,58 @@ app.post('/api/mes-sync', async (req, res) => {
                     });
                 }
 
+                // Process Workorder Process responses (Workers & Processes)
+                const workorderRows = [];
+                if (resWorkG && resWorkG.ok) {
+                    try {
+                        const gJson = await resWorkG.json();
+                        const gRows = gJson.OUT_DATA || [];
+                        workorderRows.push(...gRows);
+                        console.log(`[MES] Fetched ${gRows.length} workorder records from CN0WBFAG`);
+                    } catch(e) {}
+                }
+                if (resWorkH && resWorkH.ok) {
+                    try {
+                        const hJson = await resWorkH.json();
+                        const hRows = hJson.OUT_DATA || [];
+                        workorderRows.push(...hRows);
+                        console.log(`[MES] Fetched ${hRows.length} workorder records from CN0WBFAH`);
+                    } catch(e) {}
+                }
+
+                workorderRows.forEach(r => {
+                    const ordKey = (r.PROD_ORD_ID || '').trim();
+                    const serialKey = (r.PROD_MDL_CNT || '').trim();
+                    
+                    // Search all possible worker properties in MES WorkorderProcess row
+                    let worker = '';
+                    for (const [k, v] of Object.entries(r)) {
+                        if (/WORKER|OPERATOR|USER_NAME|CHARGER|EMP_NAME|ACT_WRK/i.test(k) && typeof v === 'string' && v.trim() && !/ID|CODE/i.test(k)) {
+                            worker = v.trim();
+                            break;
+                        }
+                    }
+                    if (!worker) {
+                        worker = r.WORKER_NAME || r.WORKER || r.USER_NAME || r.OPERATOR_NAME || r.OPERATOR || r.CHARGER_NAME || r.CHARGER || r.EMP_NAME || r.ACT_WORKER_NAME || r.ACT_WORKER || '';
+                    }
+
+                    const loc = (r.GI_LOC_ID || r.LOC_ID || r.WORK_LOC_ID || '').trim().toUpperCase();
+
+                    if (worker) {
+                        if (ordKey) workerMap.set(ordKey, worker);
+                        if (serialKey) workerMap.set(serialKey, worker);
+                    }
+                    if (loc) {
+                        if (ordKey && !locBayMap.has(ordKey)) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                        if (serialKey && !locBayMap.has(serialKey)) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                    }
+                });
+
+                let locRows = [];
                 if (resLoc && resLoc.ok) {
                     const locJson = await resLoc.json();
-                    const locRows = locJson.OUT_DATA || [];
-                    console.log(`[MES] Fetched ${locRows.length} physical bay location records from Query 2`);
+                    locRows = locJson.OUT_DATA || [];
+                    console.log(`[MES] Fetched ${locRows.length} physical bay location records from Query 4`);
 
                     // Map bay locations by Order ID and Serial
                     locRows.forEach(r => {
@@ -285,11 +391,23 @@ app.post('/api/mes-sync', async (req, res) => {
                         const loc = (r.GI_LOC_ID || '').trim().toUpperCase();
 
                         if (loc) {
-                            if (ordKey) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
-                            if (serialKey) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                            if (ordKey && !locBayMap.has(ordKey)) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
+                            if (serialKey && !locBayMap.has(serialKey)) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME, ver: r.PROD_VER_ID, raw: r });
                         }
                     });
                 }
+
+                // Debug save sample records
+                try {
+                    fs.writeFileSync('mes_debug_sample.json', JSON.stringify({
+                        query1_sample: mesItems.slice(0, 2),
+                        workorder_sample: workorderRows.slice(0, 3),
+                        workorder_keys: workorderRows[0] ? Object.keys(workorderRows[0]) : [],
+                        loc_sample: locRows.slice(0, 2)
+                    }, null, 2), 'utf8');
+                    console.log('[MES DEBUG] Saved mes_debug_sample.json with workorder rows');
+                } catch(e) {}
+
             } catch (fetchErr) {
                 console.warn('[MES] Remote connection warning:', fetchErr.message);
             }
@@ -374,6 +492,7 @@ app.post('/api/mes-sync', async (req, res) => {
             const key = ordKey || serial;
 
             const locInfo = (ordKey && locBayMap.get(ordKey)) || (serialKey && locBayMap.get(serialKey)) || {};
+            const workerFound = (ordKey && workerMap.get(ordKey)) || (serialKey && workerMap.get(serialKey)) || i.WORKER_NAME || i.WORKER || i.USER_NAME || i.CHARGER || '';
 
             if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
                 machineMap.set(key, {
@@ -383,7 +502,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     model: i.PROD_MDL_NAME || i.MTRL_ID,
                     salesDoc: i.PROD_ORD_ID,
                     loc: locInfo.loc || '',
-                    area: locInfo.area || ''
+                    area: locInfo.area || '',
+                    worker: workerFound
                 });
             }
         });
@@ -433,7 +553,9 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.spec = locMatch.MTRL_ID || targetBay.spec;
                 
                 // Extract worker name
-                const workerFound = locMatch.WORKER_NAME || locMatch.WORKER || locMatch.OPERATOR_NAME || locMatch.OPERATOR || locMatch.USER_NAME || locMatch.CHARGER_NAME || locMatch.CHARGER || locMatch.EMP_NAME || locMatch.ACT_WORKER_NAME || locMatch.ACT_WORKER || (locMatch.raw ? (locMatch.raw.WORKER_NAME || locMatch.raw.WORKER || locMatch.raw.USER_NAME || locMatch.raw.CHARGER) : '');
+                const ordKey = (locMatch.salesDoc || '').trim();
+                const serialKey = (locMatch.PROD_MDL_CNT || locMatch.serial || '').trim();
+                const workerFound = locMatch.worker || (ordKey && workerMap.get(ordKey)) || (serialKey && workerMap.get(serialKey)) || locMatch.WORKER_NAME || locMatch.WORKER || locMatch.USER_NAME || locMatch.CHARGER || '';
                 if (workerFound) targetBay.worker = workerFound;
 
                 targetBay.source = 'MES';
@@ -462,7 +584,9 @@ app.post('/api/mes-sync', async (req, res) => {
                     targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                     targetBay.spec = match.MTRL_ID || targetBay.spec;
 
-                    const workerFound = match.WORKER_NAME || match.WORKER || match.OPERATOR_NAME || match.OPERATOR || match.USER_NAME || match.CHARGER_NAME || match.CHARGER || match.EMP_NAME || match.ACT_WORKER_NAME || match.ACT_WORKER || (match.raw ? (match.raw.WORKER_NAME || match.raw.WORKER || match.raw.USER_NAME || match.raw.CHARGER) : '');
+                    const ordKey = (match.salesDoc || '').trim();
+                    const serialKey = (match.PROD_MDL_CNT || match.serial || '').trim();
+                    const workerFound = match.worker || (ordKey && workerMap.get(ordKey)) || (serialKey && workerMap.get(serialKey)) || match.WORKER_NAME || match.WORKER || match.USER_NAME || match.CHARGER || '';
                     if (workerFound) targetBay.worker = workerFound;
 
                     targetBay.source = 'MES';
