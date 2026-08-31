@@ -431,6 +431,11 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.startDate = locMatch.START_PLAN_DATE || targetBay.startDate;
                 targetBay.deliveryDate = locMatch.SHIP_TARGET_DATE || targetBay.deliveryDate;
                 targetBay.spec = locMatch.MTRL_ID || targetBay.spec;
+                
+                // Extract worker name
+                const workerFound = locMatch.WORKER_NAME || locMatch.WORKER || locMatch.OPERATOR_NAME || locMatch.OPERATOR || locMatch.USER_NAME || locMatch.CHARGER_NAME || locMatch.CHARGER || locMatch.EMP_NAME || locMatch.ACT_WORKER_NAME || locMatch.ACT_WORKER || (locMatch.raw ? (locMatch.raw.WORKER_NAME || locMatch.raw.WORKER || locMatch.raw.USER_NAME || locMatch.raw.CHARGER) : '');
+                if (workerFound) targetBay.worker = workerFound;
+
                 targetBay.source = 'MES';
                 targetBay.isShipped = false;
                 if (locMatch.PROD_ORD_STATUS_NAME) {
@@ -456,6 +461,10 @@ app.post('/api/mes-sync', async (req, res) => {
                     targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
                     targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                     targetBay.spec = match.MTRL_ID || targetBay.spec;
+
+                    const workerFound = match.WORKER_NAME || match.WORKER || match.OPERATOR_NAME || match.OPERATOR || match.USER_NAME || match.CHARGER_NAME || match.CHARGER || match.EMP_NAME || match.ACT_WORKER_NAME || match.ACT_WORKER || (match.raw ? (match.raw.WORKER_NAME || match.raw.WORKER || match.raw.USER_NAME || match.raw.CHARGER) : '');
+                    if (workerFound) targetBay.worker = workerFound;
+
                     targetBay.source = 'MES';
                     targetBay.isShipped = false;
                     if (match.PROD_ORD_STATUS_NAME) {

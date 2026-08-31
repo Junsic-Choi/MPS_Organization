@@ -1412,9 +1412,11 @@
                 const serialNo = m.serial || (m.PROD_MDL_ID ? `${m.PROD_MDL_ID}-${m.PROD_MDL_CNT}` : m.PROD_MDL_CNT) || '시리얼 미지정';
                 const orderNo = m.salesDoc || m.PROD_ORD_ID || '';
                 const custName = m.customer || '고객사 정보 없음';
+                const workerName = m.WORKER_NAME || m.WORKER || m.OPERATOR_NAME || m.OPERATOR || m.USER_NAME || m.CHARGER_NAME || m.CHARGER || m.EMP_NAME || m.ACT_WORKER_NAME || m.worker || '';
 
                 let shiftBadge = '';
                 let procBadge = '';
+                let workerBadge = workerName ? `<span style="font-size: 0.65rem; font-weight: 700; color: #334155; background: #e2e8f0; padding: 0.05rem 0.35rem; border-radius: 4px;">👷 ${workerName}</span>` : '';
 
                 if (isMes) {
                     card.style.borderLeft = '4px solid #f59e0b';
@@ -1430,7 +1432,10 @@
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: 800; font-size: 0.85rem; color: var(--text-main);">${modelName}</span>
-                        ${shiftBadge}
+                        <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            ${workerBadge}
+                            ${shiftBadge}
+                        </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 0.725rem; margin: 0.15rem 0;">
                         <span style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--text-secondary);">호기: ${serialNo}</span>
