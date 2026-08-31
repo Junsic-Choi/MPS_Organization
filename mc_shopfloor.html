@@ -919,7 +919,17 @@
                 <!-- Tab 1: Token -->
                 <div id="mes-tab-token">
                     <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.8rem; line-height: 1.5; color: #0369a1;">
-                        💡 <strong>토큰 확인 방법</strong>: MES 화면에서 <code>F12</code> &rarr; <code>Network</code> &rarr; <code>query</code> 클릭 &rarr; <code>Headers</code> &rarr; <code>Request Headers</code>의 <strong>Authorization</strong> (또는 <code>Bearer eyJ...</code>) 값을 복사해 아래에 붙여넣으세요.
+                        <div style="font-weight: 800; margin-bottom: 0.35rem; font-size: 0.85rem;">⚡ 1초 원클릭 토큰 복사 방법:</div>
+                        아래 버튼을 브라우저 <strong>북마크바(즐겨찾기 바)로 드래그</strong>해 두시면, MES 화면에서 클릭 한 번으로 최신 토큰이 자동 복사됩니다!<br>
+                        <div style="margin-top: 0.6rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <a href="javascript:(function(){let t='';for(let i=0;i<localStorage.length;i++){const v=localStorage.getItem(localStorage.key(i));if(v&&typeof v==='string'&&v.includes('eyJ')){const m=v.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m){t=m[0];break;}}}if(!t){for(let i=0;i<sessionStorage.length;i++){const v=sessionStorage.getItem(sessionStorage.key(i));if(v&&typeof v==='string'&&v.includes('eyJ')){const m=v.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m){t=m[0];break;}}}}if(!t&&document.cookie.includes('eyJ')){const m=document.cookie.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)t=m[0];}if(t){navigator.clipboard.writeText('Bearer '+t).then(()=>{alert('✅ [MES 토큰 복사 완료!]\n\n지번 현황판으로 돌아가서 붙여넣기(Ctrl+V) 하세요!');}).catch(()=>{prompt('아래 토큰을 복사(Ctrl+C)하세요:','Bearer '+t);});}else{alert('⚠️ MES 토큰을 찾지 못했습니다.\nMES 페이지에 로그인된 상태인지 확인해 주세요.');}})();" 
+                               class="btn" 
+                               style="display: inline-flex; align-items: center; gap: 0.35rem; background: #fbbf24; color: #78350f; font-weight: 800; padding: 0.35rem 0.85rem; border-radius: 6px; text-decoration: none; border: 1px solid #f59e0b; cursor: move;" 
+                               title="이 버튼을 마우스로 잡아 브라우저 상단 북마크바로 끌어다 놓으세요!">
+                               ⭐ [⚡ MES 토큰 복사] 북마크 (북마크바로 드래그)
+                            </a>
+                            <span style="font-size: 0.725rem; color: #64748b;">(또는 기존처럼 F12 Network의 Authorization 복사)</span>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -929,7 +939,7 @@
 
                     <div style="margin-bottom: 1rem;">
                         <label style="font-size: 0.825rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
-                            <input type="checkbox" id="mes-remember-token" checked> 이 브라우저에 토큰 저장 (다음부터 버튼 한 번으로 자동 동기화)
+                            <input type="checkbox" id="mes-remember-token" checked> 이 브라우저에 토큰 저장 (당일 동안은 클릭 한 번으로 계속 동기화)
                         </label>
                     </div>
 
