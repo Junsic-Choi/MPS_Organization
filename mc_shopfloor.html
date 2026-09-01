@@ -1255,6 +1255,13 @@
             renderBays();
         }
 
+        // Pool State Variables
+        let isPoolSidebarOpen = true;
+        let currentPoolSource = 'MPS';
+        let currentPoolShift = 'ALL';
+        let activePoolFilteredMachines = [];
+        let poolRenderLimit = 30;
+
         function togglePoolSidebar(forceState) {
             if (typeof forceState === 'boolean') {
                 isPoolSidebarOpen = forceState;
