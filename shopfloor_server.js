@@ -228,12 +228,12 @@ app.post('/api/mes-sync', async (req, res) => {
                 port: "8082"
             };
 
-            // Query 2: Daily Work Result (CN0WBFAG - MC1/2조립 당일 실적)
+            // Query 2: Daily Work Result (CN0WBFAG - MC1조립)
             const dd = String(now.getDate()).padStart(2, '0');
             const todayStart = `${yyyy}-${mm}-${dd}T00:00:00.000+09:00`;
             const todayEnd = `${yyyy}-${mm}-${dd}T23:59:59.000+09:00`;
 
-            const payloadDailyG = {
+            const createDailyPayload = (deptId) => ({
                 BizActId: "BR_DNS_MES_SEL_DailyWorkResult",
                 InDataList: {
                     IN_DATA: [
@@ -241,7 +241,7 @@ app.post('/api/mes-sync', async (req, res) => {
                             LANG_ID: "ko-KR",
                             ENTERPRISE_ID: "1800",
                             PLANT_ID: "1840",
-                            DEPT_ID: "CN0WBFAG",
+                            DEPT_ID: deptId,
                             WORKER_ID: null,
                             WO_TYPE_CODE: null,
                             WC_ID: null,
@@ -253,33 +253,14 @@ app.post('/api/mes-sync', async (req, res) => {
                 },
                 OutData: "OUT_DATA",
                 port: "8082"
-            };
+            });
 
-            // Query 3: Daily Work Result (CN0WBFAH - MC3/4조립 당일 실적)
-            const payloadDailyH = {
-                BizActId: "BR_DNS_MES_SEL_DailyWorkResult",
-                InDataList: {
-                    IN_DATA: [
-                        {
-                            LANG_ID: "ko-KR",
-                            ENTERPRISE_ID: "1800",
-                            PLANT_ID: "1840",
-                            DEPT_ID: "CN0WBFAH",
-                            WORKER_ID: null,
-                            WO_TYPE_CODE: null,
-                            WC_ID: null,
-                            SEARCH_DATE_FROM: todayStart,
-                            SEARCH_DATE_TO: todayEnd,
-                            INCLUDE_NORESULT: "N"
-                        }
-                    ]
-                },
-                OutData: "OUT_DATA",
-                port: "8082"
-            };
+            const payloadDailyG = createDailyPayload("CN0WBFAG"); // MC 1직
+            const payloadDailyH = createDailyPayload("CN0WBFAH"); // MC 2직
+            const payloadDailyI = createDailyPayload("CN0WBFAI"); // MC 3직
+            const payloadDailyJ = createDailyPayload("CN0WBFAJ"); // MC 4직
 
-            // Query 4: Workorder Process & Workers (CN0WBFAG - MC1/2조립)
-            const payloadWorkorderG = {
+            const createWorkorderPayload = (deptId) => ({
                 BizActId: "BR_DNS_MES_GET_WorkorderProcess",
                 InDataList: {
                     IN_DATA: [
@@ -295,7 +276,7 @@ app.post('/api/mes-sync', async (req, res) => {
                             START_PLAN_DATE_FROM: null,
                             START_PLAN_DATE_TO: null,
                             DEPT_VENDOR_CHK: "Y",
-                            DEPT_VENDOR_ID: "CN0WBFAG",
+                            DEPT_VENDOR_ID: deptId,
                             LANG_ID: "ko-KR",
                             EXCLD_PROC_END: "N"
                         }
@@ -303,34 +284,12 @@ app.post('/api/mes-sync', async (req, res) => {
                 },
                 OutData: "OUT_DATA,OUT_GPES",
                 port: "8082"
-            };
+            });
 
-            // Query 5: Workorder Process & Workers (CN0WBFAH - MC3/4조립)
-            const payloadWorkorderH = {
-                BizActId: "BR_DNS_MES_GET_WorkorderProcess",
-                InDataList: {
-                    IN_DATA: [
-                        {
-                            ENTERPRISE_ID: "1800",
-                            PROD_ORD_ID: null,
-                            PLANT_ID: "1840",
-                            PROD_MDL_ID: null,
-                            PROD_YYYYMM_FROM: fromYm,
-                            PROD_YYYYMM_TO: toYm,
-                            ORD_TYPE_CODE: "A",
-                            MTRL_ID: null,
-                            START_PLAN_DATE_FROM: null,
-                            START_PLAN_DATE_TO: null,
-                            DEPT_VENDOR_CHK: "Y",
-                            DEPT_VENDOR_ID: "CN0WBFAH",
-                            LANG_ID: "ko-KR",
-                            EXCLD_PROC_END: "N"
-                        }
-                    ]
-                },
-                OutData: "OUT_DATA,OUT_GPES",
-                port: "8082"
-            };
+            const payloadWorkorderG = createWorkorderPayload("CN0WBFAG"); // MC 1직
+            const payloadWorkorderH = createWorkorderPayload("CN0WBFAH"); // MC 2직
+            const payloadWorkorderI = createWorkorderPayload("CN0WBFAI"); // MC 3직
+            const payloadWorkorderJ = createWorkorderPayload("CN0WBFAJ"); // MC 4직
 
             // Query 6: Physical Bay Locations (GI_LOC_ID) across all departments
             const payloadLocation = {
@@ -413,12 +372,22 @@ app.post('/api/mes-sync', async (req, res) => {
             }
 
             try {
-                const [resProgress, resDailyG, resDailyH, resWorkG, resWorkH, resLoc, resQmsUpdate, resQms] = await Promise.all([
+                const [
+                    resProgress,
+                    resDailyG, resDailyH, resDailyI, resDailyJ,
+                    resWorkG, resWorkH, resWorkI, resWorkJ,
+                    resLoc,
+                    resQmsUpdate, resQms
+                ] = await Promise.all([
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadProgress) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyG) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyH) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyI) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyJ) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderG) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderH) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderI) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderJ) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadLocation) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadQmsUpdate) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadQmsInspTbl) }).catch(e => null)
@@ -474,21 +443,24 @@ app.post('/api/mes-sync', async (req, res) => {
                     }
                 });
 
-                // Process Daily Work Results (Floor Activity Ground Truth)
+                // Process Daily Work Results (Floor Activity Ground Truth across 4 Shifts)
                 const dailyRows = [];
-                if (resDailyG && resDailyG.ok) {
-                    try {
-                        const dgJson = await resDailyG.json();
-                        dailyRows.push(...(dgJson.OUT_DATA || []));
-                        console.log(`[MES] Fetched ${(dgJson.OUT_DATA || []).length} DailyWorkResult records from CN0WBFAG`);
-                    } catch(e) {}
-                }
-                if (resDailyH && resDailyH.ok) {
-                    try {
-                        const dhJson = await resDailyH.json();
-                        dailyRows.push(...(dhJson.OUT_DATA || []));
-                        console.log(`[MES] Fetched ${(dhJson.OUT_DATA || []).length} DailyWorkResult records from CN0WBFAH`);
-                    } catch(e) {}
+                const dailyResponses = [
+                    { res: resDailyG, dept: 'CN0WBFAG' },
+                    { res: resDailyH, dept: 'CN0WBFAH' },
+                    { res: resDailyI, dept: 'CN0WBFAI' },
+                    { res: resDailyJ, dept: 'CN0WBFAJ' }
+                ];
+
+                for (const d of dailyResponses) {
+                    if (d.res && d.res.ok) {
+                        try {
+                            const dJson = await d.res.json();
+                            const rows = dJson.OUT_DATA || [];
+                            dailyRows.push(...rows);
+                            console.log(`[MES] Fetched ${rows.length} DailyWorkResult records from ${d.dept}`);
+                        } catch(e) {}
+                    }
                 }
 
                 dailyRows.forEach(r => {
@@ -531,23 +503,25 @@ app.post('/api/mes-sync', async (req, res) => {
                     }
                 });
 
-                // Process Workorder Process responses (Workers & Processes)
+                // Process Workorder Process responses (Workers & Processes across 4 Shifts)
                 const workorderRows = [];
-                if (resWorkG && resWorkG.ok) {
-                    try {
-                        const gJson = await resWorkG.json();
-                        const gRows = gJson.OUT_DATA || [];
-                        const gGpes = gJson.OUT_GPES || [];
-                        workorderRows.push(...gRows, ...gGpes);
-                    } catch(e) {}
-                }
-                if (resWorkH && resWorkH.ok) {
-                    try {
-                        const hJson = await resWorkH.json();
-                        const hRows = hJson.OUT_DATA || [];
-                        const hGpes = hJson.OUT_GPES || [];
-                        workorderRows.push(...hRows, ...hGpes);
-                    } catch(e) {}
+                const workResponses = [
+                    { res: resWorkG, dept: 'CN0WBFAG' },
+                    { res: resWorkH, dept: 'CN0WBFAH' },
+                    { res: resWorkI, dept: 'CN0WBFAI' },
+                    { res: resWorkJ, dept: 'CN0WBFAJ' }
+                ];
+
+                for (const w of workResponses) {
+                    if (w.res && w.res.ok) {
+                        try {
+                            const wJson = await w.res.json();
+                            const wRows = wJson.OUT_DATA || [];
+                            const wGpes = wJson.OUT_GPES || [];
+                            workorderRows.push(...wRows, ...wGpes);
+                            console.log(`[MES] Fetched ${wRows.length + wGpes.length} WorkorderProcess records from ${w.dept}`);
+                        } catch(e) {}
+                    }
                 }
 
                 // Helper: Process Code to Friendly Descriptive Korean Name
@@ -708,6 +682,12 @@ app.post('/api/mes-sync', async (req, res) => {
 
         // Strict MC Classifier
         function classifyMcShift(item) {
+            const dept = (item.DEPT_ID || item.DEPT_VENDOR_ID || '').toUpperCase();
+            if (dept === 'CN0WBFAG') return 'MC1직';
+            if (dept === 'CN0WBFAH') return 'MC2직';
+            if (dept === 'CN0WBFAI') return 'MC3직';
+            if (dept === 'CN0WBFAJ') return 'MC4직';
+
             const mdl = (item.PROD_MDL_NAME || item.MTRL_ID || '').toUpperCase();
             const wc = (item.WC_ID || '').toUpperCase();
             const ver = (item.PROD_VER_ID || '').toUpperCase();
