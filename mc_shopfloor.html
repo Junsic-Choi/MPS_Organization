@@ -1148,13 +1148,35 @@
             return MODEL_PROCESS_MASTER['DEFAULT'];
         }
 
-        function updateProcessDropdownForModel(modelName, currentValue) {
-            const config = getProcessConfigForModel(modelName);
+        function updateProcessDropdownForModel(modelName, currentValue, routingSteps) {
             const badge = document.getElementById('m-lt-badge');
-            if (badge) badge.textContent = `[${config.badge}]`;
-
             const procSelect = document.getElementById('m-process');
             const cleanCurr = (currentValue || '').trim().toUpperCase();
+
+            // 1. If individual order routingSteps from MES is provided, use actual real sequence!
+            if (Array.isArray(routingSteps) && routingSteps.length > 0) {
+                if (badge) badge.textContent = `[실제 MES 라우팅 (${routingSteps.length}단계)]`;
+
+                let hasMatched = false;
+                let optionsHtml = routingSteps.map(s => {
+                    const sCode = (s.code || '').trim().toUpperCase();
+                    const sName = s.name || `[${s.code}] ${s.code}`;
+                    const isSelected = (!hasMatched && (cleanCurr === sCode || cleanCurr.startsWith(sCode) || sCode.startsWith(cleanCurr) || sName.toUpperCase().includes(cleanCurr))) ? 'selected' : '';
+                    if (isSelected) hasMatched = true;
+                    return `<option value="${s.code}" ${isSelected}>${sName}</option>`;
+                }).join('');
+
+                if (!hasMatched && cleanCurr) {
+                    optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;
+                }
+
+                procSelect.innerHTML = optionsHtml;
+                return;
+            }
+
+            // 2. Fallback to model process master
+            const config = getProcessConfigForModel(modelName);
+            if (badge) badge.textContent = `[${config.badge}]`;
 
             let hasMatched = false;
             let optionsHtml = config.steps.map(s => {
@@ -1164,9 +1186,18 @@
                 return `<option value="${s.code}" ${isSelected}>${s.name}</option>`;
             }).join('');
 
-            // Fallback for custom MES process code
+            // Fallback for custom MES process code: if RPS option, insert naturally before GIN
             if (!hasMatched && cleanCurr) {
-                optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;
+                if (cleanCurr.startsWith('RPS')) {
+                    const rpsOption = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] Round Pallet System (RPS) 장착 & 시운전 (옵션)</option>`;
+                    if (optionsHtml.includes('GIN')) {
+                        optionsHtml = optionsHtml.replace(/(<option[^>]*value="GIN[^>]*>)/i, `${rpsOption}$1`);
+                    } else {
+                        optionsHtml = rpsOption + optionsHtml;
+                    }
+                } else {
+                    optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;
+                }
             }
 
             procSelect.innerHTML = optionsHtml;
@@ -1175,7 +1206,8 @@
         function onModelInputChange() {
             const modelVal = document.getElementById('m-model').value.trim();
             const currentProc = document.getElementById('m-process').value;
-            updateProcessDropdownForModel(modelVal, currentProc);
+            const currentBay = allBays.find(b => b.id === activeEditingBayId);
+            updateProcessDropdownForModel(modelVal, currentProc, currentBay?.routingSteps);
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -2005,7 +2037,8 @@
             document.getElementById('m-issue').value = bay.issue || '';
 
             // Update process dropdown based on model
-            updateProcessDropdownForModel(bay.model, bay.currentProcess || 'BASE');
+            // Update process dropdown based on model & actual routingSteps
+            updateProcessDropdownForModel(bay.model, bay.currentProcess || 'BASE', bay.routingSteps);
 
             // Initialize Move Bay targets
             document.getElementById('move-target-shift').value = bay.shift;
@@ -2075,7 +2108,7 @@
 
             // Automatically switch process steps for this model!
             const targetProc = m.CUR_PROC_ID || m.PROC_ID || '';
-            updateProcessDropdownForModel(m.model, targetProc);
+            updateProcessDropdownForModel(m.model, targetProc, m.routingSteps);
         }
 
         // Save Current Bay

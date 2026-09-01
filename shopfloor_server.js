@@ -549,11 +549,61 @@ app.post('/api/mes-sync', async (req, res) => {
                     } catch(e) {}
                 }
 
+                // Helper: Process Code to Friendly Descriptive Korean Name
+                function getProcFriendlyName(procId) {
+                    const p = (procId || '').toUpperCase();
+                    if (p.includes('BDLEVEL') || p.includes('BASE')) return 'Base 레벨링 & 베드 안착 (GBDLEVEL)';
+                    if (p === 'PGEB') return '테이블 안착 & 서보모터 (PGEB)';
+                    if (p.startsWith('PCLM')) return '컬럼 조립 & 안착 (PCLM)';
+                    if (p.startsWith('PACONF')) return '팔레트/부속 가공 & 서브 안착 (PACONF)';
+                    if (p.startsWith('RPS')) return `Round Pallet System (${p}) 장착 & 시운전 ⚡`;
+                    if (p.startsWith('APC') || p.startsWith('2PAL')) return `APC 팔레트 체인저 장착 & 시운전 ⚡`;
+                    if (p.startsWith('MAT')) return `Matrix Magazine (${p}) 툴 매거진 장착 ⚡`;
+                    if (p === 'EIF' || p === 'EIF1' || p === 'EIF2') return '전장 인터페이스 & 결선 (EIF)';
+                    if (p === 'EAD') return '전장 시운전 & FSSB 파라미터 (EAD)';
+                    if (p.includes('TRANS') || p.includes('XYHOME') || p.includes('XYZHOME')) return '원점 셋팅 & 팔레트 안착 (TRANS/XYHOME)';
+                    if (p.startsWith('GAJ') || p.includes('LASER') || p.includes('ATC') || p.includes('ACC')) return `정밀도 측정 & 레이저 보정 (${p})`;
+                    if (p.includes('SELFCUTT')) return 'ATC 센터링 & 셀프컷팅 시험 (SELFCUTT)';
+                    if (p.startsWith('GIN')) return `기능 검사 & 쿨런트/정도 검사 (${p})`;
+                    if (p.startsWith('GSG')) return 'Splash Guard 외주 조립 (GSG)';
+                    if (p.startsWith('GSR') || p.startsWith('GSRAM')) return '연속 무부하 가동 시험 & 도어 조정 (GSR)';
+                    if (p.startsWith('GRN') || p.startsWith('GRNE') || p.startsWith('GRNT')) return '절삭유 탱크 & 옵션 배관 작업 (GRN)';
+                    if (p.startsWith('CSWRITE')) return 'CS 소프트웨어 라이팅 & 셋팅 (CSWRITE)';
+                    if (p.startsWith('GOT')) return '출하 검사 & 최종 출하 준비 (GOT)';
+                    if (p.startsWith('OINS') || p.startsWith('LK') || p.includes('출검')) return '최종 출하검사 & 축고정 포장 (OINS/LK)';
+                    return `[${p}] 실시간 조립 공정`;
+                }
+
+                // Map of full actual routing steps per order / serial
+                const orderRoutingMap = new Map();
+
                 workorderRows.forEach(r => {
                     const ordKey = (r.PROD_ORD_ID || '').trim();
                     const serialKey = (r.PROD_MDL_CNT || '').trim();
                     const fullSerial = (r.FULL_PROD_MDL_CNT || '').trim();
+                    const procId = (r.PROC_ID || '').trim().toUpperCase();
+                    const procSeq = (r.PROC_SEQ || '').trim();
+                    const stdTime = r.STD_TIME || 0;
+                    const status = r.PROC_STATUS_CODE || r.LOT_STATUS_CODE || '';
                     
+                    if (procId && (ordKey || serialKey || fullSerial)) {
+                        const step = {
+                            code: procId,
+                            seq: procSeq,
+                            stdTime: stdTime,
+                            status: status
+                        };
+
+                        const keys = [ordKey, serialKey, fullSerial].filter(Boolean);
+                        keys.forEach(k => {
+                            if (!orderRoutingMap.has(k)) orderRoutingMap.set(k, []);
+                            const list = orderRoutingMap.get(k);
+                            if (!list.some(s => s.code === procId && s.seq === procSeq)) {
+                                list.push(step);
+                            }
+                        });
+                    }
+
                     let worker = '';
                     for (const [k, v] of Object.entries(r)) {
                         if (/WORKER|OPERATOR|USER_NAME|CHARGER|EMP_NAME|ACT_WRK/i.test(k) && typeof v === 'string' && v.trim() && !/ID|CODE/i.test(k)) {
@@ -580,6 +630,15 @@ app.post('/api/mes-sync', async (req, res) => {
                         }
                     }
                 });
+
+                // Format & sort each order's actual full routing
+                for (const [k, list] of orderRoutingMap.entries()) {
+                    list.sort((a, b) => (parseInt(a.seq) || 0) - (parseInt(b.seq) || 0));
+                    list.forEach((s, idx) => {
+                        s.dayIndex = idx + 1;
+                        s.name = `${idx + 1}일차 / ${s.code} | ${getProcFriendlyName(s.code)}`;
+                    });
+                }
 
                 let locRows = [];
                 if (resLoc && resLoc.ok) {
@@ -786,6 +845,8 @@ app.post('/api/mes-sync', async (req, res) => {
                 }
             }
 
+            const routingList = orderRoutingMap.get(ordKey) || orderRoutingMap.get(serialKey) || orderRoutingMap.get(fullSerial) || [];
+
             if (!machineMap.has(key) || (i.CUR_PROC_ID && !machineMap.get(key).CUR_PROC_ID)) {
                 machineMap.set(key, {
                     ...i,
@@ -797,7 +858,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     planMonth: planMonth,
                     loc: locInfo.loc || '',
                     area: locInfo.area || '',
-                    worker: workerFound
+                    worker: workerFound,
+                    routingSteps: routingList
                 });
             }
         });
@@ -944,6 +1006,7 @@ app.post('/api/mes-sync', async (req, res) => {
 
                 targetBay.source = 'MES';
                 targetBay.isShipped = false;
+                targetBay.routingSteps = locMatch.routingSteps || orderRoutingMap.get(ordKey) || orderRoutingMap.get(serialKey) || [];
                 if (locMatch.PROD_ORD_STATUS_NAME) {
                     targetBay.issue = `[상태: ${locMatch.PROD_ORD_STATUS_NAME}]`;
                 }
@@ -962,7 +1025,8 @@ app.post('/api/mes-sync', async (req, res) => {
                         customer: c.customer || '',
                         planMonth: c.planMonth || '',
                         spec: c.MTRL_ID || '',
-                        issue: c.PROD_ORD_STATUS_NAME ? `[상태: ${c.PROD_ORD_STATUS_NAME}]` : ''
+                        issue: c.PROD_ORD_STATUS_NAME ? `[상태: ${c.PROD_ORD_STATUS_NAME}]` : '',
+                        routingSteps: c.routingSteps || orderRoutingMap.get(cOrd) || orderRoutingMap.get(cSerial) || []
                     };
                 });
 
