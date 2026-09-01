@@ -660,25 +660,35 @@
             background: #f8fafc;
         }
 
-        /* Machine Model Real Photo Thumbnail */
-        .bay-model-photo {
-            width: 46px;
-            height: 34px;
-            object-fit: contain;
-            border-radius: 6px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            padding: 1px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: zoom-in;
-            flex-shrink: 0;
+        /* Machine Model 2.5D Digital Twin 3D Graphic */
+        .bay-3d-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0.35rem 0 0.5rem 0;
+            padding: 0.35rem 0;
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.7) 0%, rgba(241, 245, 249, 0.4) 100%);
+            border-radius: 8px;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            overflow: hidden;
         }
-        .bay-model-photo:hover {
-            transform: scale(1.2);
-            box-shadow: 0 4px 12px rgba(2,132,199,0.25);
-            border-color: #0284c7;
-            z-index: 10;
+        .bay-card:hover .bay-3d-wrapper {
+            background: linear-gradient(180deg, rgba(224, 242, 254, 0.45) 0%, rgba(255, 255, 255, 0.9) 100%);
+            border-color: #38bdf8;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.12);
+        }
+        .bay-3d-model-svg {
+            width: 100%;
+            max-width: 190px;
+            height: 96px;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.07));
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .bay-card:hover .bay-3d-model-svg {
+            transform: scale(1.06) translateY(-2px);
         }
 
         /* Toast notification */
@@ -1243,6 +1253,251 @@
         function closePhotoModal(e) {
             const modal = document.getElementById('photo-modal');
             if (modal) modal.style.display = 'none';
+        }
+
+        // ==========================================
+        // 2.5D Digital Twin 3D Model Vector Engine
+        // ==========================================
+        function getModel3dGraphic(modelName, currentProcess) {
+            if (!modelName) return '';
+            const clean = modelName.replace(/[\s\-_]/g, '').toUpperCase();
+            
+            // Status lamp color based on process
+            let lampColor = '#10b981'; // green default active
+            let procHighlight = false;
+            if (currentProcess && (currentProcess.includes('ATC') || currentProcess.includes('MAG'))) {
+                lampColor = '#f59e0b'; // amber
+                procHighlight = 'ATC';
+            } else if (currentProcess && (currentProcess.includes('GEB') || currentProcess.includes('PGEB') || currentProcess.includes('BASE') || currentProcess.includes('BDLEVEL'))) {
+                lampColor = '#0284c7'; // blue
+                procHighlight = 'TABLE';
+            } else if (currentProcess && (currentProcess.includes('EIF') || currentProcess.includes('EAD'))) {
+                lampColor = '#8b5cf6'; // purple
+                procHighlight = 'ELEC';
+            }
+
+            // 1. DVF 5-Axis Machine Graphic
+            if (clean.includes('DVF')) {
+                return `
+                <svg viewBox="0 0 200 130" class="bay-3d-model-svg" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="dvf-body-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#f8fafc" />
+                            <stop offset="100%" stop-color="#cbd5e1" />
+                        </linearGradient>
+                        <linearGradient id="dvf-dark-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#334155" />
+                            <stop offset="100%" stop-color="#0f172a" />
+                        </linearGradient>
+                        <linearGradient id="dvf-glass-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(56, 189, 248, 0.4)" />
+                            <stop offset="100%" stop-color="rgba(2, 132, 199, 0.15)" />
+                        </linearGradient>
+                        <radialGradient id="dvf-shadow-${clean}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(15, 23, 42, 0.25)" />
+                            <stop offset="100%" stop-color="rgba(15, 23, 42, 0)" />
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="100" cy="118" rx="85" ry="10" fill="url(#dvf-shadow-${clean})" />
+                    
+                    <polygon points="40,95 100,118 160,95 100,75" fill="#1e293b" />
+                    <polygon points="40,95 100,118 100,122 40,99" fill="#0f172a" />
+                    <polygon points="100,118 160,95 160,99 100,122" fill="#334155" />
+
+                    <polygon points="45,55 100,78 100,108 45,85" fill="url(#dvf-dark-${clean})" />
+                    <polygon points="100,78 155,55 155,85 100,108" fill="#475569" />
+                    <polygon points="45,55 100,32 155,55 100,78" fill="url(#dvf-body-${clean})" />
+
+                    <polygon points="50,48 100,28 150,48 100,68" fill="#f1f5f9" stroke="#94a3b8" stroke-width="0.5" />
+                    
+                    <polygon points="52,60 96,78 96,98 52,80" fill="url(#dvf-glass-${clean})" stroke="#38bdf8" stroke-width="0.8" />
+                    
+                    <ellipse cx="74" cy="80" rx="14" ry="7" fill="${procHighlight === 'TABLE' ? '#38bdf8' : '#64748b'}" stroke="#e2e8f0" stroke-width="0.8" />
+                    <ellipse cx="74" cy="78" rx="10" ry="5" fill="${procHighlight === 'TABLE' ? '#0284c7' : '#94a3b8'}" />
+                    <rect x="71" y="60" width="6" height="12" fill="#e2e8f0" rx="1" />
+                    <polygon points="72,72 76,72 74,76" fill="#f59e0b" />
+
+                    <polygon points="104,78 148,60 148,78 104,96" fill="${procHighlight === 'ATC' ? 'rgba(245, 158, 11, 0.35)' : '#334155'}" stroke="${procHighlight === 'ATC' ? '#f59e0b' : '#64748b'}" stroke-width="${procHighlight === 'ATC' ? '1.2' : '0.5'}" />
+                    <line x1="110" y1="84" x2="142" y2="70" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2" />
+
+                    <polyline points="152,65 168,55 168,75" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" />
+                    <rect x="160" y="65" width="16" height="22" fill="#0f172a" rx="2" stroke="#64748b" stroke-width="0.7" />
+                    <rect x="162" y="67" width="12" height="11" fill="#0284c7" rx="1" />
+                    <circle cx="165" cy="82" r="1.5" fill="#22c55e" />
+                    <circle cx="171" cy="82" r="1.5" fill="#ef4444" />
+
+                    <line x1="56" y1="46" x2="56" y2="28" stroke="#64748b" stroke-width="1.5" />
+                    <circle cx="56" cy="27" r="2.5" fill="#ef4444" opacity="0.3" />
+                    <circle cx="56" cy="22" r="2.5" fill="#f59e0b" opacity="0.4" />
+                    <circle cx="56" cy="17" r="3" fill="${lampColor}" />
+
+                    <text x="100" y="48" font-size="6.5" font-weight="900" fill="#0284c7" text-anchor="middle" font-family="sans-serif">5-AXIS DVF</text>
+                </svg>
+                `;
+            }
+
+            // 2. NHP Horizontal Machining Center Graphic
+            if (clean.includes('NHP') || clean.includes('NHC') || clean.includes('HC')) {
+                return `
+                <svg viewBox="0 0 200 130" class="bay-3d-model-svg" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="nhp-body-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff" />
+                            <stop offset="100%" stop-color="#cbd5e1" />
+                        </linearGradient>
+                        <linearGradient id="nhp-glass-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(56, 189, 248, 0.45)" />
+                            <stop offset="100%" stop-color="rgba(3, 105, 161, 0.2)" />
+                        </linearGradient>
+                        <radialGradient id="nhp-shadow-${clean}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(15, 23, 42, 0.25)" />
+                            <stop offset="100%" stop-color="rgba(15, 23, 42, 0)" />
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="100" cy="118" rx="85" ry="10" fill="url(#nhp-shadow-${clean})" />
+
+                    <polygon points="35,90 100,118 165,90 100,68" fill="#0f172a" />
+                    <polygon points="35,90 100,118 100,122 35,94" fill="#020617" />
+                    <polygon points="100,118 165,90 165,94 100,122" fill="#1e293b" />
+
+                    <polygon points="40,55 85,72 85,96 40,78" fill="#1e293b" />
+                    <polygon points="85,72 135,52 135,76 85,96" fill="#334155" />
+                    <polygon points="40,55 90,35 135,52 85,72" fill="url(#nhp-body-${clean})" />
+
+                    <polygon points="75,85 115,102 155,85 115,68" fill="${procHighlight === 'TABLE' ? '#bae6fd' : '#e2e8f0'}" stroke="${procHighlight === 'TABLE' ? '#0284c7' : '#94a3b8'}" stroke-width="${procHighlight === 'TABLE' ? '1.5' : '0.8'}" />
+                    <rect x="85" y="80" width="14" height="10" transform="skewY(15)" fill="#0284c7" rx="1" />
+                    <rect x="120" y="74" width="14" height="10" transform="skewY(-15)" fill="#64748b" rx="1" />
+
+                    <polygon points="48,60 85,75 85,92 48,76" fill="url(#nhp-glass-${clean})" stroke="#38bdf8" stroke-width="0.8" />
+                    <rect x="65" y="68" width="16" height="7" transform="skewX(-20)" fill="#f59e0b" stroke="#ffffff" stroke-width="0.5" />
+
+                    <polygon points="135,52 165,40 165,75 135,88" fill="${procHighlight === 'ATC' ? 'rgba(245, 158, 11, 0.35)' : '#1e293b'}" stroke="${procHighlight === 'ATC' ? '#f59e0b' : '#64748b'}" stroke-width="${procHighlight === 'ATC' ? '1.5' : '0.6'}" />
+                    <circle cx="150" cy="58" r="6" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="2,2" />
+
+                    <rect x="166" y="65" width="15" height="20" fill="#0f172a" rx="2" stroke="#64748b" stroke-width="0.8" />
+                    <rect x="168" y="67" width="11" height="9" fill="#38bdf8" rx="1" />
+                    <line x1="168" y1="80" x2="179" y2="80" stroke="#f59e0b" stroke-width="1.5" />
+
+                    <line x1="48" y1="46" x2="48" y2="25" stroke="#64748b" stroke-width="1.5" />
+                    <circle cx="48" cy="24" r="2.5" fill="#ef4444" opacity="0.3" />
+                    <circle cx="48" cy="19" r="2.5" fill="#f59e0b" opacity="0.4" />
+                    <circle cx="48" cy="14" r="3" fill="${lampColor}" />
+
+                    <text x="90" y="47" font-size="6.5" font-weight="900" fill="#0284c7" text-anchor="middle" font-family="sans-serif">HMC NHP</text>
+                </svg>
+                `;
+            }
+
+            // 3. NHM Heavy-Duty Horizontal Machining Center Graphic
+            if (clean.includes('NHM')) {
+                return `
+                <svg viewBox="0 0 200 130" class="bay-3d-model-svg" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="nhm-body-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#f8fafc" />
+                            <stop offset="100%" stop-color="#94a3b8" />
+                        </linearGradient>
+                        <radialGradient id="nhm-shadow-${clean}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(15, 23, 42, 0.3)" />
+                            <stop offset="100%" stop-color="rgba(15, 23, 42, 0)" />
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="100" cy="118" rx="88" ry="11" fill="url(#nhm-shadow-${clean})" />
+
+                    <polygon points="30,88 100,118 170,88 100,64" fill="#0f172a" />
+                    <polygon points="30,88 100,118 100,123 30,93" fill="#020617" />
+                    <polygon points="100,118 170,88 170,93 100,123" fill="#1e293b" />
+
+                    <polygon points="38,48 95,70 95,95 38,72" fill="#1e293b" />
+                    <polygon points="95,70 152,48 152,72 95,95" fill="#475569" />
+                    <polygon points="38,48 95,25 152,48 95,70" fill="url(#nhm-body-${clean})" />
+
+                    <polygon points="70,82 110,98 150,82 110,66" fill="${procHighlight === 'TABLE' ? '#bae6fd' : '#cbd5e1'}" stroke="${procHighlight === 'TABLE' ? '#0284c7' : '#64748b'}" stroke-width="${procHighlight === 'TABLE' ? '1.5' : '1'}" />
+                    <rect x="98" y="74" width="24" height="12" transform="skewY(-14)" fill="#0f172a" rx="1" />
+
+                    <rect x="58" y="60" width="22" height="10" transform="skewX(-15)" fill="#0284c7" stroke="#ffffff" stroke-width="0.8" />
+                    <polygon points="46,55 90,70 90,88 46,72" fill="rgba(56, 189, 248, 0.3)" stroke="#38bdf8" stroke-width="0.8" />
+
+                    <polygon points="135,46 168,34 168,70 135,82" fill="${procHighlight === 'ATC' ? 'rgba(245, 158, 11, 0.35)' : '#1e293b'}" stroke="${procHighlight === 'ATC' ? '#f59e0b' : '#64748b'}" stroke-width="${procHighlight === 'ATC' ? '1.5' : '0.6'}" />
+
+                    <rect x="168" y="62" width="16" height="22" fill="#0f172a" rx="2" stroke="#64748b" stroke-width="0.8" />
+                    <rect x="170" y="64" width="12" height="10" fill="#0284c7" rx="1" />
+
+                    <line x1="45" y1="42" x2="45" y2="20" stroke="#64748b" stroke-width="1.5" />
+                    <circle cx="45" cy="19" r="2.5" fill="#ef4444" opacity="0.3" />
+                    <circle cx="45" cy="14" r="2.5" fill="#f59e0b" opacity="0.4" />
+                    <circle cx="45" cy="9" r="3" fill="${lampColor}" />
+
+                    <text x="95" y="42" font-size="6.5" font-weight="900" fill="#0f172a" text-anchor="middle" font-family="sans-serif">HEAVY NHM</text>
+                </svg>
+                `;
+            }
+
+            // 4. DHF / HM Large Machine Graphic
+            if (clean.includes('DHF') || clean.includes('HM')) {
+                return `
+                <svg viewBox="0 0 200 130" class="bay-3d-model-svg" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="dhf-body-${clean}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff" />
+                            <stop offset="100%" stop-color="#94a3b8" />
+                        </linearGradient>
+                        <radialGradient id="dhf-shadow-${clean}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(15, 23, 42, 0.35)" />
+                            <stop offset="100%" stop-color="rgba(15, 23, 42, 0)" />
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="100" cy="119" rx="90" ry="10" fill="url(#dhf-shadow-${clean})" />
+
+                    <polygon points="25,85 100,118 175,85 100,58" fill="#090d16" />
+                    <polygon points="25,85 100,118 100,123 25,90" fill="#000000" />
+                    <polygon points="100,118 175,85 175,90 100,123" fill="#1e293b" />
+
+                    <polygon points="32,44 100,68 100,94 32,68" fill="#1e293b" />
+                    <polygon points="100,68 168,44 168,68 100,94" fill="#334155" />
+                    <polygon points="32,44 100,20 168,44 100,68" fill="url(#dhf-body-${clean})" />
+
+                    <circle cx="82" cy="62" r="9" fill="#0284c7" stroke="#ffffff" stroke-width="1" />
+                    <rect x="79" y="66" width="6" height="12" fill="#f59e0b" rx="1" />
+
+                    <polygon points="42,50 94,68 94,88 42,68" fill="rgba(56, 189, 248, 0.35)" stroke="#38bdf8" stroke-width="0.9" />
+                    <polygon points="70,82 110,98 150,82 110,66" fill="${procHighlight === 'TABLE' ? '#38bdf8' : '#e2e8f0'}" stroke="${procHighlight === 'TABLE' ? '#0284c7' : '#64748b'}" stroke-width="1.2" />
+
+                    <polygon points="145,40 178,28 178,66 145,78" fill="${procHighlight === 'ATC' ? 'rgba(245, 158, 11, 0.35)' : '#0f172a'}" stroke="${procHighlight === 'ATC' ? '#f59e0b' : '#64748b'}" stroke-width="${procHighlight === 'ATC' ? '1.5' : '0.8'}" />
+
+                    <rect x="175" y="60" width="16" height="24" fill="#0f172a" rx="2" stroke="#64748b" stroke-width="0.8" />
+                    <rect x="177" y="62" width="12" height="11" fill="#38bdf8" rx="1" />
+
+                    <line x1="40" y1="36" x2="40" y2="16" stroke="#64748b" stroke-width="1.5" />
+                    <circle cx="40" cy="15" r="2.5" fill="#ef4444" opacity="0.3" />
+                    <circle cx="40" cy="10" r="2.5" fill="#f59e0b" opacity="0.4" />
+                    <circle cx="40" cy="5" r="3" fill="${lampColor}" />
+
+                    <text x="100" y="38" font-size="6.5" font-weight="900" fill="#0284c7" text-anchor="middle" font-family="sans-serif">GIANT 5-AXIS / HM</text>
+                </svg>
+                `;
+            }
+
+            // Default Fallback Machine Graphic
+            return `
+            <svg viewBox="0 0 200 130" class="bay-3d-model-svg" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="def-shadow-${clean}" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="rgba(15, 23, 42, 0.25)" />
+                        <stop offset="100%" stop-color="rgba(15, 23, 42, 0)" />
+                    </radialGradient>
+                </defs>
+                <ellipse cx="100" cy="118" rx="80" ry="10" fill="url(#def-shadow-${clean})" />
+                <polygon points="40,90 100,115 160,90 100,68" fill="#1e293b" />
+                <polygon points="45,55 100,76 100,105 45,84" fill="#334155" />
+                <polygon points="100,76 155,55 155,84 100,105" fill="#475569" />
+                <polygon points="45,55 100,34 155,55 100,76" fill="#f8fafc" />
+                <polygon points="52,60 96,76 96,95 52,78" fill="rgba(56, 189, 248, 0.3)" stroke="#38bdf8" stroke-width="0.8" />
+                <line x1="55" y1="46" x2="55" y2="25" stroke="#64748b" stroke-width="1.5" />
+                <circle cx="55" cy="16" r="3" fill="${lampColor}" />
+                <text x="100" y="48" font-size="6.5" font-weight="800" fill="#0284c7" text-anchor="middle" font-family="sans-serif">MACHINING CENTER</text>
+            </svg>
+            `;
         }
 
         const MODEL_PROCESS_MASTER = {
@@ -2168,8 +2423,7 @@
                                 `;
                             }
 
-                            const photoUrl = getModelPhotoUrl(bay.model);
-                            const photoHtml = photoUrl ? `<img src="${photoUrl}" loading="lazy" class="bay-model-photo" alt="${bay.model}" title="${bay.model} 공식 실물 외관 (클릭하여 확대)" onclick="event.stopPropagation(); showPhotoModal('${photoUrl}', '${bay.model}')">` : '';
+                            const model3dGraphic = getModel3dGraphic(bay.model, bay.currentProcess);
 
                             card.innerHTML = `
                                 <div class="bay-card-top">
@@ -2178,16 +2432,18 @@
                                     ${sourceBadge}
                                 </div>
 
+                                <!-- Prominent 2.5D Digital Twin 3D Graphic -->
+                                <div class="bay-3d-wrapper" title="[${bay.model || '장비'}] 2.5D 디지털 트윈 모델">
+                                    ${model3dGraphic}
+                                </div>
+
                                 <div>
                                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.35rem;">
                                         <div style="display: flex; flex-direction: column;">
                                             <span class="bay-model">${bay.model || '-'}</span>
                                             ${bay.planMonth ? `<span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid #bae6fd; width: fit-content; margin-top: 2px;">📅 ${bay.planMonth}</span>` : ''}
                                         </div>
-                                        ${photoHtml}
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; display: flex; justify-content: space-between;">
-                                        <span>호기: <strong style="color: #1e293b;">${bay.serial || '-'}</strong></span>
+                                        <span style="font-size: 0.72rem; font-weight: 800; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">호기: ${bay.serial || '-'}</span>
                                     </div>
                                     <div class="bay-customer" style="margin-top: 0.25rem; font-weight: 600; color: ${bay.customer ? '#0f172a' : '#94a3b8'};">🏢 ${bay.customer || '고객사 정보 없음'}</div>
                                 </div>
