@@ -1808,6 +1808,32 @@
                                 `;
                             }
 
+                            let subMachinesHtml = '';
+                            if (Array.isArray(bay.subMachines) && bay.subMachines.length > 0) {
+                                const subItems = bay.subMachines.map(sub => {
+                                    const cleanSerial = (sub.serial || '').replace(/^MH00\d{2}-/, '').replace(/^MV00\d{2}-/, '').replace(/^MM00\d{2}-/, '');
+                                    const procBadge = sub.currentProcess ? `<span style="background:#f59e0b;color:#fff;padding:1px 4px;border-radius:3px;font-weight:800;font-size:0.65rem;margin-left:3px;">${sub.currentProcess}</span>` : '';
+                                    const workerText = sub.worker ? ` • 👷 ${sub.worker}` : '';
+                                    return `
+                                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 4px; padding: 3px 6px; margin-top: 3px; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;">
+                                            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <b style="color: #92400e;">${sub.model || '장비'}</b> <span style="color:#64748b; font-size:0.7rem;">(${cleanSerial || sub.salesDoc})</span>${procBadge}
+                                            </div>
+                                            <div style="color: #475569; font-size: 0.68rem; margin-left: 4px; white-space: nowrap;">${workerText}</div>
+                                        </div>
+                                    `;
+                                }).join('');
+
+                                subMachinesHtml = `
+                                    <div style="margin-top: 0.45rem; padding-top: 0.4rem; border-top: 1px dashed #cbd5e1;">
+                                        <div style="font-size: 0.68rem; font-weight: 800; color: #b45309; display: flex; align-items: center; justify-content: space-between;">
+                                            <span>⚡ 동시/부속 작업 (${bay.subMachines.length}건)</span>
+                                        </div>
+                                        ${subItems}
+                                    </div>
+                                `;
+                            }
+
                             card.innerHTML = `
                                 <div class="bay-card-top">
                                     <span class="bay-num-badge">지번 ${bay.bay}</span>
@@ -1832,6 +1858,7 @@
                                     ${bay.spec ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">⚡ ${bay.spec}</div>` : ''}
                                     ${bay.issue ? `<div style="color: var(--danger); font-weight: 700;">⚠️ ${bay.issue}</div>` : ''}
                                 </div>
+                                ${subMachinesHtml}
                             `;
                         }
 

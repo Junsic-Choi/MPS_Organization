@@ -867,13 +867,28 @@ app.post('/api/mes-sync', async (req, res) => {
                 return false;
             }
 
+            function isMainProc(m) {
+                if (!m) return false;
+                const proc = (m.CUR_PROC_ID || m.PROC_ID || '').toUpperCase();
+                // Sub processes starting with P (PGEB, PACONF, PCLM, PTBL, etc.)
+                if (proc.startsWith('P') && (proc.includes('GEB') || proc.includes('CONF') || proc.includes('CLM') || proc.includes('TBL') || proc.includes('ACT') || proc.includes('10'))) {
+                    return false;
+                }
+                return true; // GBDLEVEL, GCLM, GEB, GAJ, GIN, GSR, GOT, XYZHOME, ILUPIP, SCALE, etc.
+            }
+
             // 4-Way Smart Priority Sort:
+            // 0. Main Body Assembly (GBDLEVEL, GAJ, GIN 등) vs Sub/Pallet Assembly (PGEB, PACONF 등)
             // 1. QMS GIN Inspection Request Bay (Highest Ground Truth)
             // 2. Daily Live Work Result (CN0WBFAG/H)
             // 3. Real Active Started Status (Yellow/Purple)
             // 4. Newest Production Order (e.g. 700004161378 / 52호기 > 700004154500 / 1109호기)
             // 5. Newest Production Month (e.g. 202609 > 202608)
             candidates.sort((a, b) => {
+                const aMain = isMainProc(a) ? 1 : 0;
+                const bMain = isMainProc(b) ? 1 : 0;
+                if (aMain !== bMain) return bMain - aMain;
+
                 const aOrd = (a.salesDoc || a.PROD_ORD_ID || '').trim();
                 const bOrd = (b.salesDoc || b.PROD_ORD_ID || '').trim();
                 const aSerial = (a.PROD_MDL_CNT || a.serial || '').trim();
@@ -932,8 +947,29 @@ app.post('/api/mes-sync', async (req, res) => {
                 if (locMatch.PROD_ORD_STATUS_NAME) {
                     targetBay.issue = `[상태: ${locMatch.PROD_ORD_STATUS_NAME}]`;
                 }
+
+                // Attach concurrent / sub machines at this bay
+                targetBay.subMachines = candidates.slice(1).map(c => {
+                    const cOrd = (c.salesDoc || '').trim();
+                    const cSerial = (c.PROD_MDL_CNT || c.serial || '').trim();
+                    const cWorker = c.worker || (cOrd && workerMap.get(cOrd)) || (cSerial && workerMap.get(cSerial)) || c.WORKER_NAME || '';
+                    return {
+                        model: c.model || '',
+                        serial: c.serial || c.PROD_MDL_CNT || '',
+                        salesDoc: c.salesDoc || '',
+                        currentProcess: c.CUR_PROC_ID || c.PROC_ID || '',
+                        worker: cWorker,
+                        customer: c.customer || '',
+                        planMonth: c.planMonth || '',
+                        spec: c.MTRL_ID || '',
+                        issue: c.PROD_ORD_STATUS_NAME ? `[상태: ${c.PROD_ORD_STATUS_NAME}]` : ''
+                    };
+                });
+
                 autoAssignedCount++;
                 return;
+            } else {
+                targetBay.subMachines = [];
             }
 
             // 2. If bay was already assigned manually, sync its in-progress stage
