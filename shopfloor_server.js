@@ -180,6 +180,7 @@ app.post('/api/mes-sync', async (req, res) => {
         let mesItems = [];
         const locBayMap = new Map();
         const workerMap = new Map();
+        const orderRoutingMap = new Map();
 
         // 1. If client provided manual raw OUT_DATA or raw JSON directly
         if (Array.isArray(req.body.outData) && req.body.outData.length > 0) {
@@ -575,7 +576,7 @@ app.post('/api/mes-sync', async (req, res) => {
                 }
 
                 // Map of full actual routing steps per order / serial
-                const orderRoutingMap = new Map();
+                orderRoutingMap.clear();
 
                 workorderRows.forEach(r => {
                     const ordKey = (r.PROD_ORD_ID || '').trim();
