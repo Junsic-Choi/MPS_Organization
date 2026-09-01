@@ -278,6 +278,17 @@
             white-space: nowrap;
         }
 
+        .concurrent-sub-item {
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .concurrent-sub-item:hover {
+            background: rgba(245, 158, 11, 0.22) !important;
+            border-color: #f59e0b !important;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(245, 158, 11, 0.25);
+        }
+
         .pool-shift-chip.active {
             background: var(--primary);
             border-color: var(--primary);
@@ -886,6 +897,56 @@
                     <button class="btn" onclick="closeModal()">취소</button>
                     <button class="btn btn-primary" onclick="saveCurrentBay()">💾 지번 저장</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sub-machine Concurrent Work Detail Modal -->
+    <div class="modal-overlay" id="sub-detail-modal" onclick="closeSubDetailModal(event)">
+        <div class="modal-card" style="max-width: 520px;" onclick="event.stopPropagation()">
+            <div class="modal-header" style="background: linear-gradient(135deg, #fffbeb, #fef3c7); border-bottom: 1px solid #fde68a;">
+                <div>
+                    <div class="modal-title" style="color: #92400e; font-size: 1.05rem;" id="sub-m-title">⚡ [동시/부속 작업 장비] 상세 정보</div>
+                    <div style="font-size: 0.8rem; color: #b45309; margin-top: 0.2rem;" id="sub-m-sub">작업 위치: 지번 D11</div>
+                </div>
+                <button class="btn" style="padding: 0.3rem 0.6rem;" onclick="closeSubDetailModal()">✕</button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.2rem;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.85rem; background: #fffdf7; border: 1px solid #fde68a; border-radius: 8px; padding: 1rem;">
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">기종 (Model)</div>
+                        <div style="font-size: 1rem; font-weight: 800; color: #1e293b; margin-top: 2px;" id="sub-val-model">-</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">호기 시리얼 (Serial)</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #0284c7; margin-top: 2px;" id="sub-val-serial">-</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">고객사명 (Customer)</div>
+                        <div style="font-size: 0.9rem; font-weight: 600; color: #1e293b; margin-top: 2px;" id="sub-val-customer">-</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">담당 작업자 (Worker)</div>
+                        <div style="font-size: 0.9rem; font-weight: 700; color: #0f172a; margin-top: 2px;" id="sub-val-worker">-</div>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">현재 실시간 공정 (Process Stage)</div>
+                        <div style="margin-top: 4px;" id="sub-val-process">-</div>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">Sales Doc / 오더 번호</div>
+                        <div style="font-size: 0.85rem; font-family: 'JetBrains Mono'; font-weight: 600; color: #334155; margin-top: 2px;" id="sub-val-salesdoc">-</div>
+                    </div>
+                    <div style="grid-column: span 2;" id="sub-val-spec-wrap">
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">품명 / 사양 (Spec)</div>
+                        <div style="font-size: 0.825rem; color: #475569; margin-top: 2px; line-height: 1.4;" id="sub-val-spec">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 0.75rem 1.2rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeSubDetailModal()">닫기</button>
             </div>
         </div>
     </div>
@@ -1812,14 +1873,15 @@
                             if (Array.isArray(bay.subMachines) && bay.subMachines.length > 0) {
                                 const subItems = bay.subMachines.map(sub => {
                                     const cleanSerial = (sub.serial || '').replace(/^MH00\d{2}-/, '').replace(/^MV00\d{2}-/, '').replace(/^MM00\d{2}-/, '');
-                                    const procBadge = sub.currentProcess ? `<span style="background:#f59e0b;color:#fff;padding:1px 4px;border-radius:3px;font-weight:800;font-size:0.65rem;margin-left:3px;">${sub.currentProcess}</span>` : '';
+                                    const procBadge = sub.currentProcess ? `<span style="background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;font-weight:800;font-size:0.65rem;margin-left:3px;">${sub.currentProcess}</span>` : '';
                                     const workerText = sub.worker ? ` • 👷 ${sub.worker}` : '';
+                                    const safeSubStr = encodeURIComponent(JSON.stringify(sub));
                                     return `
-                                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 4px; padding: 3px 6px; margin-top: 3px; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;">
+                                        <div class="concurrent-sub-item" onclick="event.stopPropagation(); showSubMachineDetail('${safeSubStr}', '${bay.bay}')" title="클릭하여 [${sub.model}] 부속 작업 상세 정보 조회" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 5px; padding: 4px 7px; margin-top: 3px; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;">
                                             <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                                 <b style="color: #92400e;">${sub.model || '장비'}</b> <span style="color:#64748b; font-size:0.7rem;">(${cleanSerial || sub.salesDoc})</span>${procBadge}
                                             </div>
-                                            <div style="color: #475569; font-size: 0.68rem; margin-left: 4px; white-space: nowrap;">${workerText}</div>
+                                            <div style="color: #475569; font-size: 0.68rem; margin-left: 4px; white-space: nowrap;">${workerText} 🔍</div>
                                         </div>
                                     `;
                                 }).join('');
@@ -2122,6 +2184,38 @@
         function closeModal(e) {
             document.getElementById('edit-modal').style.display = 'none';
             activeEditingBayId = null;
+        }
+
+        function showSubMachineDetail(subJsonStr, bayNum) {
+            let sub = {};
+            try {
+                sub = typeof subJsonStr === 'string' ? JSON.parse(decodeURIComponent(subJsonStr)) : subJsonStr;
+            } catch(e) {
+                console.error(e);
+            }
+            if (!sub) return;
+
+            document.getElementById('sub-m-title').textContent = `⚡ [동시/부속 작업] ${sub.model || '장비'} 상세 정보`;
+            document.getElementById('sub-m-sub').textContent = `작업 위치: 지번 ${bayNum || ''}`;
+
+            const planBadge = sub.planMonth ? `<span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">📅 ${sub.planMonth}</span>` : '';
+            document.getElementById('sub-val-model').innerHTML = `${sub.model || '-'} ${planBadge}`;
+            document.getElementById('sub-val-serial').textContent = sub.serial || '-';
+            document.getElementById('sub-val-customer').textContent = sub.customer || '고객사 정보 없음';
+            document.getElementById('sub-val-worker').textContent = sub.worker ? `👷 ${sub.worker}` : '작업자 미지정';
+            document.getElementById('sub-val-salesdoc').textContent = sub.salesDoc || '-';
+            document.getElementById('sub-val-spec').textContent = sub.spec || '-';
+
+            const procText = sub.currentProcess ? `<span style="background: #fef9c3; border: 1px solid #fde047; color: #713f12; padding: 0.3rem 0.65rem; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-block;">⚡ [${sub.currentProcess}] 실시간 부속 공정 진행 중</span>` : '<span style="color:#64748b;">공정 정보 없음</span>';
+            document.getElementById('sub-val-process').innerHTML = procText;
+
+            document.getElementById('sub-detail-modal').style.display = 'flex';
+        }
+
+        function closeSubDetailModal(e) {
+            if (e && e.target && e.target.classList.contains('modal-card')) return;
+            const modal = document.getElementById('sub-detail-modal');
+            if (modal) modal.style.display = 'none';
         }
 
         // MES Modal Controls
