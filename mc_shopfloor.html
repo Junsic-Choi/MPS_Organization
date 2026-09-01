@@ -1152,6 +1152,7 @@
             const badge = document.getElementById('m-lt-badge');
             const procSelect = document.getElementById('m-process');
             const cleanCurr = (currentValue || '').trim().toUpperCase();
+            const normCurr = cleanCurr.replace(/[\s\-_]/g, '');
 
             // 1. If individual order routingSteps from MES is provided, use actual real sequence!
             if (Array.isArray(routingSteps) && routingSteps.length > 0) {
@@ -1160,10 +1161,15 @@
                 let hasMatched = false;
                 let optionsHtml = routingSteps.map(s => {
                     const sCode = (s.code || '').trim().toUpperCase();
+                    const normCode = sCode.replace(/[\s\-_]/g, '');
                     const sName = s.name || `[${s.code}] ${s.code}`;
-                    const isSelected = (!hasMatched && (cleanCurr === sCode || cleanCurr.startsWith(sCode) || sCode.startsWith(cleanCurr) || sName.toUpperCase().includes(cleanCurr))) ? 'selected' : '';
-                    if (isSelected) hasMatched = true;
-                    return `<option value="${s.code}" ${isSelected}>${sName}</option>`;
+                    
+                    let isSelected = false;
+                    if (!hasMatched && normCurr && (normCurr === normCode || normCurr.startsWith(normCode) || normCode.startsWith(normCurr) || sName.toUpperCase().replace(/[\s\-_]/g, '').includes(normCurr))) {
+                        isSelected = true;
+                        hasMatched = true;
+                    }
+                    return `<option value="${s.code}" ${isSelected ? 'selected' : ''}>${sName}</option>`;
                 }).join('');
 
                 if (!hasMatched && cleanCurr) {
@@ -1181,19 +1187,41 @@
             let hasMatched = false;
             let optionsHtml = config.steps.map(s => {
                 const sCode = (s.code || '').trim().toUpperCase();
-                const isSelected = (!hasMatched && (cleanCurr === sCode || cleanCurr.startsWith(sCode) || s.name.toUpperCase().includes(cleanCurr))) ? 'selected' : '';
-                if (isSelected) hasMatched = true;
-                return `<option value="${s.code}" ${isSelected}>${s.name}</option>`;
+                const normCode = sCode.replace(/[\s\-_]/g, '');
+                
+                let isSelected = false;
+                if (!hasMatched && normCurr && (normCurr === normCode || normCurr.startsWith(normCode) || normCode.startsWith(normCurr) || s.name.toUpperCase().replace(/[\s\-_]/g, '').includes(normCurr))) {
+                    isSelected = true;
+                    hasMatched = true;
+                }
+                return `<option value="${s.code}" ${isSelected ? 'selected' : ''}>${s.name}</option>`;
             }).join('');
 
-            // Fallback for custom MES process code: if RPS option, insert naturally before GIN
+            // Fallback for custom MES process code: insert in logically accurate sequence
             if (!hasMatched && cleanCurr) {
-                if (cleanCurr.startsWith('RPS')) {
+                if (cleanCurr.includes('ATC') || cleanCurr.includes('MAG') || cleanCurr.includes('TOOL')) {
+                    // ATC Option: EIF 이전 공정 (3~4일차 부근)
+                    const atcOption = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] ATC 매거진 조립 (EIF 이전 공정)</option>`;
+                    if (optionsHtml.includes('EIF')) {
+                        optionsHtml = optionsHtml.replace(/(<option[^>]*value="EIF[^>]*>)/i, `${atcOption}$1`);
+                    } else {
+                        optionsHtml = optionsHtml.replace(/(<option[^>]*value="GEB[^>]*>)/i, `$1${atcOption}`);
+                    }
+                } else if (cleanCurr.startsWith('RPS') || cleanCurr.startsWith('APC') || cleanCurr.startsWith('2PAL')) {
+                    // RPS / Pallet Option: GIN 이전 공정
                     const rpsOption = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] Round Pallet System (RPS) 장착 & 시운전 (옵션)</option>`;
                     if (optionsHtml.includes('GIN')) {
                         optionsHtml = optionsHtml.replace(/(<option[^>]*value="GIN[^>]*>)/i, `${rpsOption}$1`);
                     } else {
                         optionsHtml = rpsOption + optionsHtml;
+                    }
+                } else if (cleanCurr.includes('SCALE')) {
+                    // Scale Option: with EIF / before EAD
+                    const scaleOption = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 스케일 (Scale) 조립 & 에어 배관</option>`;
+                    if (optionsHtml.includes('EAD')) {
+                        optionsHtml = optionsHtml.replace(/(<option[^>]*value="EAD[^>]*>)/i, `${scaleOption}$1`);
+                    } else {
+                        optionsHtml = scaleOption + optionsHtml;
                     }
                 } else {
                     optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;

@@ -297,7 +297,7 @@ app.post('/api/mes-sync', async (req, res) => {
                             DEPT_VENDOR_CHK: "Y",
                             DEPT_VENDOR_ID: "CN0WBFAG",
                             LANG_ID: "ko-KR",
-                            EXCLD_PROC_END: "Y"
+                            EXCLD_PROC_END: "N"
                         }
                     ]
                 },
@@ -324,7 +324,7 @@ app.post('/api/mes-sync', async (req, res) => {
                             DEPT_VENDOR_CHK: "Y",
                             DEPT_VENDOR_ID: "CN0WBFAH",
                             LANG_ID: "ko-KR",
-                            EXCLD_PROC_END: "Y"
+                            EXCLD_PROC_END: "N"
                         }
                     ]
                 },
@@ -557,6 +557,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     if (p === 'PGEB') return '테이블 안착 & 서보모터 (PGEB)';
                     if (p.startsWith('PCLM')) return '컬럼 조립 & 안착 (PCLM)';
                     if (p.startsWith('PACONF')) return '팔레트/부속 가공 & 서브 안착 (PACONF)';
+                    if (p.includes('ATC') && (p.includes('30T') || p.includes('40T') || p.includes('TOOL') || p.includes('MAG'))) return `ATC 매거진 조립 (${p}) ⚡`;
+                    if (p.includes('SCALE')) return `스케일 조립 & 에어 배관 (${p}) ⚡`;
                     if (p.startsWith('RPS')) return `Round Pallet System (${p}) 장착 & 시운전 ⚡`;
                     if (p.startsWith('APC') || p.startsWith('2PAL')) return `APC 팔레트 체인저 장착 & 시운전 ⚡`;
                     if (p.startsWith('MAT')) return `Matrix Magazine (${p}) 툴 매거진 장착 ⚡`;
