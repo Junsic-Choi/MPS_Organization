@@ -1143,6 +1143,8 @@
                 const json = await res.json();
                 if (json.success && Array.isArray(json.machines)) {
                     mpsMachines = json.machines;
+                    enrichBaysWithMpsData();
+                    renderBays();
                     if (isManual) {
                         alert(`📋 [MPS 배정계획 갱신 완료]\n\n총 ${mpsMachines.length}건의 MC직 생산계획 장비가 성공적으로 동기화되었습니다!\n\n각 지번(Bay)을 클릭하여 장비를 배정할 때 최신 계획 목록에서 선택하실 수 있습니다.`);
                     }
@@ -1163,6 +1165,32 @@
                     btn.disabled = false;
                 }
             }
+        }
+
+        function enrichBaysWithMpsData() {
+            if (!Array.isArray(mpsMachines) || mpsMachines.length === 0) return;
+            allBays.forEach(bay => {
+                if (bay.assigned) {
+                    const s = (bay.serial || '').trim();
+                    const o = (bay.salesDoc || '').trim();
+                    const match = mpsMachines.find(m => {
+                        const ms = (m.serial || '').trim();
+                        const mo = (m.salesDoc || m.order || '').trim();
+                        if (s && (ms === s || s.includes(ms) || ms.includes(s))) return true;
+                        if (o && (mo === o || o.includes(mo) || mo.includes(o))) return true;
+                        return false;
+                    });
+                    if (match) {
+                        if (!bay.customer && match.customer) bay.customer = match.customer;
+                        if (!bay.planMonth && match.mon) {
+                            const digits = match.mon.toString().replace(/\D/g, '');
+                            if (digits.length >= 6) bay.planMonth = `${digits.slice(2, 4)}.${digits.slice(4, 6)}월분`;
+                            else if (digits.length === 4) bay.planMonth = `${digits.slice(0, 2)}.${digits.slice(2, 4)}월분`;
+                            else bay.planMonth = match.mon;
+                        }
+                    }
+                }
+            });
         }
 
         let currentZone = 'D';

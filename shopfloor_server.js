@@ -193,11 +193,12 @@ app.post('/api/mes-sync', async (req, res) => {
             const now = new Date();
             const yyyy = now.getFullYear();
             const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const nextMm = String((now.getMonth() + 2) > 12 ? 1 : (now.getMonth() + 2)).padStart(2, '0');
-            const nextYyyy = (now.getMonth() + 2) > 12 ? (yyyy + 1) : yyyy;
 
-            const fromYm = `${yyyy}${mm}`;
-            const toYm = `${nextYyyy}${nextMm}`;
+            // Broad window: 2 months prior (for active machines from previous months like 543호기) to 2 months ahead
+            const prevDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+            const fromYm = `${prevDate.getFullYear()}${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+            const nextDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+            const toYm = `${nextDate.getFullYear()}${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
 
             // Query 1: Progress & Real-time Active Process (CUR_PROC_ID)
             const payloadProgress = {
@@ -562,8 +563,8 @@ app.post('/api/mes-sync', async (req, res) => {
                 return null;
             }
 
-            // 2. MC 4직: DHF 8000, NHP 8000, HM 1000, HM 1250, XC 4000
-            if (mdl.includes('DHF') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('HM 1') || mdl.includes('HM1') || mdl.includes('XC') || wc === 'A10MC40' || /0AM4|0AMD/.test(ver)) {
+            // 2. MC 4직: DHF 8000, NHP 8000, NHP 800, HM 1000, HM 1250, XC 4000
+            if (mdl.includes('DHF') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('NHP 800') || mdl.includes('NHP800') || mdl.includes('HM 1') || mdl.includes('HM1') || mdl.includes('XC') || wc === 'A10MC40' || /0AM4|0AMD/.test(ver)) {
                 return 'MC4직';
             }
 
@@ -586,7 +587,7 @@ app.post('/api/mes-sync', async (req, res) => {
             if (wc === 'A10MCE0' || wc === 'Q10MC00' || wc === 'A10MC51') {
                 if (mdl.includes('DVF')) return 'MC2직';
                 if (mdl.includes('NHM')) return 'MC3직';
-                if (mdl.includes('DHF') || mdl.includes('HM')) return 'MC4직';
+                if (mdl.includes('DHF') || mdl.includes('HM') || mdl.includes('NHP 8') || mdl.includes('NHP8') || mdl.includes('NHP800') || mdl.includes('XC') || /0AM4|0AMD/.test(ver)) return 'MC4직';
                 if (mdl.includes('NHP') || mdl.includes('NHC') || mdl.includes('HC')) return 'MC1직';
             }
 
@@ -831,8 +832,12 @@ app.post('/api/mes-sync', async (req, res) => {
                 const bayOrder = (targetBay.salesDoc || '').trim();
 
                 const match = mesMachines.find(m => {
-                    if (baySerial && (m.serial === baySerial || m.PROD_MDL_CNT === baySerial)) return true;
-                    if (bayOrder && m.salesDoc === bayOrder) return true;
+                    const mSerial = (m.serial || '').trim();
+                    const mCnt = (m.PROD_MDL_CNT || '').trim();
+                    const mOrd = (m.salesDoc || m.PROD_ORD_ID || '').trim();
+
+                    if (baySerial && (mSerial === baySerial || mCnt === baySerial || baySerial.includes(mCnt) || mSerial.includes(baySerial))) return true;
+                    if (bayOrder && (mOrd === bayOrder || mOrd.includes(bayOrder) || bayOrder.includes(mOrd))) return true;
                     return false;
                 });
 
@@ -853,6 +858,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     targetBay.isShipped = false;
                     if (match.PROD_ORD_STATUS_NAME) {
                         targetBay.issue = `[상태: ${match.PROD_ORD_STATUS_NAME}]`;
+                    } else if (targetBay.issue && targetBay.issue.includes('출하 완료')) {
+                        targetBay.issue = '';
                     }
                     updatedCount++;
                 } else if (targetBay.source === 'MES') {
