@@ -1078,11 +1078,12 @@
         };
 
         function getProcessConfigForModel(modelName) {
-            const m = (modelName || '').toUpperCase();
+            const raw = (modelName || '').toUpperCase();
+            const m = raw.replace(/[\s\-_]/g, ''); // "NHP 4000" -> "NHP4000"
             if (m.includes('DVF5') || m.includes('DVF4') || m.includes('DVF')) return MODEL_PROCESS_MASTER['DVF5000'];
-            if (m.includes('NHP40') || m.includes('NHP50') || m.includes('NHC4') || m.includes('NHC5') || m.includes('HC4') || m.includes('HC5')) return MODEL_PROCESS_MASTER['NHP4000'];
-            if (m.includes('NHM') || m.includes('NHP55') || m.includes('NHP63') || m.includes('NHP8') || m.includes('XC4')) return MODEL_PROCESS_MASTER['NHM6300'];
-            if (m.includes('HM') || m.includes('DHF') || m.includes('1000') || m.includes('1250') || m.includes('800')) return MODEL_PROCESS_MASTER['HM1000'];
+            if (m.includes('NHP4') || m.includes('NHP50') || m.includes('NHC4') || m.includes('NHC5') || m.includes('HC4') || m.includes('HC5')) return MODEL_PROCESS_MASTER['NHP4000'];
+            if (m.includes('NHM') || m.includes('NHP55') || m.includes('NHP63')) return MODEL_PROCESS_MASTER['NHM6300'];
+            if (m.includes('HM') || m.includes('DHF') || m.includes('NHP8') || m.includes('XC4') || m.includes('1000') || m.includes('1250') || m.includes('800')) return MODEL_PROCESS_MASTER['HM1000'];
             return MODEL_PROCESS_MASTER['DEFAULT'];
         }
 
@@ -1092,10 +1093,22 @@
             if (badge) badge.textContent = `[${config.badge}]`;
 
             const procSelect = document.getElementById('m-process');
-            procSelect.innerHTML = config.steps.map(s => {
-                const isSelected = (currentValue === s.code || currentValue === s.name) ? 'selected' : '';
+            const cleanCurr = (currentValue || '').trim().toUpperCase();
+
+            let hasMatched = false;
+            let optionsHtml = config.steps.map(s => {
+                const sCode = (s.code || '').trim().toUpperCase();
+                const isSelected = (!hasMatched && (cleanCurr === sCode || cleanCurr.startsWith(sCode) || s.name.toUpperCase().includes(cleanCurr))) ? 'selected' : '';
+                if (isSelected) hasMatched = true;
                 return `<option value="${s.code}" ${isSelected}>${s.name}</option>`;
             }).join('');
+
+            // Fallback for custom MES process code
+            if (!hasMatched && cleanCurr) {
+                optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;
+            }
+
+            procSelect.innerHTML = optionsHtml;
         }
 
         function onModelInputChange() {
