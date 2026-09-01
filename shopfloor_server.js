@@ -357,19 +357,70 @@ app.post('/api/mes-sync', async (req, res) => {
                 port: "8082"
             };
 
+            // Query 7: QMS Inspection Request Status Update Procedure Trigger
+            const payloadQmsUpdate = {
+                BizActId: "BR_QMS_UPD_PR_REQUEST_INSPECTION_STATUS",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            ENTERPRISE_ID: "1800",
+                            PLANT_ID: "1840"
+                        }
+                    ]
+                },
+                OutData: "",
+                port: "8082"
+            };
+
+            // Query 8: QMS Inspection Requests Table (GIN Inspection Bays - Highest Source of Truth)
+            const payloadQmsInspTbl = {
+                BizActId: "BR_QMS_GET_REQUEST_INSPECTION_TBL",
+                InDataList: {
+                    IN_DATA: [
+                        {
+                            LANG_ID: "ko-KR",
+                            ENTERPRISE_ID: "1800",
+                            PLANT_ID: "1840",
+                            LOGIN_USER_ID: "i0215099",
+                            DEPT_ID: "",
+                            REQ_DEPT_ID: "",
+                            PROD_MDL_ID: "",
+                            PROD_MDL_CNT: null,
+                            INSP_TYPE: "",
+                            INSP_STATUS: "",
+                            PROD_YYYYMM_FROM: fromYm,
+                            PROD_YYYYMM_TO: toYm,
+                            INSP_DATE_CHK: false,
+                            INSP_DTTM_FROM: "",
+                            INSP_DTTM_TO: "",
+                            OINS_INSP_DATE_CHK: false,
+                            OINS_INSP_DTTM_FROM: "",
+                            OINS_INSP_DTTM_TO: "",
+                            isPending: false,
+                            WO_DATE_CHK: false,
+                            WO_DATE: ""
+                        }
+                    ]
+                },
+                OutData: "OUT_DATA",
+                port: "8082"
+            };
+
             const headers = { 'Content-Type': 'application/json' };
             if (authHeader) {
                 headers['Authorization'] = authHeader.startsWith('Bearer ') ? authHeader : `Bearer ${authHeader}`;
             }
 
             try {
-                const [resProgress, resDailyG, resDailyH, resWorkG, resWorkH, resLoc] = await Promise.all([
+                const [resProgress, resDailyG, resDailyH, resWorkG, resWorkH, resLoc, resQmsUpdate, resQms] = await Promise.all([
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadProgress) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyG) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadDailyH) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderG) }).catch(e => null),
                     fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadWorkorderH) }).catch(e => null),
-                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadLocation) }).catch(e => null)
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadLocation) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadQmsUpdate) }).catch(e => null),
+                    fetch('http://mes.dn-solutions.com:8081/api/json/query', { method: 'POST', headers, body: JSON.stringify(payloadQmsInspTbl) }).catch(e => null)
                 ]);
 
                 if (resProgress && resProgress.ok) {
@@ -383,7 +434,46 @@ app.post('/api/mes-sync', async (req, res) => {
                     });
                 }
 
-                // Process Daily Work Results (Highest Priority for Floor Status)
+                // Process QMS Inspection Table (GIN Inspection Location - Highest Priority Ground Truth)
+                const qmsRows = [];
+                if (resQms && resQms.ok) {
+                    try {
+                        const qmsJson = await resQms.json();
+                        qmsRows.push(...(qmsJson.OUT_DATA || []));
+                        console.log(`[QMS] Fetched ${qmsRows.length} Inspection Request records`);
+                    } catch(e) {}
+                }
+
+                qmsRows.forEach(r => {
+                    const ordKey = (r.PROD_ORD_ID || r.WO_ID || r.ORDER_ID || '').trim();
+                    const serialKey = (r.PROD_MDL_CNT || r.SERIAL_NO || r.SERIAL || '').trim();
+                    const fullSerial = (r.FULL_PROD_MDL_CNT || (r.PROD_MDL_ID ? `${r.PROD_MDL_ID}-${r.PROD_MDL_CNT}` : r.PROD_MDL_CNT) || '').trim();
+
+                    let loc = (r.GI_LOC_ID || r.INSP_LOC_ID || r.REQ_LOC_ID || r.LOC_ID || r.BAY || '').trim().toUpperCase();
+                    if (!loc) {
+                        for (const [k, v] of Object.entries(r)) {
+                            if (typeof v === 'string' && /([A-F]\d{1,2})/.test(v)) {
+                                const m = v.toUpperCase().match(/([A-F]\d{1,2})/);
+                                if (m) { loc = m[1]; break; }
+                            }
+                        }
+                    }
+
+                    const worker = (r.REQ_WORKER_NAME || r.INSP_CHARGER_NAME || r.CHARGER || r.USER_NAME || r.WORKER_NAME || '').trim();
+                    if (worker) {
+                        if (ordKey) workerMap.set(ordKey, worker);
+                        if (serialKey) workerMap.set(serialKey, worker);
+                        if (fullSerial) workerMap.set(fullSerial, worker);
+                    }
+
+                    if (loc) {
+                        if (ordKey) locBayMap.set(ordKey, { loc, area: r.AREA_NAME || r.GI_AREA_NAME, isQms: true, isInsp: true, isWorkorder: true, worker, raw: r });
+                        if (serialKey) locBayMap.set(serialKey, { loc, area: r.AREA_NAME || r.GI_AREA_NAME, isQms: true, isInsp: true, isWorkorder: true, worker, raw: r });
+                        if (fullSerial) locBayMap.set(fullSerial, { loc, area: r.AREA_NAME || r.GI_AREA_NAME, isQms: true, isInsp: true, isWorkorder: true, worker, raw: r });
+                    }
+                });
+
+                // Process Daily Work Results (Floor Activity Ground Truth)
                 const dailyRows = [];
                 if (resDailyG && resDailyG.ok) {
                     try {
@@ -426,15 +516,17 @@ app.post('/api/mes-sync', async (req, res) => {
                     }
 
                     if (worker) {
-                        if (ordKey) workerMap.set(ordKey, worker);
-                        if (serialKey) workerMap.set(serialKey, worker);
-                        if (fullSerial) workerMap.set(fullSerial, worker);
+                        if (ordKey && !workerMap.has(ordKey)) workerMap.set(ordKey, worker);
+                        if (serialKey && !workerMap.has(serialKey)) workerMap.set(serialKey, worker);
+                        if (fullSerial && !workerMap.has(fullSerial)) workerMap.set(fullSerial, worker);
                     }
 
                     if (loc) {
-                        const locCode = loc.replace(/[^A-Z0-9]/g, '');
-                        if (ordKey) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isDaily: true, worker, raw: r });
-                        if (serialKey) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isDaily: true, worker, raw: r });
+                        const existing = locBayMap.get(ordKey) || locBayMap.get(serialKey);
+                        if (!existing || !existing.isQms) {
+                            if (ordKey) locBayMap.set(ordKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isDaily: true, worker, raw: r });
+                            if (serialKey) locBayMap.set(serialKey, { loc, area: r.GI_AREA_NAME || r.AREA_NAME, ver: r.PROD_VER_ID, isDaily: true, worker, raw: r });
+                        }
                     }
                 });
 
@@ -775,24 +867,42 @@ app.post('/api/mes-sync', async (req, res) => {
                 return false;
             }
 
-            // Sort: 1. Real active running operation (Yellow/Purple) 2. isDaily 3. Higher Serial
+            // 4-Way Smart Priority Sort:
+            // 1. QMS GIN Inspection Request Bay (Highest Ground Truth)
+            // 2. Daily Live Work Result (CN0WBFAG/H)
+            // 3. Real Active Started Status (Yellow/Purple)
+            // 4. Newest Production Order (e.g. 700004161378 / 52호기 > 700004154500 / 1109호기)
+            // 5. Newest Production Month (e.g. 202609 > 202608)
             candidates.sort((a, b) => {
-                const aActive = hasRealActiveProcess(a) ? 1 : 0;
-                const bActive = hasRealActiveProcess(b) ? 1 : 0;
-                if (aActive !== bActive) return bActive - aActive;
-
-                const aOrd = (a.salesDoc || '').trim();
-                const bOrd = (b.salesDoc || '').trim();
+                const aOrd = (a.salesDoc || a.PROD_ORD_ID || '').trim();
+                const bOrd = (b.salesDoc || b.PROD_ORD_ID || '').trim();
                 const aSerial = (a.PROD_MDL_CNT || a.serial || '').trim();
                 const bSerial = (b.PROD_MDL_CNT || b.serial || '').trim();
 
+                // 1. QMS Inspection Request Match (Highest Truth)
+                const aQms = (locBayMap.get(aOrd)?.isQms || locBayMap.get(aSerial)?.isQms) ? 1 : 0;
+                const bQms = (locBayMap.get(bOrd)?.isQms || locBayMap.get(bSerial)?.isQms) ? 1 : 0;
+                if (aQms !== bQms) return bQms - aQms;
+
+                // 2. Daily Active
                 const aDaily = (locBayMap.get(aOrd)?.isDaily || locBayMap.get(aSerial)?.isDaily) ? 1 : 0;
                 const bDaily = (locBayMap.get(bOrd)?.isDaily || locBayMap.get(bSerial)?.isDaily) ? 1 : 0;
                 if (aDaily !== bDaily) return bDaily - aDaily;
 
-                const aNum = parseInt(aSerial.replace(/\D/g, '')) || 0;
-                const bNum = parseInt(bSerial.replace(/\D/g, '')) || 0;
-                if (aNum !== bNum) return bNum - aNum;
+                // 3. Real Active Started Status
+                const aActive = hasRealActiveProcess(a) ? 1 : 0;
+                const bActive = hasRealActiveProcess(b) ? 1 : 0;
+                if (aActive !== bActive) return bActive - aActive;
+
+                // 4. Newest Production Order ID
+                const aOrdNum = parseInt(aOrd.replace(/\D/g, '')) || 0;
+                const bOrdNum = parseInt(bOrd.replace(/\D/g, '')) || 0;
+                if (aOrdNum !== bOrdNum) return bOrdNum - aOrdNum;
+
+                // 5. Newest Production Month
+                const aMon = parseInt((a.PROD_YYYYMM || '').replace(/\D/g, '')) || 0;
+                const bMon = parseInt((b.PROD_YYYYMM || '').replace(/\D/g, '')) || 0;
+                if (aMon !== bMon) return bMon - aMon;
 
                 return 0;
             });
