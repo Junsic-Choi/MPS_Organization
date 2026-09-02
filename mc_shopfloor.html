@@ -1822,21 +1822,32 @@
             if (Array.isArray(routingSteps) && routingSteps.length > 0) {
                 if (badge) badge.textContent = `[실제 MES 라우팅 (${routingSteps.length}단계)]`;
 
-                let hasMatched = false;
-                let optionsHtml = routingSteps.map(s => {
+                // 1) Find exact code match first
+                let targetIdx = routingSteps.findIndex(s => (s.code || '').trim().toUpperCase() === cleanCurr);
+                
+                // 2) If not found, try normalized code equality (exact code, no substring)
+                if (targetIdx === -1 && normCurr) {
+                    targetIdx = routingSteps.findIndex(s => {
+                        const sCode = (s.code || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
+                        return sCode === normCurr;
+                    });
+                }
+                
+                // 3) If still not found, check if any step is currently in START / RUN status
+                if (targetIdx === -1) {
+                    targetIdx = routingSteps.findIndex(s => s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
+                }
+
+                let optionsHtml = routingSteps.map((s, idx) => {
                     const sCode = (s.code || '').trim().toUpperCase();
-                    const normCode = sCode.replace(/[\s\-_]/g, '');
                     const sName = s.name || `[${s.code}] ${s.code}`;
-                    
-                    let isSelected = false;
-                    if (!hasMatched && normCurr && (normCurr === normCode || normCurr.startsWith(normCode) || normCode.startsWith(normCurr) || sName.toUpperCase().replace(/[\s\-_]/g, '').includes(normCurr))) {
-                        isSelected = true;
-                        hasMatched = true;
-                    }
-                    return `<option value="${s.code}" ${isSelected ? 'selected' : ''}>${sName}</option>`;
+                    const isSelected = (idx === targetIdx);
+                    const isLiveRunning = (s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
+                    const runningTag = isLiveRunning ? ' ⚡ (현장 가동중)' : '';
+                    return `<option value="${s.code}" ${isSelected ? 'selected' : ''}>${sName}${runningTag}</option>`;
                 }).join('');
 
-                if (!hasMatched && cleanCurr) {
+                if (targetIdx === -1 && cleanCurr) {
                     optionsHtml = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] 실시간 MES 공정</option>` + optionsHtml;
                 }
 
@@ -1848,21 +1859,22 @@
             const config = getProcessConfigForModel(modelName);
             if (badge) badge.textContent = `[${config.badge}]`;
 
-            let hasMatched = false;
-            let optionsHtml = config.steps.map(s => {
+            let targetIdx = config.steps.findIndex(s => (s.code || '').trim().toUpperCase() === cleanCurr);
+            if (targetIdx === -1 && normCurr) {
+                targetIdx = config.steps.findIndex(s => {
+                    const sCode = (s.code || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
+                    return sCode === normCurr;
+                });
+            }
+
+            let optionsHtml = config.steps.map((s, idx) => {
                 const sCode = (s.code || '').trim().toUpperCase();
-                const normCode = sCode.replace(/[\s\-_]/g, '');
-                
-                let isSelected = false;
-                if (!hasMatched && normCurr && (normCurr === normCode || normCurr.startsWith(normCode) || normCode.startsWith(normCurr) || s.name.toUpperCase().replace(/[\s\-_]/g, '').includes(normCurr))) {
-                    isSelected = true;
-                    hasMatched = true;
-                }
+                const isSelected = (idx === targetIdx);
                 return `<option value="${s.code}" ${isSelected ? 'selected' : ''}>${s.name}</option>`;
             }).join('');
 
             // Fallback for custom MES process code: insert in logically accurate sequence
-            if (!hasMatched && cleanCurr) {
+            if (targetIdx === -1 && cleanCurr) {
                 if (cleanCurr.includes('ATC') || cleanCurr.includes('MAG') || cleanCurr.includes('TOOL')) {
                     // ATC Option: EIF 이전 공정 (3~4일차 부근)
                     const atcOption = `<option value="${cleanCurr}" selected>⚡ [${cleanCurr}] ATC 매거진 조립 (EIF 이전 공정)</option>`;

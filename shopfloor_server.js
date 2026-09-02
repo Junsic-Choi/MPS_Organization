@@ -53,7 +53,16 @@ app.get('/api/shopfloor', (req, res) => {
         if (fs.existsSync(DATA_FILE)) {
             const content = fs.readFileSync(DATA_FILE, 'utf8');
             const data = JSON.parse(content);
-            return res.json({ success: true, bays: data.bays || [] });
+            const baysList = data.bays || [];
+            baysList.forEach(b => {
+                if (b.source === 'MES' && Array.isArray(b.routingSteps) && b.routingSteps.length > 0) {
+                    const active = b.routingSteps.find(s => s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
+                    if (active && active.code) {
+                        b.currentProcess = active.code;
+                    }
+                }
+            });
+            return res.json({ success: true, bays: baysList });
         }
         // If file doesn't exist, create with clean empty templates
         const defaultBays = getDefaultBays();
@@ -976,7 +985,6 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.salesDoc = locMatch.salesDoc || '';
                 targetBay.customer = locMatch.customer || targetBay.customer || '';
                 targetBay.planMonth = locMatch.planMonth || targetBay.planMonth || '';
-                targetBay.currentProcess = locMatch.CUR_PROC_ID || locMatch.PROC_ID || 'BASE';
                 targetBay.startDate = locMatch.START_PLAN_DATE || targetBay.startDate;
                 targetBay.deliveryDate = locMatch.SHIP_TARGET_DATE || targetBay.deliveryDate;
                 targetBay.spec = locMatch.MTRL_ID || targetBay.spec;
@@ -990,6 +998,11 @@ app.post('/api/mes-sync', async (req, res) => {
                 targetBay.source = 'MES';
                 targetBay.isShipped = false;
                 targetBay.routingSteps = locMatch.routingSteps || orderRoutingMap.get(ordKey) || orderRoutingMap.get(serialKey) || [];
+                
+                // Prioritize real-time active (START / RUN / CONT) process from actual routing
+                const activeFromRouting = (targetBay.routingSteps || []).find(s => s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
+                targetBay.currentProcess = (activeFromRouting && activeFromRouting.code) || locMatch.CUR_PROC_ID || locMatch.PROC_ID || 'BASE';
+
                 if (locMatch.PROD_ORD_STATUS_NAME) {
                     targetBay.issue = `[상태: ${locMatch.PROD_ORD_STATUS_NAME}]`;
                 }
@@ -999,17 +1012,19 @@ app.post('/api/mes-sync', async (req, res) => {
                     const cOrd = (c.salesDoc || '').trim();
                     const cSerial = (c.PROD_MDL_CNT || c.serial || '').trim();
                     const cWorker = c.worker || (cOrd && workerMap.get(cOrd)) || (cSerial && workerMap.get(cSerial)) || c.WORKER_NAME || '';
+                    const cRouting = c.routingSteps || orderRoutingMap.get(cOrd) || orderRoutingMap.get(cSerial) || [];
+                    const cActive = cRouting.find(s => s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
                     return {
                         model: c.model || '',
                         serial: c.serial || c.PROD_MDL_CNT || '',
                         salesDoc: c.salesDoc || '',
-                        currentProcess: c.CUR_PROC_ID || c.PROC_ID || '',
+                        currentProcess: (cActive && cActive.code) || c.CUR_PROC_ID || c.PROC_ID || '',
                         worker: cWorker,
                         customer: c.customer || '',
                         planMonth: c.planMonth || '',
                         spec: c.MTRL_ID || '',
                         issue: c.PROD_ORD_STATUS_NAME ? `[상태: ${c.PROD_ORD_STATUS_NAME}]` : '',
-                        routingSteps: c.routingSteps || orderRoutingMap.get(cOrd) || orderRoutingMap.get(cSerial) || []
+                        routingSteps: cRouting
                     };
                 });
 
@@ -1035,15 +1050,18 @@ app.post('/api/mes-sync', async (req, res) => {
                 });
 
                 if (match) {
-                    targetBay.currentProcess = match.CUR_PROC_ID || match.PROC_ID || targetBay.currentProcess || 'BASE';
+                    const ordKey = (match.salesDoc || '').trim();
+                    const serialKey = (match.PROD_MDL_CNT || match.serial || '').trim();
+                    targetBay.routingSteps = match.routingSteps || orderRoutingMap.get(ordKey) || orderRoutingMap.get(serialKey) || targetBay.routingSteps || [];
+                    
+                    const matchActive = (targetBay.routingSteps || []).find(s => s.status === 'START' || s.status === 'RUN' || s.status === 'CONT');
+                    targetBay.currentProcess = (matchActive && matchActive.code) || match.CUR_PROC_ID || match.PROC_ID || targetBay.currentProcess || 'BASE';
+                    
                     targetBay.startDate = match.START_PLAN_DATE || targetBay.startDate;
                     targetBay.deliveryDate = match.SHIP_TARGET_DATE || targetBay.deliveryDate;
                     targetBay.spec = match.MTRL_ID || targetBay.spec;
                     targetBay.customer = match.customer || targetBay.customer || '';
                     targetBay.planMonth = match.planMonth || targetBay.planMonth || '';
-
-                    const ordKey = (match.salesDoc || '').trim();
-                    const serialKey = (match.PROD_MDL_CNT || match.serial || '').trim();
                     const workerFound = match.worker || (ordKey && workerMap.get(ordKey)) || (serialKey && workerMap.get(serialKey)) || match.WORKER_NAME || match.WORKER || match.USER_NAME || match.CHARGER || '';
                     if (workerFound) targetBay.worker = workerFound;
 
