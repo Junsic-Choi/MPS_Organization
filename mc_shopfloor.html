@@ -1725,22 +1725,22 @@
                 name: 'DVF4000 / DVF5000 5축 (16일 표준 공순)',
                 badge: '16일 L/T (DVF 5축 계열)',
                 steps: [
-                    { seq: '0010', code: 'GCLM1',   alias: ['GCLM1', 'S-MOTORSUB'],       name: '1일차 / GCLM1 | Spindle Head Sub 조립 (S-MOTORSUB)' },
-                    { seq: '0020', code: 'GCLM2',   alias: ['GCLM2', 'GRTAM'],            name: '2일차 / GCLM2 | Core MC 레벨링 & 로터리테이블 (GRTAM)' },
-                    { seq: '0030', code: 'GEB',     alias: ['GEB', 'GCLPIP', 'ATC'],      name: '3일차 / GEB | ATC 조립 & 오일쿨러 & 배관 (GCLPIP)' },
-                    { seq: '0040', code: 'EIF1',    alias: ['EIF1', 'SCALE'],             name: '4일차 / EIF1 | 스케일 조립 & 전장 인터페이스 (EIF1)' },
-                    { seq: '0050', code: 'EIF2',    alias: ['EIF2', 'EIF3'],              name: '5일차 / EIF2 | 전장 결선 & 케이블베이어 (EIF2/3)' },
-                    { seq: '0060', code: 'EAD',     alias: ['EAD', 'EAD1'],               name: '6일차 / EAD | 전장 시운전 & I/O 체크 (EAD)' },
-                    { seq: '0070', code: 'GAJTBAR', alias: ['GAJTBAR', 'GAJ1', 'XYZHOME'],name: '7일차 / GAJTBAR | 장비 정도 & 원점셋팅 (GAJTBAR)' },
-                    { seq: '0080', code: 'GAJACC',  alias: ['GAJACC', 'GAJ2'],            name: '8일차 / GAJACC | Table 5축 분할 정도 & 직각도 (GAJACC)' },
-                    { seq: '0090', code: 'GAJATC',  alias: ['GAJATC', 'GAJ3', 'GAJLASER'],name: '9일차 / GAJATC | 레이저 측정 & ATC 정도 (GAJATC)' },
-                    { seq: '0100', code: 'GIN',     alias: ['GIN', 'GIN1', 'GIN2'],       name: '10일차 / GIN | 기능/정도검사 & Test Cutting (GIN)' },
-                    { seq: '0110', code: 'GSG',     alias: ['GSG', 'GUARD'],              name: '11일차 / GSG | Splash Guard 외주 조립 (GSG)' },
-                    { seq: '0120', code: 'GMC',     alias: ['GMC', 'COVER'],              name: '12일차 / GMC | Multi Cover & Head Cover 조립 (GMC)' },
-                    { seq: '0130', code: 'GRNE1',   alias: ['GRNE1', 'GRN1', 'GRNREADY'], name: '13일차 / GRNE1 | 절삭유 Tank & 옵션 작업 (GRN1)' },
-                    { seq: '0140', code: 'GRNE2',   alias: ['GRNE2', 'GRN2', 'GRN'],      name: '14일차 / GRNE2 | 명판 & 잔여 커버 조립 (GRN2)' },
-                    { seq: '0150', code: 'OINS',    alias: ['OINS', '출검'],              name: '15일차 / OINS | 최종 출하검사 (OINS)' },
-                    { seq: '0160', code: 'LK',      alias: ['LK', '완료'],                name: '16일차 / LK | 축고정 & 최종 완료 (LK)' }
+                    { seq: '0010', code: 'GCLM1',   alias: ['GCLM1', 'GCL0', 'USHEAD', 'S-MOTORSUB'], name: '1일차 / GCLM1 | Spindle Head Sub 조립 (S-MOTORSUB)' },
+                    { seq: '0020', code: 'GCLM2',   alias: ['GCLM2', 'GCOREMC', 'GRTAM'],            name: '2일차 / GCLM2 | Core MC 레벨링 & 로터리테이블 (GRTAM)' },
+                    { seq: '0030', code: 'GEB',     alias: ['GEB', 'GCLPIP', 'ATC'],                  name: '3일차 / GEB | ATC 조립 & 오일쿨러 & 배관 (GCLPIP)' },
+                    { seq: '0040', code: 'EIF1',    alias: ['EIF1', 'EIF', 'SCALE'],                  name: '4일차 / EIF1 | 스케일 조립 & 전장 인터페이스 (EIF1)' },
+                    { seq: '0050', code: 'EIF2',    alias: ['EIF2', 'EIF3'],                          name: '5일차 / EIF2 | 전장 결선 & 케이블베이어 (EIF2/3)' },
+                    { seq: '0060', code: 'EAD',     alias: ['EAD', 'EAD1'],                           name: '6일차 / EAD | 전장 시운전 & I/O 체크 (EAD)' },
+                    { seq: '0070', code: 'GAJACC',  alias: ['GAJACC', 'GAJ1', 'GAJTBAR', 'XYZHOME'],  name: '7일차 / GAJACC | 장비 정도 & 원점셋팅 (GAJTBAR/GAJACC)' },
+                    { seq: '0080', code: 'GAJTABLE',alias: ['GAJTABLE', 'GAJ2', 'TABLE', 'TOOL MEASURE'], name: '8일차 / GAJTABLE | Table 정도작업 (상면 평행 & B/C축 직각도)' },
+                    { seq: '0090', code: 'GAJLASER',alias: ['GAJLASER', 'GAJ3', 'CSWRITE1', 'SPINDLE'], name: '9일차 / GAJLASER | 레이저 피치 측정 & 스핀들 발란싱' },
+                    { seq: '0100', code: 'GIN',     alias: ['GIN', 'GIN1', 'GIN2'],                   name: '10일차 / GIN | 기능/정도검사 & Test Cutting (GIN)' },
+                    { seq: '0110', code: 'GSG',     alias: ['GSG', 'GUARD', 'GSG TABLE CHECK'],       name: '11일차 / GSG | Splash Guard 외주 조립 (GSG)' },
+                    { seq: '0120', code: 'GMC',     alias: ['GMC', 'COVER', 'MULTI COVER'],           name: '12일차 / GMC | Multi Cover & Head Cover 조립 (GMC)' },
+                    { seq: '0130', code: 'GRNREADY',alias: ['GRNREADY', 'GRNE1', 'GCOVER', 'GRN1'],   name: '13일차 / GRNREADY | 절삭유 Tank & 잔여커버 조립 (GRN1)' },
+                    { seq: '0140', code: 'GRN',     alias: ['GRN', 'GRNE2', 'GRN2', 'CSWRITE2', 'GOT'], name: '14일차 / GRN | 표준성 옵션 작업 & 도어 조정 (GRN2)' },
+                    { seq: '0150', code: 'OINS',    alias: ['OINS', '출검'],                          name: '15일차 / OINS | 최종 출하검사 (OINS)' },
+                    { seq: '0160', code: 'LK',      alias: ['LK', '완료'],                            name: '16일차 / LK | 축고정 & 최종 완료 (LK)' }
                 ]
             },
             'NHM6300': {
@@ -1840,13 +1840,13 @@
             if (targetCode) {
                 matchedIndex = config.steps.findIndex(s => s.code === targetCode);
                 if (matchedIndex === -1) {
-                    matchedIndex = config.steps.findIndex(s => s.alias && s.alias.some(a => a === targetCode || targetCode.startsWith(a)));
+                    matchedIndex = config.steps.findIndex(s => s.alias && s.alias.some(a => a === targetCode || targetCode.includes(a) || a.includes(targetCode)));
                 }
             }
 
             // Fallback: if not matched, try active MES code
             if (matchedIndex === -1 && activeMesCode) {
-                matchedIndex = config.steps.findIndex(s => s.code === activeMesCode || (s.alias && s.alias.some(a => a === activeMesCode)));
+                matchedIndex = config.steps.findIndex(s => s.code === activeMesCode || (s.alias && s.alias.some(a => a === activeMesCode || activeMesCode.includes(a) || a.includes(activeMesCode))));
             }
 
             // Default to 1일차 if still nothing
@@ -2519,7 +2519,7 @@
                             const isMes = bay.source === 'MES';
                             const modelCfg = getProcessConfigForModel(bay.model);
                             const cleanProcCode = (bay.currentProcess || '').trim().toUpperCase();
-                            const stepFound = modelCfg.steps.find(s => s.code === cleanProcCode || (s.alias && s.alias.includes(cleanProcCode)));
+                            const stepFound = modelCfg.steps.find(s => s.code === cleanProcCode || (s.alias && s.alias.some(a => a === cleanProcCode || cleanProcCode.includes(a) || a.includes(cleanProcCode))));
                             const procText = stepFound ? stepFound.name : `[${cleanProcCode || 'BASE'}] 조립 진행`;
 
                             let sourceBadge = '';

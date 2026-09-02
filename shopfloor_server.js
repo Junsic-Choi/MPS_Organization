@@ -548,6 +548,8 @@ app.post('/api/mes-sync', async (req, res) => {
                     if (p === 'EIF' || p === 'EIF1' || p === 'EIF2') return '전장 인터페이스 & 결선 (EIF)';
                     if (p === 'EAD') return '전장 시운전 & FSSB 파라미터 (EAD)';
                     if (p.includes('TRANS') || p.includes('XYHOME') || p.includes('XYZHOME')) return '원점 셋팅 & 팔레트 안착 (TRANS/XYHOME)';
+                    if (p.includes('GAJTABLE') || (p.includes('TABLE') && p.includes('GAJ'))) return 'Table 정도작업 (상면 평행 & B/C축 직각도 & ATC Centering)';
+                    if (p.includes('TOOL MEASURE') || p.includes('TOOLMEASURE')) return '공구 길이/경 측정 장치 셋팅 (TOOL MEASURE)';
                     if (p.startsWith('GAJ') || p.includes('LASER') || p.includes('ATC') || p.includes('ACC')) return `정밀도 측정 & 레이저 보정 (${p})`;
                     if (p.includes('SELFCUTT')) return 'ATC 센터링 & 셀프컷팅 시험 (SELFCUTT)';
                     if (p.startsWith('GIN')) return `기능 검사 & 쿨런트/정도 검사 (${p})`;
