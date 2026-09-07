@@ -80,8 +80,8 @@ function extractMonth(s) {
     if (s instanceof Date) return s.getMonth() + 1;
     
     const str = s.toString().trim();
-    // 2026.05 or 26.05
-    const dotMatch = str.match(/(?:20)?26\.(\d+)/);
+    // 2026.05 or 26.05 or 27.01
+    const dotMatch = str.match(/(?:20)?\d{2}\.(\d+)/);
     if (dotMatch) {
         const n = parseInt(dotMatch[1]);
         if (n >= 1 && n <= 12) return n;
