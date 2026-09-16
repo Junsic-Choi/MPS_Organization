@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
-const SAP_EXPORT_FILE = "C:\\Users\\i0215099\\Documents\\SAP\\SAP GUI\\export.MHTML";
+const SAP_GUI_DIR = "C:\\Users\\i0215099\\Documents\\SAP\\SAP GUI";
 const WORKSPACE_DIR = path.resolve(__dirname, "..");
 
 let currentSyncState = {
@@ -27,21 +27,26 @@ function extractSalesDocsFromMhtml(filePath) {
         const tableMatch = content.match(/<table[^>]*>([\s\S]*?)<\/table>/i);
         if (!tableMatch) return [];
         const rows = tableMatch[1].match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-        
+        if (rows.length < 2) return [];
+
         let salesDocIdx = -1;
         for (let i = 0; i < Math.min(10, rows.length); i++) {
-            const cells = (rows[i].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim().toUpperCase());
+            const cells = (rows[i].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || [])
+                .map(c => c.replace(/<[^>]+>/g, "").trim().toUpperCase());
             const idx = cells.findIndex(c => c.includes("SALES DOC") || c.includes("SALESDOC") || c.includes("판매문서") || c.includes("S/O ORDER"));
             if (idx !== -1) {
                 salesDocIdx = idx;
                 break;
             }
         }
-        if (salesDocIdx === -1) return [];
-        
+        if (salesDocIdx === -1) {
+            salesDocIdx = 11;
+        }
+
         const docs = new Set();
         for (let i = 1; i < rows.length; i++) {
-            const cells = (rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
+            const cells = (rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [])
+                .map(c => c.replace(/<[^>]+>/g, "").trim());
             const doc = cells[salesDocIdx];
             if (doc && /^\d{5,12}$/.test(doc)) {
                 docs.add(doc);
@@ -54,65 +59,97 @@ function extractSalesDocsFromMhtml(filePath) {
     }
 }
 
-async function waitForExportFile(maxWaitSec = 90) {
+async function waitForNewExportFile(sinceTimestamp, maxWaitSec = 90) {
     const startTime = Date.now();
+    let lastPath = null;
     let lastSize = -1;
     let stableCount = 0;
 
     while ((Date.now() - startTime) < (maxWaitSec * 1000)) {
         await new Promise(r => setTimeout(r, 1000));
-        if (fs.existsSync(SAP_EXPORT_FILE)) {
-            try {
-                const stat = fs.statSync(SAP_EXPORT_FILE);
-                if (stat.size > 1000 && stat.size === lastSize) {
+        if (!fs.existsSync(SAP_GUI_DIR)) continue;
+
+        try {
+            const files = fs.readdirSync(SAP_GUI_DIR)
+                .filter(f => /\.mhtml$/i.test(f))
+                .map(f => {
+                    const full = path.join(SAP_GUI_DIR, f);
+                    const stat = fs.statSync(full);
+                    return { full, size: stat.size, mtime: stat.mtimeMs };
+                })
+                .filter(f => f.mtime >= sinceTimestamp - 3000 && f.size > 1000)
+                .sort((a, b) => b.mtime - a.mtime);
+
+            if (files.length > 0) {
+                const newest = files[0];
+                if (newest.full === lastPath && newest.size === lastSize) {
                     stableCount++;
                     if (stableCount >= 2) {
-                        return true;
+                        return newest.full;
                     }
                 } else {
-                    lastSize = stat.size;
+                    lastPath = newest.full;
+                    lastSize = newest.size;
                     stableCount = 0;
                 }
-            } catch (e) {}
-        }
+            }
+        } catch (e) {}
     }
-    return false;
+    return null;
 }
 
-function clearSapExportFile() {
-    if (fs.existsSync(SAP_EXPORT_FILE)) {
-        try { fs.unlinkSync(SAP_EXPORT_FILE); } catch (e) {}
-    }
-}
-
-function copyExportToWorkspace(targetFilename) {
+function copyExportToWorkspace(sourcePath, targetFilename) {
     const dest = path.join(WORKSPACE_DIR, targetFilename);
-    fs.copyFileSync(SAP_EXPORT_FILE, dest);
+    fs.copyFileSync(sourcePath, dest);
     const sizeMb = (fs.statSync(dest).size / 1024 / 1024).toFixed(2);
-    console.log("[Sync] Saved " + targetFilename + " (" + sizeMb + " MB)");
+    console.log(`[Sync] Saved ${targetFilename} (${sizeMb} MB) from ${sourcePath}`);
+    try { fs.unlinkSync(sourcePath); } catch (e) {}
     return dest;
 }
 
 function setClipboardText(textList) {
-    const tmpFile = path.join(__dirname, "temp_clipboard.txt");
-    fs.writeFileSync(tmpFile, textList.join("\r\n"), "utf8");
-    const safePath = tmpFile.replace(/\\/g, "/");
-    const psCmd = 'powershell -NoProfile -Command "Set-Clipboard -Value (Get-Content -Raw -Encoding UTF8 \'' + safePath + '\')"';
-    execSync(psCmd, { stdio: "ignore" });
+    if (!textList || textList.length === 0) return;
+    const data = textList.join("\r\n");
+    execSync("clip", { input: data });
 }
 
 function getDefaultMonths() {
     const now = new Date();
-    const y1 = now.getFullYear();
-    const m1 = now.getMonth();
-    const dStart = new Date(y1, m1 - 1, 1);
-    const dEnd = new Date(y1, m1 + 4, 1);
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const dStart = new Date(y, m - 1, 1);
+    const dEnd = new Date(y, m + 4, 1);
     
     const fmt = d => d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0");
     return {
         start: fmt(dStart),
         end: fmt(dEnd)
     };
+}
+
+function runVbs(vbsFile, args = []) {
+    const vbsPath = path.join(__dirname, vbsFile);
+    const quotedArgs = args.map(a => `"${a}"`).join(" ");
+    const cmd = `cscript //Nologo "${vbsPath}" ${quotedArgs}`;
+    try {
+        const out = execSync(cmd, { encoding: "utf8" });
+        return out;
+    } catch (err) {
+        const out = ((err.stdout || "") + " " + (err.stderr || "")).trim();
+        if (out.includes("ERROR_NO_SAPGUI")) {
+            throw new Error("SAP Logon이 실행되어 있지 않습니다. SAP Logon을 먼저 실행하고 로그인해 주세요.");
+        }
+        if (out.includes("ERROR_NO_SCRIPTING")) {
+            throw new Error("SAP GUI 스크립팅이 비활성화되어 있습니다. SAP 옵션에서 스크립팅 설정을 확인해 주세요.");
+        }
+        if (out.includes("ERROR_NO_CONNECTION")) {
+            throw new Error("로그인된 SAP 연결이 없습니다. SAP 시스템에 로그인해 주세요.");
+        }
+        if (out.includes("ERROR_NO_SESSION")) {
+            throw new Error("활성화된 SAP 세션 창(화면)이 없습니다.");
+        }
+        throw new Error(out || err.message);
+    }
 }
 
 async function runSapSync(options = {}) {
@@ -138,85 +175,82 @@ async function runSapSync(options = {}) {
 
     try {
         console.log("\n=======================================================");
-        console.log("  [SAP One-Stop Sync] Starting Sync for " + startMonth + " ~ " + endMonth);
+        console.log(`  [SAP One-Stop Sync] Starting Sync for ${startMonth} ~ ${endMonth}`);
         console.log("=======================================================\n");
 
         // --- STEP 1: ZPPM6680 for 1840 ---
         currentSyncState.currentStep = 1;
-        currentSyncState.statusText = "[1/4] 남산(1840) 생산계획 데이터 수집 중 (ZPPM6680)...";
+        currentSyncState.statusText = `[1/4] 안산(1840) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
-        clearSapExportFile();
-        const vbs1 = path.join(__dirname, "zppm6680.vbs");
-        execSync('cscript //Nologo "' + vbs1 + '" 1840 ' + startMonth + ' ' + endMonth);
+        let stepStart = Date.now();
+        runVbs("zppm6680.vbs", ["1840", startMonth, endMonth]);
         
-        const ok1 = await waitForExportFile(90);
-        if (!ok1) throw new Error("1840 생산계획 MHTML 파일 생성 대기 시간 초과");
-        copyExportToWorkspace("sap_1840.mhtml");
+        const file1 = await waitForNewExportFile(stepStart, 90);
+        if (!file1) throw new Error("1840 생산계획 MHTML 파일 생성 대기시간 초과 (90초)");
+        copyExportToWorkspace(file1, "sap_1840.mhtml");
         
         const docs1840 = extractSalesDocsFromMhtml(path.join(WORKSPACE_DIR, "sap_1840.mhtml"));
-        console.log("[Sync] Extracted " + docs1840.length + " Sales Docs for 1840");
+        console.log(`[Sync] Extracted ${docs1840.length} Sales Docs for 1840`);
         currentSyncState.results.docs1840Count = docs1840.length;
 
         // --- STEP 2: ZPPR6470 for 1840 ---
         currentSyncState.currentStep = 2;
-        currentSyncState.statusText = "[2/4] 남산(1840) 가공품 소요량 데이터 수집 중 (ZPPR6470)...";
+        currentSyncState.statusText = `[2/4] 안산(1840) 가공품 소요량 데이터 수집 중 (${docs1840.length}개 오더, ZPPR6470)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
         if (docs1840.length > 0) {
             setClipboardText(docs1840);
-            clearSapExportFile();
-            const vbs2 = path.join(__dirname, "zppr6470.vbs");
-            execSync('cscript //Nologo "' + vbs2 + '" 1840 e "" 18');
+            stepStart = Date.now();
+            runVbs("zppr6470.vbs", ["1840", "e", "", "18"]);
             
-            const ok2 = await waitForExportFile(90);
-            if (!ok2) throw new Error("1840 가공품 소요량 MHTML 파일 생성 대기 시간 초과");
-            copyExportToWorkspace("sap_component_1840.mhtml");
+            const file2 = await waitForNewExportFile(stepStart, 120);
+            if (!file2) throw new Error("1840 가공품 소요량 MHTML 파일 생성 대기시간 초과 (120초)");
+            copyExportToWorkspace(file2, "sap_component_1840.mhtml");
         } else {
             console.warn("[Sync] No Sales Docs found for 1840, skipping ZPPR6470");
         }
 
         // --- STEP 3: ZPPM6680 for 1842 ---
         currentSyncState.currentStep = 3;
-        currentSyncState.statusText = "[3/4] 성주(1842) 생산계획 데이터 수집 중 (ZPPM6680)...";
+        currentSyncState.statusText = `[3/4] 진주(1842) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
-        clearSapExportFile();
-        execSync('cscript //Nologo "' + vbs1 + '" 1842 ' + startMonth + ' ' + endMonth);
+        stepStart = Date.now();
+        runVbs("zppm6680.vbs", ["1842", startMonth, endMonth]);
         
-        const ok3 = await waitForExportFile(90);
-        if (!ok3) throw new Error("1842 생산계획 MHTML 파일 생성 대기 시간 초과");
-        copyExportToWorkspace("sap_1842.mhtml");
+        const file3 = await waitForNewExportFile(stepStart, 90);
+        if (!file3) throw new Error("1842 생산계획 MHTML 파일 생성 대기시간 초과 (90초)");
+        copyExportToWorkspace(file3, "sap_1842.mhtml");
 
         const docs1842 = extractSalesDocsFromMhtml(path.join(WORKSPACE_DIR, "sap_1842.mhtml"));
-        console.log("[Sync] Extracted " + docs1842.length + " Sales Docs for 1842");
+        console.log(`[Sync] Extracted ${docs1842.length} Sales Docs for 1842`);
         currentSyncState.results.docs1842Count = docs1842.length;
 
         // --- STEP 4: ZPPR6470 for 1842 ---
         currentSyncState.currentStep = 4;
-        currentSyncState.statusText = "[4/4] 성주(1842) 가공품 소요량 데이터 수집 중 (ZPPR6470)...";
+        currentSyncState.statusText = `[4/4] 진주(1842) 가공품 소요량 데이터 수집 중 (${docs1842.length}개 오더, ZPPR6470)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
         if (docs1842.length > 0) {
             setClipboardText(docs1842);
-            clearSapExportFile();
-            const vbs4 = path.join(__dirname, "zppr6470.vbs");
-            execSync('cscript //Nologo "' + vbs4 + '" "" F 44 18');
+            stepStart = Date.now();
+            runVbs("zppr6470.vbs", ["", "F", "44", "18"]);
             
-            const ok4 = await waitForExportFile(90);
-            if (!ok4) throw new Error("1842 가공품 소요량 MHTML 파일 생성 대기 시간 초과");
-            copyExportToWorkspace("sap_component_1842.mhtml");
+            const file4 = await waitForNewExportFile(stepStart, 120);
+            if (!file4) throw new Error("1842 가공품 소요량 MHTML 파일 생성 대기시간 초과 (120초)");
+            copyExportToWorkspace(file4, "sap_component_1842.mhtml");
         } else {
             console.warn("[Sync] No Sales Docs found for 1842, skipping ZPPR6470");
         }
 
-        // Return SAP to home
+        // Return SAP to home screen
         try {
-            execSync('cscript //Nologo "' + path.join(__dirname, "return_home.vbs") + '"');
+            runVbs("return_home.vbs");
         } catch (e) {}
 
         currentSyncState.statusText = "✅ SAP 최신 데이터 동기화 완료! (4개 파일 갱신됨)";
@@ -234,10 +268,6 @@ async function runSapSync(options = {}) {
         throw err;
     } finally {
         currentSyncState.running = false;
-        const tmpFile = path.join(__dirname, "temp_clipboard.txt");
-        if (fs.existsSync(tmpFile)) {
-            try { fs.unlinkSync(tmpFile); } catch (e) {}
-        }
     }
 
     return currentSyncState;

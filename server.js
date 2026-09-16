@@ -215,30 +215,6 @@ app.get('/api/load-sap/:type', (req, res) => {
     }
 });
 
-// SAP 최신 데이터 원클릭 자동 동기화 API
-const { runSapSync, getSyncStatus } = require('./sap_automation/sync_engine');
-
-app.post('/api/sync-sap', (req, res) => {
-    try {
-        const { startMonth, endMonth } = req.body || {};
-        const status = getSyncStatus();
-        if (status.running) {
-            return res.status(409).json({ success: false, error: '이미 SAP 동기화 작업이 진행 중입니다.', status });
-        }
-        runSapSync({ startMonth, endMonth }).catch(err => {
-            console.error('[api/sync-sap Background Error]', err.message);
-        });
-        res.json({ success: true, message: 'SAP 동기화가 백그라운드에서 시작되었습니다.' });
-    } catch (err) {
-        console.error('[api/sync-sap] Failed to start SAP sync:', err);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get('/api/sync-sap/status', (req, res) => {
-    res.json(getSyncStatus());
-});
-
 // Heartbeat state
 let lastHeartbeat = Date.now();
 let hasReceivedHeartbeat = false;
@@ -248,6 +224,49 @@ app.post('/api/heartbeat', (req, res) => {
     hasReceivedHeartbeat = true;
     res.sendStatus(200);
 });
+
+// SAP ERP 자동 동기화 API
+const { runSapSync, getSyncStatus } = require('./sap_automation/sync_engine');
+
+app.post('/api/sync-sap', async (req, res) => {
+    try {
+        const { startMonth, endMonth } = req.body || {};
+        const status = getSyncStatus();
+        if (status.running) {
+            return res.json({ success: true, message: '이미 SAP 동기화가 진행 중입니다.', status });
+        }
+        // Run in background so request doesn't timeout
+        runSapSync({ startMonth, endMonth }).catch(e => {
+            console.error('[SAP Sync Error in background]:', e.message);
+        });
+        res.json({ success: true, message: 'SAP 동기화가 시작되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/sync-sap/status', (req, res) => {
+    try {
+        const status = getSyncStatus();
+        const files = {};
+        ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'].forEach(fn => {
+            const fp = path.join(__dirname, fn);
+            if (fs.existsSync(fp)) {
+                const stat = fs.statSync(fp);
+                files[fn] = {
+                    size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+                    mtime: stat.mtime
+                };
+            } else {
+                files[fn] = null;
+            }
+        });
+        res.json({ success: true, ...status, files });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // 서버 종료 API
 app.post('/api/shutdown', (req, res) => {

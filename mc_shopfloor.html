@@ -733,6 +733,7 @@
             <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;">
                 <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">📋 계획:</span>
                 <button class="btn" id="mps-sync-btn" onclick="syncMpsPlan()" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1;" title="SAP 1840 생산계획표를 읽어 배정 후보 목록을 갱신합니다">🔄 MPS 배정계획 갱신</button>
+                <button class="btn" id="sap-erp-direct-sync-btn" onclick="syncSapErpDirectly()" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 700; background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd;" title="SAP ERP(ZPPM6680/ZPPR6470)에서 최신 데이터를 직접 원클릭 자동 수집합니다">🔄 SAP ERP 최신 수집</button>
             </div>
 
             <!-- 현장 실적 그룹 -->
@@ -1877,10 +1878,13 @@
             initAutoSync();
             
             // Heartbeat
-            fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-            setInterval(() => {
-                fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-            }, 10000);
+            const pingHeartbeat = () => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+            pingHeartbeat();
+            setInterval(pingHeartbeat, 10000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') pingHeartbeat();
+            });
+            window.addEventListener('focus', pingHeartbeat);
         });
 
         // Load Bays from Server (Port 8895)
@@ -1928,6 +1932,76 @@
             } finally {
                 if (btn && isManual) {
                     btn.textContent = '🔄 MPS 배정계획 갱신';
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function syncSapErpDirectly() {
+            const btn = document.getElementById('sap-erp-direct-sync-btn');
+            const confirmMsg = 
+                "SAP ERP 최신 소요 결합 데이터를 지금 즉시 자동으로 수집하시겠습니까?\n\n" +
+                "■ 원스톱 수집 파이프라인:\n" +
+                " 1. 안산(1840) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 2. 안산(1840) 가공품 소요량 데이터 수집 (ZPPR6470)\n" +
+                " 3. 진주(1842) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 4. 진주(1842) 가공품 소요량 데이터 수집 (ZPPR6470)\n\n" +
+                "※ 중요: SAP Logon이 켜져 있고 시스템에 로그인된 상태여야 합니다.";
+
+            if (!confirm(confirmMsg)) return;
+
+            if (btn) {
+                btn.textContent = '⏳ SAP 수집 중...';
+                btn.disabled = true;
+            }
+
+            try {
+                const res = await fetch('/api/sync-sap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('SAP 동기화가 시작되었습니다. 완료 후 자동으로 반영됩니다.');
+                    const timer = setInterval(async () => {
+                        try {
+                            const sRes = await fetch('/api/sync-sap/status');
+                            const sData = await sRes.json();
+                            if (sData.running) {
+                                if (btn) btn.textContent = `⏳ [${sData.currentStep}/4] 수집 중...`;
+                            } else {
+                                clearInterval(timer);
+                                if (btn) {
+                                    btn.textContent = '🔄 SAP ERP 최신 수집';
+                                    btn.disabled = false;
+                                }
+                                if (sData.error) {
+                                    alert('❌ SAP 동기화 오류: ' + sData.error);
+                                } else {
+                                    alert('✅ SAP 최신 데이터(4개 파일) 수집이 완료되었습니다!\n계획 데이터를 새로고침합니다.');
+                                    syncMpsPlan(false);
+                                }
+                            }
+                        } catch (e) {
+                            clearInterval(timer);
+                            if (btn) {
+                                btn.textContent = '🔄 SAP ERP 최신 수집';
+                                btn.disabled = false;
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    alert('동기화 실패: ' + (data.error || data.message));
+                    if (btn) {
+                        btn.textContent = '🔄 SAP ERP 최신 수집';
+                        btn.disabled = false;
+                    }
+                }
+            } catch (e) {
+                alert('서버 통신 오류: ' + e.message);
+                if (btn) {
+                    btn.textContent = '🔄 SAP ERP 최신 수집';
                     btn.disabled = false;
                 }
             }

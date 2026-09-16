@@ -783,6 +783,9 @@
                 <span id="server-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
                 <span id="server-status-text">서버 연결 정상</span>
             </div>
+            <button id="header-sap-sync-btn" onclick="triggerSapSync()" style="background: rgba(59, 130, 246, 0.25); color: #bfdbfe; border: 1px solid rgba(96, 165, 250, 0.5); padding: 0.4rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px; transition: all 0.2s;">
+                <span id="header-sap-sync-icon">🔄</span> <span>SAP 최신 동기화</span>
+            </button>
             <div class="user-info" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">
                 실시간 엔진 업데이트 완료
             </div>
@@ -806,36 +809,83 @@
                     <span style="font-size:0.9rem; color: #64748b;">(MPS2603-1, 2604-1 등 모든 표준 형식 지원)</span>
                 </p>
 
-                <!-- Two-Column Selection Area -->
-                <div style="display: flex; gap: 2rem; justify-content: center; max-width: 960px; margin: 0 auto 2rem; flex-wrap: wrap; text-align: left;">
+                <!-- Three-Column Selection Area -->
+                <div style="display: flex; gap: 1.5rem; justify-content: center; max-width: 1320px; margin: 0 auto 2rem; flex-wrap: wrap; text-align: left;">
                     
-                    <!-- Left: Upload Zone -->
-                    <div style="flex: 1.2; min-width: 320px; max-width: 460px; display: flex; flex-direction: column;">
-                        <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                    <!-- Col 1: Upload Zone -->
+                    <div style="flex: 1; min-width: 290px; max-width: 370px; display: flex; flex-direction: column;">
+                        <h3 style="color: var(--text-primary); font-size: 1.05rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                             <span>💻 로컬에서 신규 파일 업로드</span>
                         </h3>
                         <div id="drop-zone"
                             onclick="document.getElementById('file-input').click()"
-                            style="cursor:pointer; border: 2px dashed rgba(59,130,246,0.5); border-radius: 12px; padding: 2.2rem 1.5rem; background: rgba(59,130,246,0.03); transition: all 0.2s; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;"
+                            style="cursor:pointer; border: 2px dashed rgba(59,130,246,0.5); border-radius: 12px; padding: 2rem 1.2rem; background: rgba(59,130,246,0.03); transition: all 0.2s; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;"
                             ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)'; this.style.borderColor='var(--accent-color)';"
                             ondragleave="this.style.background='rgba(59,130,246,0.03)'; this.style.borderColor='rgba(59,130,246,0.5)';"
                             ondrop="handleDrop(event)">
-                            <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📂</div>
-                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.4rem; font-size: 1rem;">엑셀 파일 선택 또는 드래그</div>
-                            <div id="file-name-display" style="font-size: 0.85rem; color: var(--accent-color); margin-top: 0.3rem; word-break: break-all;">클릭하여 .xlsx 파일을 선택하세요</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.4rem;">📂</div>
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.3rem; font-size: 0.95rem;">엑셀 파일 선택 또는 드래그</div>
+                            <div id="file-name-display" style="font-size: 0.82rem; color: var(--accent-color); margin-top: 0.3rem; word-break: break-all;">클릭하여 .xlsx 파일을 선택하세요</div>
                         </div>
                         <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this.files[0])">
                     </div>
 
-                    <!-- Right: Server Saved Files -->
-                    <div style="flex: 1; min-width: 320px; max-width: 440px; display: flex; flex-direction: column;">
-                        <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                    <!-- Col 2: Server Saved Files -->
+                    <div style="flex: 1; min-width: 290px; max-width: 370px; display: flex; flex-direction: column;">
+                        <h3 style="color: var(--text-primary); font-size: 1.05rem; margin-bottom: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
                             <span>💾 서버 저장된 파일 목록</span>
                             <button onclick="fetchSavedMpsFiles()" class="btn-small" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">🔄 새로고침</button>
                         </h3>
                         <div id="saved-files-list" style="border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.8rem; background: rgba(15,23,42,0.4); flex: 1; min-height: 160px; max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem;">
                             <div style="color: var(--text-secondary); text-align: center; margin-top: 3rem; font-size: 0.9rem;">불러오는 중...</div>
                         </div>
+                    </div>
+
+                    <!-- Col 3: SAP ERP One-Stop Sync Card -->
+                    <div style="flex: 1.2; min-width: 330px; max-width: 440px; display: flex; flex-direction: column; background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 12px; padding: 1rem 1.2rem; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <h3 style="color: #93c5fd; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>🔄 SAP ERP 최신 자동 동기화</span>
+                                </h3>
+                                <span id="sap-sync-badge" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600;">준비 완료</span>
+                            </div>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.6rem; line-height: 1.4;">
+                                ZPPM6680(생산계획) ➔ ZPPR6470(가공품 소요량)을 SAP에서 원클릭으로 일괄 자동 수집합니다.
+                            </p>
+                            
+                            <!-- 4 File Status List -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.6rem; font-size: 0.72rem;">
+                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                    <div style="color: #cbd5e1; font-weight: 600;">1840 안산 생산계획</div>
+                                    <div id="sap-status-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
+                                </div>
+                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                    <div style="color: #cbd5e1; font-weight: 600;">1840 부품 소요량</div>
+                                    <div id="sap-status-comp-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
+                                </div>
+                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                    <div style="color: #cbd5e1; font-weight: 600;">1842 진주 생산계획</div>
+                                    <div id="sap-status-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
+                                </div>
+                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                    <div style="color: #cbd5e1; font-weight: 600;">1842 부품 소요량</div>
+                                    <div id="sap-status-comp-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
+                                </div>
+                            </div>
+
+                            <!-- Progress Bar & Status Text -->
+                            <div id="sap-sync-progress-box" style="display: none; margin-bottom: 0.6rem;">
+                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
+                                    <div id="sap-sync-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.3s;"></div>
+                                </div>
+                                <div id="sap-sync-live-text" style="font-size: 0.75rem; color: #93c5fd; font-weight: 500;">동기화 진행 중...</div>
+                            </div>
+                        </div>
+
+                        <button id="sap-sync-btn" onclick="triggerSapSync()" style="background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; border: none; padding: 0.65rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(37,99,235,0.3); width: 100%; margin-top: 0.4rem;">
+                            <span id="sap-sync-icon">🚀</span> <span>SAP 최신 데이터 동기화 시작</span>
+                        </button>
                     </div>
 
                 </div>
@@ -1860,6 +1910,134 @@ DST: 22. 지티테크`;
             if (span) span.textContent = '🚀 선택된 파일 분석 시작';
             
             renderSavedFilesList();
+        }
+
+        // ==========================================
+        // SAP ERP One-Stop Auto Sync Logic
+        // ==========================================
+        let sapSyncPollingInterval = null;
+
+        async function fetchSapSyncStatus() {
+            try {
+                const res = await fetch('/api/sync-sap/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.success) return;
+
+                // 4개 SAP 파일 최신 수정 시간 및 크기 렌더링
+                if (data.files) {
+                    const fmtDate = (mtime) => {
+                        if (!mtime) return '파일 없음';
+                        const d = new Date(mtime);
+                        return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                    };
+                    const el1840 = document.getElementById('sap-status-1840');
+                    const elComp1840 = document.getElementById('sap-status-comp-1840');
+                    const el1842 = document.getElementById('sap-status-1842');
+                    const elComp1842 = document.getElementById('sap-status-comp-1842');
+
+                    if (el1840) el1840.innerText = data.files['sap_1840.mhtml'] ? `${fmtDate(data.files['sap_1840.mhtml'].mtime)} (${data.files['sap_1840.mhtml'].size})` : '미수집';
+                    if (elComp1840) elComp1840.innerText = data.files['sap_component_1840.mhtml'] ? `${fmtDate(data.files['sap_component_1840.mhtml'].mtime)} (${data.files['sap_component_1840.mhtml'].size})` : '미수집';
+                    if (el1842) el1842.innerText = data.files['sap_1842.mhtml'] ? `${fmtDate(data.files['sap_1842.mhtml'].mtime)} (${data.files['sap_1842.mhtml'].size})` : '미수집';
+                    if (elComp1842) elComp1842.innerText = data.files['sap_component_1842.mhtml'] ? `${fmtDate(data.files['sap_component_1842.mhtml'].mtime)} (${data.files['sap_component_1842.mhtml'].size})` : '미수집';
+                }
+
+                const badge = document.getElementById('sap-sync-badge');
+                const progressBox = document.getElementById('sap-sync-progress-box');
+                const progressBar = document.getElementById('sap-sync-progress-bar');
+                const liveText = document.getElementById('sap-sync-live-text');
+                const syncBtn = document.getElementById('sap-sync-btn');
+                const headerBtn = document.getElementById('header-sap-sync-btn');
+
+                if (data.running) {
+                    if (badge) {
+                        badge.style.background = 'rgba(234, 179, 8, 0.2)';
+                        badge.style.color = '#facc15';
+                        badge.innerText = `진행 중 [${data.currentStep}/${data.totalSteps}]`;
+                    }
+                    if (progressBox) progressBox.style.display = 'block';
+                    if (progressBar) progressBar.style.width = `${(data.currentStep / data.totalSteps) * 100}%`;
+                    if (liveText) liveText.innerText = data.statusText || '동기화 진행 중...';
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.style.opacity = '0.6';
+                        syncBtn.innerHTML = '<span>⏳</span> <span>SAP 데이터 수집 중...</span>';
+                    }
+                    if (headerBtn) {
+                        headerBtn.disabled = true;
+                        headerBtn.style.opacity = '0.6';
+                        headerBtn.innerHTML = '<span>⏳</span> 수집 중...';
+                    }
+                } else {
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.innerHTML = '<span>🚀</span> <span>SAP 최신 데이터 동기화 시작</span>';
+                    }
+                    if (headerBtn) {
+                        headerBtn.disabled = false;
+                        headerBtn.style.opacity = '1';
+                        headerBtn.innerHTML = '<span>🔄</span> <span>SAP 최신 동기화</span>';
+                    }
+
+                    if (data.error) {
+                        if (badge) {
+                            badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                            badge.style.color = '#f87171';
+                            badge.innerText = '오류 발생';
+                        }
+                        if (progressBox) progressBox.style.display = 'block';
+                        if (liveText) liveText.innerHTML = `<span style="color: var(--danger)">❌ ${data.error}</span>`;
+                    } else if (data.finishedAt) {
+                        if (badge) {
+                            badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                            badge.style.color = '#34d399';
+                            badge.innerText = '동기화 완료';
+                        }
+                        if (progressBox) progressBox.style.display = 'block';
+                        if (progressBar) progressBar.style.width = '100%';
+                        if (liveText) liveText.innerHTML = '<span style="color: #34d399">✅ 4개 파일 최신 동기화 완료!</span>';
+                    }
+
+                    if (sapSyncPollingInterval) {
+                        clearInterval(sapSyncPollingInterval);
+                        sapSyncPollingInterval = null;
+                    }
+                }
+            } catch (e) {
+                console.warn('[fetchSapSyncStatus] error:', e);
+            }
+        }
+
+        async function triggerSapSync() {
+            const confirmMsg = 
+                "SAP ERP 최신 소요 결합 데이터를 지금 즉시 자동으로 수집하시겠습니까?\n\n" +
+                "■ 원스톱 수집 파이프라인:\n" +
+                " 1. 안산(1840) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 2. 안산(1840) 가공품 소요량 데이터 수집 (ZPPR6470)\n" +
+                " 3. 진주(1842) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 4. 진주(1842) 가공품 소요량 데이터 수집 (ZPPR6470)\n\n" +
+                "※ 중요: SAP Logon이 켜져 있고 시스템에 로그인된 상태여야 합니다.";
+
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch('/api/sync-sap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (sapSyncPollingInterval) clearInterval(sapSyncPollingInterval);
+                    sapSyncPollingInterval = setInterval(fetchSapSyncStatus, 1500);
+                    fetchSapSyncStatus();
+                } else {
+                    alert('동기화 요청 실패: ' + data.error);
+                }
+            } catch (e) {
+                alert('서버 연결 실패: ' + e.message);
+            }
         }
 
         function handleDrop(event) {
@@ -5733,6 +5911,7 @@ DST: 22. 지티테크`;
             loadSiteMaster();
             loadUserPreferences();
             initCellSelection();
+            fetchSapSyncStatus();
             
             // Restore active tab from localStorage
             const savedTab = localStorage.getItem('mps_active_tab') || 'main';

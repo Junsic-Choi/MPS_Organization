@@ -55,12 +55,12 @@ if exist mps_dashboard_app.exe (
 
 :RUN_LOCAL_NODE
 echo [INFO] 내장 Node.js [node.exe] 를 감지하여 백그라운드로 안전하게 실행합니다.
-powershell -Command "Start-Process -FilePath '.\node.exe' -ArgumentList 'server.js' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+powershell -Command "Start-Process -FilePath '%CD%\node.exe' -ArgumentList 'server.js' -WorkingDirectory '%CD%' -WindowStyle Hidden"
 goto OPEN_BROWSER
 
 :RUN_SYSTEM_NODE
 echo [INFO] 시스템 Node.js가 감지되어 백그라운드로 안전하게 실행합니다.
-powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'server.js' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'server.js' -WorkingDirectory '%CD%' -WindowStyle Hidden"
 goto OPEN_BROWSER
 
 :OPEN_BROWSER

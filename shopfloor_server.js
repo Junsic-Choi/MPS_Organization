@@ -1204,6 +1204,47 @@ app.get('/api/mps-plan-machines', (req, res) => {
     }
 });
 
+// SAP ERP 자동 동기화 API
+const { runSapSync, getSyncStatus } = require('./sap_automation/sync_engine');
+
+app.post('/api/sync-sap', async (req, res) => {
+    try {
+        const { startMonth, endMonth } = req.body || {};
+        const status = getSyncStatus();
+        if (status.running) {
+            return res.json({ success: true, message: '이미 SAP 동기화가 진행 중입니다.', status });
+        }
+        runSapSync({ startMonth, endMonth }).catch(e => {
+            console.error('[shopfloor/SAP Sync Error]:', e.message);
+        });
+        res.json({ success: true, message: 'SAP 동기화가 시작되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/sync-sap/status', (req, res) => {
+    try {
+        const status = getSyncStatus();
+        const files = {};
+        ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'].forEach(fn => {
+            const fp = path.join(__dirname, fn);
+            if (fs.existsSync(fp)) {
+                const stat = fs.statSync(fp);
+                files[fn] = {
+                    size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+                    mtime: stat.mtime
+                };
+            } else {
+                files[fn] = null;
+            }
+        });
+        res.json({ success: true, ...status, files });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Heartbeat & Auto-shutdown (10 min idle)
 let lastHeartbeat = Date.now();
 let hasReceivedHeartbeat = false;
@@ -1227,21 +1268,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
 });
 
-const HEARTBEAT_TIMEOUT = 1800000; // 30 minutes
-const GRACE_PERIOD = 1800000; // 30 minutes grace period
-const startupTime = Date.now();
+// [상시 유지 모드] 컴퓨터를 장시간 켜두거나 탭이 백그라운드로 전환되어도 자동 종료되지 않고 상시 대기
+// (서버 수동 종료는 필요 시 /api/shutdown 호출 또는 배치 파일 재실행 시 정리됩니다)
 
-setInterval(() => {
-    const now = Date.now();
-    if (hasReceivedHeartbeat) {
-        if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
-            console.log('[AUTO-SHUTDOWN] No client connected for 30 minutes. Exiting...');
-            process.exit(0);
-        }
-    } else {
-        if (now - startupTime > GRACE_PERIOD) {
-            console.log('[AUTO-SHUTDOWN] Grace period expired without client connection. Exiting...');
-            process.exit(0);
-        }
-    }
-}, 10000);
