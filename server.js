@@ -215,6 +215,30 @@ app.get('/api/load-sap/:type', (req, res) => {
     }
 });
 
+// SAP 최신 데이터 원클릭 자동 동기화 API
+const { runSapSync, getSyncStatus } = require('./sap_automation/sync_engine');
+
+app.post('/api/sync-sap', (req, res) => {
+    try {
+        const { startMonth, endMonth } = req.body || {};
+        const status = getSyncStatus();
+        if (status.running) {
+            return res.status(409).json({ success: false, error: '이미 SAP 동기화 작업이 진행 중입니다.', status });
+        }
+        runSapSync({ startMonth, endMonth }).catch(err => {
+            console.error('[api/sync-sap Background Error]', err.message);
+        });
+        res.json({ success: true, message: 'SAP 동기화가 백그라운드에서 시작되었습니다.' });
+    } catch (err) {
+        console.error('[api/sync-sap] Failed to start SAP sync:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/sync-sap/status', (req, res) => {
+    res.json(getSyncStatus());
+});
+
 // Heartbeat state
 let lastHeartbeat = Date.now();
 let hasReceivedHeartbeat = false;
@@ -268,7 +292,7 @@ server.on('error', (err) => {
     process.exit(1);
 });
 
-// 이벤트 루프 강제 유지용
+// 이벤트 루프 강제 유지용 (서버 상시 대기 모드)
 setInterval(() => {
     if (!server.listening) {
         console.log('Server not listening, exiting...');
@@ -276,31 +300,7 @@ setInterval(() => {
     }
 }, 60000);
 
-// Auto-shutdown if no heartbeat is received
-const HEARTBEAT_TIMEOUT = 600000; // 10 minutes (prevents shutdown from aggressive browser background throttling)
-const GRACE_PERIOD = 120000; // 2 minutes grace period on startup
-const startupTime = Date.now();
-let lastCheckTime = Date.now();
+// [상시 유지 모드] 컴퓨터를 오래 켜두거나 브라우저 탭이 절전 모드로 전환되어도
+// 백그라운드 서버가 스스로 꺼지지 않고 상시 연결을 유지합니다.
+// (서버 수동 종료는 대시보드의 '서버 종료' 버튼 또는 배치 파일 실행 시 자동 정리됩니다)
 
-setInterval(() => {
-    const now = Date.now();
-    
-    // Sleep/wake detection: if the loop was suspended and more than 15 seconds passed (normally 5 seconds)
-    if (now - lastCheckTime > 15000) {
-        console.log('[SYSTEM] Sleep/wake detected. Resetting heartbeat timer to prevent premature shutdown.');
-        lastHeartbeat = now;
-    }
-    lastCheckTime = now;
-    
-    if (hasReceivedHeartbeat) {
-        if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
-            console.log('[AUTO-SHUTDOWN] No heartbeat received for 10 minutes. All dashboard pages closed. Shutting down...');
-            process.exit(0);
-        }
-    } else {
-        if (now - startupTime > GRACE_PERIOD) {
-            console.log('[AUTO-SHUTDOWN] No client connected within grace period. Shutting down...');
-            process.exit(0);
-        }
-    }
-}, 5000);

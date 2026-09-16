@@ -779,6 +779,10 @@
     <header style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; padding: 0 2rem;">
         <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V3.3 - Material/품명 정밀 매칭 엔진 적용</span></div>
         <div style="display: flex; gap: 1rem; align-items: center;">
+            <div id="server-status-badge" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(52, 211, 153, 0.4); font-weight: 500; transition: all 0.3s;">
+                <span id="server-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                <span id="server-status-text">서버 연결 정상</span>
+            </div>
             <div class="user-info" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">
                 실시간 엔진 업데이트 완료
             </div>
@@ -1013,8 +1017,18 @@
             </div>
             <div id="sap-join-section" style="width: 100%; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none; margin-top: 1rem;">
                 <div style="flex: 1;">
-                    <div style="font-weight: 600; color: var(--accent-color); font-size: 1rem; margin-bottom: 0.4rem;">🔗 SAP 상세 정보 및 가공품 소요 결합</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">SAP에서 내보낸 1842/1840 및 component .MHTML 파일을 결합합니다. (가공품 파일은 선택사항)</div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.35rem;">
+                        <span style="font-weight: 700; color: var(--accent-color); font-size: 1.05rem;">🔗 SAP 상세 정보 및 가공품 소요 결합</span>
+                        <button onclick="triggerOneStopSapSync()" id="btn-sap-sync" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 0.35rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 4px rgba(37,99,235,0.25); transition: all 0.2s;" title="SAP Logon에서 1840/1842 및 가공품 데이터를 원클릭으로 일괄 자동 수집합니다.">
+                            <span id="sap-sync-spinner" style="display:none;">⏳</span>
+                            <span id="sap-sync-icon">🔄</span>
+                            <span id="sap-sync-text">SAP ERP 자동 동기화</span>
+                        </button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                        <span id="sap-sync-desc">SAP에서 1840/1842 및 가공품 소요량을 원클릭 또는 수동 파일로 결합합니다.</span>
+                        <span id="sap-last-sync-time" style="font-size: 0.75rem; color: #10b981; font-weight: 600;"></span>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                     <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
@@ -2115,7 +2129,13 @@ DST: 22. 지티테크`;
                 document.getElementById('sap-join-section').style.display = 'flex';
 
             } catch (err) {
-                alert('서버 분석 오류: ' + err.message);
+                const isFetchFailed = err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'));
+                if (isFetchFailed) {
+                    if (typeof updateServerStatusBadge === 'function') updateServerStatusBadge(false);
+                    alert('서버와의 연결이 원활하지 않습니다.\n\n대시보드 서버(Port 8890)가 실행 중인지 확인해주세요.\n바탕화면의 [MPS 대시보드 실행] 또는 [1.배경실행_대시보드.bat]을 실행하시면 즉시 재연결됩니다.');
+                } else {
+                    alert('서버 분석 오류: ' + err.message);
+                }
                 console.error(err);
                 extractBtn.disabled = false;
                 const span = extractBtn.querySelector('span');
@@ -4463,6 +4483,13 @@ DST: 22. 지티테크`;
                             if (cancelBtn) {
                                 cancelBtn.style.display = 'inline-block';
                             }
+
+                            if (data.mtime) {
+                                const d = new Date(data.mtime);
+                                const timeStr = `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                                const timeEl = document.getElementById('sap-last-sync-time');
+                                if (timeEl) timeEl.textContent = `(최근 동기화: ${timeStr})`;
+                            }
                         }
                     }
                 }
@@ -4470,6 +4497,103 @@ DST: 22. 지티테크`;
                 checkJoinReady();
             } catch (err) {
                 console.error('Failed to load saved SAP files from server:', err);
+            }
+        }
+
+        let sapSyncPollingInterval = null;
+
+        async function triggerOneStopSapSync() {
+            const btn = document.getElementById('btn-sap-sync');
+            const icon = document.getElementById('sap-sync-icon');
+            const spinner = document.getElementById('sap-sync-spinner');
+            const text = document.getElementById('sap-sync-text');
+            const desc = document.getElementById('sap-sync-desc');
+
+            // Find start/end months from active filters or loaded data
+            let startMonth = null, endMonth = null;
+            if (activeFilters.months && activeFilters.months.length > 0) {
+                const mList = activeFilters.months.map(m => parseInt(m.replace(/[^0-9]/g, ''))).filter(n => n >= 1 && n <= 12);
+                if (mList.length > 0) {
+                    const firstM = mList[0];
+                    const lastM = mList[mList.length - 1];
+                    const y = new Date().getFullYear();
+                    const y1 = firstM < 6 && lastM >= 6 ? y + 1 : y;
+                    const y2 = lastM < firstM ? y + 1 : y;
+                    startMonth = `${y}.${String(firstM).padStart(2, '0')}`;
+                    endMonth = `${y2}.${String(lastM).padStart(2, '0')}`;
+                }
+            }
+
+            if (!confirm(`SAP ERP(ZPPM6680 + ZPPR6470)에서 1840/1842 생산계획 및 가공품 소요량을 원스톱 자동 수집하시겠습니까?\n\n※ SAP Logon이 실행되어 있고 로그인된 상태여야 합니다.`)) {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            icon.style.display = 'none';
+            spinner.style.display = 'inline-block';
+            text.textContent = '동기화 연결 중...';
+            desc.textContent = 'SAP 연결 확인 및 스크립트 실행 중...';
+
+            try {
+                const res = await fetch('/api/sync-sap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ startMonth, endMonth })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || '동기화 시작 요청 실패');
+                }
+
+                if (sapSyncPollingInterval) clearInterval(sapSyncPollingInterval);
+
+                sapSyncPollingInterval = setInterval(async () => {
+                    try {
+                        const sRes = await fetch('/api/sync-sap/status');
+                        if (sRes.ok) {
+                            const status = await sRes.json();
+                            if (status.statusText) {
+                                text.textContent = `[${status.currentStep}/${status.totalSteps}] 진행 중`;
+                                desc.textContent = status.statusText;
+                            }
+
+                            if (!status.running) {
+                                clearInterval(sapSyncPollingInterval);
+                                sapSyncPollingInterval = null;
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                icon.style.display = 'inline-block';
+                                spinner.style.display = 'none';
+                                text.textContent = 'SAP ERP 자동 동기화';
+
+                                if (status.error) {
+                                    alert(`SAP 동기화 실패:\n${status.error}\n\nSAP Logon 접속 여부 및 옵션의 스크립팅 설정을 확인해 주세요.`);
+                                    desc.textContent = `❌ 동기화 실패: ${status.error}`;
+                                } else {
+                                    desc.textContent = `✅ ${status.statusText || '동기화가 성공적으로 완료되었습니다.'}`;
+                                    // 4개 최신 파일 리로드 및 결합
+                                    await loadSavedSapFiles();
+                                    const joinBtn = document.getElementById('join-btn');
+                                    if (joinBtn && !joinBtn.disabled) {
+                                        joinBtn.click();
+                                    }
+                                }
+                            }
+                        }
+                    } catch (pollErr) {
+                        console.error('Polling status error:', pollErr);
+                    }
+                }, 1500);
+
+            } catch (err) {
+                alert(`동기화 시작 오류: ${err.message}`);
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                icon.style.display = 'inline-block';
+                spinner.style.display = 'none';
+                text.textContent = 'SAP ERP 자동 동기화';
+                desc.textContent = `오류: ${err.message}`;
             }
         }
 
@@ -5556,13 +5680,53 @@ DST: 22. 지티테크`;
 
 
 
-        window.addEventListener('DOMContentLoaded', () => {
-            // Heartbeat system to keep server alive
-            function sendHeartbeat() {
-                fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+        function updateServerStatusBadge(connected) {
+            const badge = document.getElementById('server-status-badge');
+            const text = document.getElementById('server-status-text');
+            const dot = document.getElementById('server-status-dot');
+            if (!badge || !text || !dot) return;
+            if (connected) {
+                badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                badge.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                badge.style.color = '#34d399';
+                dot.style.background = '#10b981';
+                text.textContent = '서버 연결 정상';
+            } else {
+                badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                badge.style.borderColor = 'rgba(248, 113, 113, 0.4)';
+                badge.style.color = '#f87171';
+                dot.style.background = '#ef4444';
+                text.textContent = '서버 연결 끊김';
             }
+        }
+
+        async function sendHeartbeat() {
+            try {
+                const res = await fetch('/api/heartbeat', { method: 'POST' });
+                if (res.ok) {
+                    updateServerStatusBadge(true);
+                } else {
+                    updateServerStatusBadge(false);
+                }
+            } catch (e) {
+                updateServerStatusBadge(false);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Heartbeat system to keep server alive & monitor status
             sendHeartbeat();
-            setInterval(sendHeartbeat, 3000);
+            setInterval(sendHeartbeat, 5000);
+
+            // Tab visibility change or window focus: immediately refresh connection
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    sendHeartbeat();
+                }
+            });
+            window.addEventListener('focus', () => {
+                sendHeartbeat();
+            });
 
             extractBtn.disabled = true;
             updateThemeButton(localStorage.getItem('mps_theme') || 'dark');
