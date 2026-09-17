@@ -857,19 +857,19 @@
                             <!-- 4 File Status List -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.6rem; font-size: 0.72rem;">
                                 <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-                                    <div style="color: #cbd5e1; font-weight: 600;">1840 안산 생산계획</div>
+                                    <div style="color: #cbd5e1; font-weight: 600;">1840 남산+ 생산계획</div>
                                     <div id="sap-status-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
                                 <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-                                    <div style="color: #cbd5e1; font-weight: 600;">1840 부품 소요량</div>
+                                    <div style="color: #cbd5e1; font-weight: 600;">1840 남산+ 부품 소요량</div>
                                     <div id="sap-status-comp-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
                                 <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-                                    <div style="color: #cbd5e1; font-weight: 600;">1842 진주 생산계획</div>
+                                    <div style="color: #cbd5e1; font-weight: 600;">1842 성주 생산계획</div>
                                     <div id="sap-status-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
                                 <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-                                    <div style="color: #cbd5e1; font-weight: 600;">1842 부품 소요량</div>
+                                    <div style="color: #cbd5e1; font-weight: 600;">1842 성주 부품 소요량</div>
                                     <div id="sap-status-comp-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
                             </div>
@@ -2013,10 +2013,10 @@ DST: 22. 지티테크`;
             const confirmMsg = 
                 "SAP ERP 최신 소요 결합 데이터를 지금 즉시 자동으로 수집하시겠습니까?\n\n" +
                 "■ 원스톱 수집 파이프라인:\n" +
-                " 1. 안산(1840) 생산계획 데이터 수집 (ZPPM6680)\n" +
-                " 2. 안산(1840) 가공품 소요량 데이터 수집 (ZPPR6470)\n" +
-                " 3. 진주(1842) 생산계획 데이터 수집 (ZPPM6680)\n" +
-                " 4. 진주(1842) 가공품 소요량 데이터 수집 (ZPPR6470)\n\n" +
+                " 1. 남산+(1840) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 2. 남산+(1840) 가공품 소요량 데이터 수집 (ZPPR6470)\n" +
+                " 3. 성주(1842) 생산계획 데이터 수집 (ZPPM6680)\n" +
+                " 4. 성주(1842) 가공품 소요량 데이터 수집 (ZPPR6470)\n\n" +
                 "※ 중요: SAP Logon이 켜져 있고 시스템에 로그인된 상태여야 합니다.";
 
             if (!confirm(confirmMsg)) return;

@@ -20,6 +20,43 @@ function getSyncStatus() {
     return { ...currentSyncState };
 }
 
+function cleanSapExportDir() {
+    if (!fs.existsSync(SAP_GUI_DIR)) return;
+    try {
+        const files = fs.readdirSync(SAP_GUI_DIR);
+        files.forEach(f => {
+            if (/^export.*\.mhtml$/i.test(f)) {
+                try {
+                    fs.unlinkSync(path.join(SAP_GUI_DIR, f));
+                } catch (e) {}
+            }
+        });
+    } catch (e) {}
+}
+
+function closeSapExcel() {
+    // 1. First try to cleanly close only SAP export workbooks without killing user's own work
+    try {
+        const script = path.join(__dirname, "close_sap_excel.vbs");
+        if (fs.existsSync(script)) {
+            execSync(`cscript //Nologo "${script}"`, { stdio: "ignore" });
+        }
+    } catch (e) {}
+
+    // 2. If export.MHTML is still locked, kill Excel to release file lock
+    const p = path.join(SAP_GUI_DIR, "export.MHTML");
+    if (fs.existsSync(p)) {
+        try {
+            fs.unlinkSync(p);
+        } catch (e) {
+            try {
+                execSync("taskkill /f /im excel.exe", { stdio: "ignore" });
+            } catch (kErr) {}
+            try { fs.unlinkSync(p); } catch (uErr) {}
+        }
+    }
+}
+
 function extractSalesDocsFromMhtml(filePath) {
     if (!fs.existsSync(filePath)) return [];
     try {
@@ -59,7 +96,7 @@ function extractSalesDocsFromMhtml(filePath) {
     }
 }
 
-async function waitForNewExportFile(sinceTimestamp, maxWaitSec = 90) {
+async function waitForNewExportFile(sinceTimestamp, maxWaitSec = 180) {
     const startTime = Date.now();
     let lastPath = null;
     let lastSize = -1;
@@ -103,6 +140,9 @@ function copyExportToWorkspace(sourcePath, targetFilename) {
     fs.copyFileSync(sourcePath, dest);
     const sizeMb = (fs.statSync(dest).size / 1024 / 1024).toFixed(2);
     console.log(`[Sync] Saved ${targetFilename} (${sizeMb} MB) from ${sourcePath}`);
+    
+    // Close Excel view and remove exported file so the next step has a clean path
+    closeSapExcel();
     try { fs.unlinkSync(sourcePath); } catch (e) {}
     return dest;
 }
@@ -178,26 +218,34 @@ async function runSapSync(options = {}) {
         console.log(`  [SAP One-Stop Sync] Starting Sync for ${startMonth} ~ ${endMonth}`);
         console.log("=======================================================\n");
 
-        // --- STEP 1: ZPPM6680 for 1840 ---
+        // 0. Initial cleanup: Close prior SAP export windows and return SAP to home
+        closeSapExcel();
+        cleanSapExportDir();
+        try { runVbs("return_home.vbs"); } catch (e) {}
+
+        // --- STEP 1: ZPPM6680 for 1840 (남산+) ---
         currentSyncState.currentStep = 1;
-        currentSyncState.statusText = `[1/4] 안산(1840) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
+        currentSyncState.statusText = `[1/4] 남산+(1840) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
         let stepStart = Date.now();
         runVbs("zppm6680.vbs", ["1840", startMonth, endMonth]);
         
-        const file1 = await waitForNewExportFile(stepStart, 90);
-        if (!file1) throw new Error("1840 생산계획 MHTML 파일 생성 대기시간 초과 (90초)");
+        const file1 = await waitForNewExportFile(stepStart, 180);
+        if (!file1) throw new Error("남산+(1840) 생산계획 MHTML 파일 생성 대기시간 초과 (180초)");
         copyExportToWorkspace(file1, "sap_1840.mhtml");
         
         const docs1840 = extractSalesDocsFromMhtml(path.join(WORKSPACE_DIR, "sap_1840.mhtml"));
-        console.log(`[Sync] Extracted ${docs1840.length} Sales Docs for 1840`);
+        console.log(`[Sync] Extracted ${docs1840.length} Sales Docs for 남산+(1840)`);
         currentSyncState.results.docs1840Count = docs1840.length;
 
-        // --- STEP 2: ZPPR6470 for 1840 ---
+        // Reset SAP to home before step 2
+        try { runVbs("return_home.vbs"); } catch (e) {}
+
+        // --- STEP 2: ZPPR6470 for 1840 (남산+) ---
         currentSyncState.currentStep = 2;
-        currentSyncState.statusText = `[2/4] 안산(1840) 가공품 소요량 데이터 수집 중 (${docs1840.length}개 오더, ZPPR6470)...`;
+        currentSyncState.statusText = `[2/4] 남산+(1840) 가공품 소요량 데이터 수집 중 (${docs1840.length}개 오더, ZPPR6470)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
@@ -206,33 +254,39 @@ async function runSapSync(options = {}) {
             stepStart = Date.now();
             runVbs("zppr6470.vbs", ["1840", "e", "", "18"]);
             
-            const file2 = await waitForNewExportFile(stepStart, 120);
-            if (!file2) throw new Error("1840 가공품 소요량 MHTML 파일 생성 대기시간 초과 (120초)");
+            const file2 = await waitForNewExportFile(stepStart, 240);
+            if (!file2) throw new Error("남산+(1840) 가공품 소요량 MHTML 파일 생성 대기시간 초과 (240초)");
             copyExportToWorkspace(file2, "sap_component_1840.mhtml");
         } else {
             console.warn("[Sync] No Sales Docs found for 1840, skipping ZPPR6470");
         }
 
-        // --- STEP 3: ZPPM6680 for 1842 ---
+        // Reset SAP to home before step 3
+        try { runVbs("return_home.vbs"); } catch (e) {}
+
+        // --- STEP 3: ZPPM6680 for 1842 (성주) ---
         currentSyncState.currentStep = 3;
-        currentSyncState.statusText = `[3/4] 진주(1842) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
+        currentSyncState.statusText = `[3/4] 성주(1842) 생산계획 데이터 수집 중 (${startMonth} ~ ${endMonth}, ZPPM6680)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
         stepStart = Date.now();
         runVbs("zppm6680.vbs", ["1842", startMonth, endMonth]);
         
-        const file3 = await waitForNewExportFile(stepStart, 90);
-        if (!file3) throw new Error("1842 생산계획 MHTML 파일 생성 대기시간 초과 (90초)");
+        const file3 = await waitForNewExportFile(stepStart, 180);
+        if (!file3) throw new Error("성주(1842) 생산계획 MHTML 파일 생성 대기시간 초과 (180초)");
         copyExportToWorkspace(file3, "sap_1842.mhtml");
 
         const docs1842 = extractSalesDocsFromMhtml(path.join(WORKSPACE_DIR, "sap_1842.mhtml"));
-        console.log(`[Sync] Extracted ${docs1842.length} Sales Docs for 1842`);
+        console.log(`[Sync] Extracted ${docs1842.length} Sales Docs for 성주(1842)`);
         currentSyncState.results.docs1842Count = docs1842.length;
 
-        // --- STEP 4: ZPPR6470 for 1842 ---
+        // Reset SAP to home before step 4
+        try { runVbs("return_home.vbs"); } catch (e) {}
+
+        // --- STEP 4: ZPPR6470 for 1842 (성주) ---
         currentSyncState.currentStep = 4;
-        currentSyncState.statusText = `[4/4] 진주(1842) 가공품 소요량 데이터 수집 중 (${docs1842.length}개 오더, ZPPR6470)...`;
+        currentSyncState.statusText = `[4/4] 성주(1842) 가공품 소요량 데이터 수집 중 (${docs1842.length}개 오더, ZPPR6470)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
@@ -241,19 +295,17 @@ async function runSapSync(options = {}) {
             stepStart = Date.now();
             runVbs("zppr6470.vbs", ["", "F", "44", "18"]);
             
-            const file4 = await waitForNewExportFile(stepStart, 120);
-            if (!file4) throw new Error("1842 가공품 소요량 MHTML 파일 생성 대기시간 초과 (120초)");
+            const file4 = await waitForNewExportFile(stepStart, 240);
+            if (!file4) throw new Error("성주(1842) 가공품 소요량 MHTML 파일 생성 대기시간 초과 (240초)");
             copyExportToWorkspace(file4, "sap_component_1842.mhtml");
         } else {
             console.warn("[Sync] No Sales Docs found for 1842, skipping ZPPR6470");
         }
 
         // Return SAP to home screen
-        try {
-            runVbs("return_home.vbs");
-        } catch (e) {}
+        try { runVbs("return_home.vbs"); } catch (e) {}
 
-        currentSyncState.statusText = "✅ SAP 최신 데이터 동기화 완료! (4개 파일 갱신됨)";
+        currentSyncState.statusText = "✅ SAP 최신 데이터 동기화 완료! (남산+/성주 4개 파일 갱신됨)";
         currentSyncState.finishedAt = new Date().toISOString();
         onProgress(currentSyncState);
         console.log("\n=======================================================");
