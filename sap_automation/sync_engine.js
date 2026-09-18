@@ -293,7 +293,7 @@ async function runSapSync(options = {}) {
         if (docs1842.length > 0) {
             setClipboardText(docs1842);
             stepStart = Date.now();
-            runVbs("zppr6470.vbs", ["", "F", "44", "18"]);
+            runVbs("zppr6470.vbs", ["1842", "F", "44", "18"]);
             
             const file4 = await waitForNewExportFile(stepStart, 240);
             if (!file4) throw new Error("성주(1842) 가공품 소요량 MHTML 파일 생성 대기시간 초과 (240초)");

@@ -80,6 +80,7 @@ session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell").selectContextMenuIte
 
 session.findById("wnd[1]/tbar[0]/btn[8]").press
 On Error Resume Next
+session.findById("wnd[1]/tbar[0]/btn[11]").press
 session.findById("wnd[1]/tbar[0]/btn[0]").press
 session.findById("wnd[1]/tbar[0]/btn[11]").press
 On Error GoTo 0

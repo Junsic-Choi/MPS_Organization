@@ -123,6 +123,7 @@ const zppr6470Lines = [
     '',
     'session.findById("wnd[1]/tbar[0]/btn[8]").press',
     'On Error Resume Next',
+    'session.findById("wnd[1]/tbar[0]/btn[11]").press',
     'session.findById("wnd[1]/tbar[0]/btn[0]").press',
     'session.findById("wnd[1]/tbar[0]/btn[11]").press',
     'On Error GoTo 0',
