@@ -1067,16 +1067,11 @@
             </div>
             <div id="sap-join-section" style="width: 100%; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none; margin-top: 1rem;">
                 <div style="flex: 1;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.35rem;">
+                    <div style="margin-bottom: 0.35rem;">
                         <span style="font-weight: 700; color: var(--accent-color); font-size: 1.05rem;">🔗 SAP 상세 정보 및 가공품 소요 결합</span>
-                        <button onclick="triggerOneStopSapSync()" id="btn-sap-sync" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 0.35rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 4px rgba(37,99,235,0.25); transition: all 0.2s;" title="SAP Logon에서 1840/1842 및 가공품 데이터를 원클릭으로 일괄 자동 수집합니다.">
-                            <span id="sap-sync-spinner" style="display:none;">⏳</span>
-                            <span id="sap-sync-icon">🔄</span>
-                            <span id="sap-sync-text">SAP ERP 자동 동기화</span>
-                        </button>
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <span id="sap-sync-desc">SAP에서 1840/1842 및 가공품 소요량을 원클릭 또는 수동 파일로 결합합니다.</span>
+                        <span id="sap-sync-desc">서버에 저장된 최신 SAP 파일(남산+/성주)을 불러오거나 필요 시 수동으로 파일을 등록하여 결합합니다.</span>
                         <span id="sap-last-sync-time" style="font-size: 0.75rem; color: #10b981; font-weight: 600;"></span>
                     </div>
                 </div>
@@ -1997,6 +1992,9 @@ DST: 22. 지티테크`;
                         if (progressBox) progressBox.style.display = 'block';
                         if (progressBar) progressBar.style.width = '100%';
                         if (liveText) liveText.innerHTML = '<span style="color: #34d399">✅ 4개 파일 최신 동기화 완료!</span>';
+                        if (typeof loadSavedSapFiles === 'function') {
+                            loadSavedSapFiles();
+                        }
                     }
 
                     if (sapSyncPollingInterval) {
@@ -4679,98 +4677,7 @@ DST: 22. 지티테크`;
         }
 
         async function triggerOneStopSapSync() {
-            const btn = document.getElementById('btn-sap-sync');
-            const icon = document.getElementById('sap-sync-icon');
-            const spinner = document.getElementById('sap-sync-spinner');
-            const text = document.getElementById('sap-sync-text');
-            const desc = document.getElementById('sap-sync-desc');
-
-            // Find start/end months from active filters or loaded data
-            let startMonth = null, endMonth = null;
-            if (activeFilters.months && activeFilters.months.length > 0) {
-                const mList = activeFilters.months.map(m => parseInt(m.replace(/[^0-9]/g, ''))).filter(n => n >= 1 && n <= 12);
-                if (mList.length > 0) {
-                    const firstM = mList[0];
-                    const lastM = mList[mList.length - 1];
-                    const y = new Date().getFullYear();
-                    const y1 = firstM < 6 && lastM >= 6 ? y + 1 : y;
-                    const y2 = lastM < firstM ? y + 1 : y;
-                    startMonth = `${y}.${String(firstM).padStart(2, '0')}`;
-                    endMonth = `${y2}.${String(lastM).padStart(2, '0')}`;
-                }
-            }
-
-            if (!confirm(`SAP ERP(ZPPM6680 + ZPPR6470)에서 1840/1842 생산계획 및 가공품 소요량을 원스톱 자동 수집하시겠습니까?\n\n※ SAP Logon이 실행되어 있고 로그인된 상태여야 합니다.`)) {
-                return;
-            }
-
-            btn.disabled = true;
-            btn.style.opacity = '0.7';
-            icon.style.display = 'none';
-            spinner.style.display = 'inline-block';
-            text.textContent = '동기화 연결 중...';
-            desc.textContent = 'SAP 연결 확인 및 스크립트 실행 중...';
-
-            try {
-                const res = await fetch('/api/sync-sap', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ startMonth, endMonth })
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) {
-                    throw new Error(data.error || '동기화 시작 요청 실패');
-                }
-
-                if (sapSyncPollingInterval) clearInterval(sapSyncPollingInterval);
-
-                sapSyncPollingInterval = setInterval(async () => {
-                    try {
-                        const sRes = await fetch('/api/sync-sap/status');
-                        if (sRes.ok) {
-                            const status = await sRes.json();
-                            if (status.statusText) {
-                                text.textContent = `[${status.currentStep}/${status.totalSteps}] 진행 중`;
-                                desc.textContent = status.statusText;
-                            }
-
-                            if (!status.running) {
-                                clearInterval(sapSyncPollingInterval);
-                                sapSyncPollingInterval = null;
-                                btn.disabled = false;
-                                btn.style.opacity = '1';
-                                icon.style.display = 'inline-block';
-                                spinner.style.display = 'none';
-                                text.textContent = 'SAP ERP 자동 동기화';
-
-                                if (status.error) {
-                                    alert(`SAP 동기화 실패:\n${status.error}\n\nSAP Logon 접속 여부 및 옵션의 스크립팅 설정을 확인해 주세요.`);
-                                    desc.textContent = `❌ 동기화 실패: ${status.error}`;
-                                } else {
-                                    desc.textContent = `✅ ${status.statusText || '동기화가 성공적으로 완료되었습니다.'}`;
-                                    // 4개 최신 파일 리로드 및 결합
-                                    await loadSavedSapFiles();
-                                    const joinBtn = document.getElementById('join-btn');
-                                    if (joinBtn && !joinBtn.disabled) {
-                                        joinBtn.click();
-                                    }
-                                }
-                            }
-                        }
-                    } catch (pollErr) {
-                        console.error('Polling status error:', pollErr);
-                    }
-                }, 1500);
-
-            } catch (err) {
-                alert(`동기화 시작 오류: ${err.message}`);
-                btn.disabled = false;
-                btn.style.opacity = '1';
-                icon.style.display = 'inline-block';
-                spinner.style.display = 'none';
-                text.textContent = 'SAP ERP 자동 동기화';
-                desc.textContent = `오류: ${err.message}`;
-            }
+            return triggerSapSync();
         }
 
         async function uploadSapToServer(file, type) {
