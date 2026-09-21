@@ -25,7 +25,7 @@ function cleanSapExportDir() {
     try {
         const files = fs.readdirSync(SAP_GUI_DIR);
         files.forEach(f => {
-            if (/^export.*\.mhtml$/i.test(f)) {
+            if (/\.mhtml$/i.test(f)) {
                 try {
                     fs.unlinkSync(path.join(SAP_GUI_DIR, f));
                 } catch (e) {}

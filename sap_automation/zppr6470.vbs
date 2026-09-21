@@ -31,6 +31,10 @@ If IsObject(WScript) Then
 End If
 On Error GoTo 0
 
+On Error Resume Next
+session.findById("wnd[0]").maximize
+On Error GoTo 0
+
 Dim plant, beskz, sobsl, layoutRow
 plant = "1840"
 beskz = "e"
@@ -69,21 +73,62 @@ End If
 
 session.findById("wnd[0]").sendVKey 8
 
-session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell").pressToolbarButton "&MB_VARIANT"
+Dim conShell, retryCon
+Set conShell = Nothing
+For retryCon = 1 To 30
+    Err.Clear
+    On Error Resume Next
+    Set conShell = session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell")
+    If Err.Number = 0 And Not conShell Is Nothing Then
+        On Error GoTo 0
+        Exit For
+    End If
+    WScript.Sleep 1000
+Next
+On Error GoTo 0
+If conShell Is Nothing Then
+    WScript.Echo "ERROR_NO_GRID: ZPPR6470 Grid container did not load within 30 seconds."
+    WScript.Quit 5
+End If
+
+conShell.pressToolbarButton "&MB_VARIANT"
 session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell").setCurrentCell CInt(layoutRow), "TEXT"
 session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell").selectedRows = CStr(layoutRow)
 session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell").clickCurrentCell
 
-session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell").currentCellRow = 1
-session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell").contextMenu
-session.findById("wnd[0]/usr/cntlCON_S100/shellcont/shell").selectContextMenuItem "&XXL"
+conShell.currentCellRow = 1
+conShell.contextMenu
+conShell.selectContextMenuItem "&XXL"
 
-session.findById("wnd[1]/tbar[0]/btn[8]").press
-On Error Resume Next
-session.findById("wnd[1]/tbar[0]/btn[11]").press
-session.findById("wnd[1]/tbar[0]/btn[0]").press
-session.findById("wnd[1]/tbar[0]/btn[11]").press
-On Error GoTo 0
+HandleExportPopups
 
 WScript.Echo "SUCCESS: ZPPR6470 completed for Plant " & plant
 WScript.Quit 0
+
+Sub HandleExportPopups()
+    Dim loopCount, wnd
+    For loopCount = 1 To 25
+        WScript.Sleep 1000
+        On Error Resume Next
+        Err.Clear
+        Set wnd = session.findById("wnd[1]")
+        If Err.Number = 0 And Not wnd Is Nothing Then
+            Err.Clear
+            wnd.findById("tbar[0]/btn[11]").press
+            If Err.Number <> 0 Then
+                Err.Clear
+                wnd.findById("tbar[0]/btn[8]").press
+                If Err.Number <> 0 Then
+                    Err.Clear
+                    wnd.findById("tbar[0]/btn[0]").press
+                End If
+            End If
+        Else
+            If loopCount >= 3 Then
+                On Error GoTo 0
+                Exit Sub
+            End If
+        End If
+        On Error GoTo 0
+    Next
+End Sub

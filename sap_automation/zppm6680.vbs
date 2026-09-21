@@ -31,6 +31,10 @@ If IsObject(WScript) Then
 End If
 On Error GoTo 0
 
+On Error Resume Next
+session.findById("wnd[0]").maximize
+On Error GoTo 0
+
 Dim plant, startMonth, endMonth
 plant = "1840"
 startMonth = "2026.08"
@@ -48,15 +52,57 @@ session.findById("wnd[0]/usr/txtSO_EMONU-LOW").text = startMonth
 session.findById("wnd[0]/usr/txtSO_EMONU-HIGH").text = endMonth
 session.findById("wnd[0]").sendVKey 8
 
-session.findById("wnd[0]/usr/cntlCC_CONTAINER_0100/shellcont/shell/shellcont/shell").currentCellRow = 1
-session.findById("wnd[0]/usr/cntlCC_CONTAINER_0100/shellcont/shell/shellcont/shell").contextMenu
-session.findById("wnd[0]/usr/cntlCC_CONTAINER_0100/shellcont/shell/shellcont/shell").selectContextMenuItem "&XXL"
-
-session.findById("wnd[1]/tbar[0]/btn[8]").press
-On Error Resume Next
-session.findById("wnd[1]/tbar[0]/btn[0]").press
-session.findById("wnd[1]/tbar[0]/btn[11]").press
+Dim grid, retry
+Set grid = Nothing
+For retry = 1 To 30
+    Err.Clear
+    On Error Resume Next
+    Set grid = session.findById("wnd[0]/usr/cntlCC_CONTAINER_0100/shellcont/shell/shellcont/shell")
+    If Err.Number = 0 And Not grid Is Nothing Then
+        On Error GoTo 0
+        Exit For
+    End If
+    WScript.Sleep 1000
+Next
 On Error GoTo 0
+If grid Is Nothing Then
+    WScript.Echo "ERROR_NO_GRID: ZPPM6680 ALV Grid did not load within 30 seconds."
+    WScript.Quit 5
+End If
+
+grid.currentCellRow = 1
+grid.contextMenu
+grid.selectContextMenuItem "&XXL"
+
+HandleExportPopups
 
 WScript.Echo "SUCCESS: ZPPM6680 completed for Plant " & plant
 WScript.Quit 0
+
+Sub HandleExportPopups()
+    Dim loopCount, wnd
+    For loopCount = 1 To 25
+        WScript.Sleep 1000
+        On Error Resume Next
+        Err.Clear
+        Set wnd = session.findById("wnd[1]")
+        If Err.Number = 0 And Not wnd Is Nothing Then
+            Err.Clear
+            wnd.findById("tbar[0]/btn[11]").press
+            If Err.Number <> 0 Then
+                Err.Clear
+                wnd.findById("tbar[0]/btn[8]").press
+                If Err.Number <> 0 Then
+                    Err.Clear
+                    wnd.findById("tbar[0]/btn[0]").press
+                End If
+            End If
+        Else
+            If loopCount >= 3 Then
+                On Error GoTo 0
+                Exit Sub
+            End If
+        End If
+        On Error GoTo 0
+    Next
+End Sub
