@@ -188,6 +188,9 @@ function runVbs(vbsFile, args = []) {
         if (out.includes("ERROR_NO_SESSION")) {
             throw new Error("활성화된 SAP 세션 창(화면)이 없습니다.");
         }
+        if (out.includes("ERROR_ZERO_ROWS")) {
+            throw new Error(`SAP ERP 조회 결과가 0건입니다. (${out.trim()}) SAP의 조회 조건(기간/버전/플랜트)을 확인해 주세요.`);
+        }
         throw new Error(out || err.message);
     }
 }

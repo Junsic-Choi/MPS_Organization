@@ -267,7 +267,6 @@ app.get('/api/sync-sap/status', (req, res) => {
     }
 });
 
-
 // 서버 종료 API
 app.post('/api/shutdown', (req, res) => {
     console.log('[api] Shutdown requested. Exiting...');

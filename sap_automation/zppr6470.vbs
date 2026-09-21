@@ -96,6 +96,11 @@ session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CO
 session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell").selectedRows = CStr(layoutRow)
 session.findById("wnd[1]/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell").clickCurrentCell
 
+If conShell.rowCount = 0 Then
+    WScript.Echo "ERROR_ZERO_ROWS: ZPPR6470 Plant " & plant & " has 0 component requirement rows."
+    WScript.Quit 6
+End If
+
 conShell.currentCellRow = 1
 conShell.contextMenu
 conShell.selectContextMenuItem "&XXL"

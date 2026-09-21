@@ -50,6 +50,12 @@ session.findById("wnd[0]").sendVKey 0
 session.findById("wnd[0]/usr/ctxtPA_WERKS").text = plant
 session.findById("wnd[0]/usr/txtSO_EMONU-LOW").text = startMonth
 session.findById("wnd[0]/usr/txtSO_EMONU-HIGH").text = endMonth
+On Error Resume Next
+session.findById("wnd[0]/usr/ctxtSO_VERID-LOW").text = ""
+session.findById("wnd[0]/usr/ctxtSO_VERID-HIGH").text = ""
+session.findById("wnd[0]/usr/ctxtSO_MATNR-LOW").text = ""
+session.findById("wnd[0]/usr/ctxtSO_MATNR-HIGH").text = ""
+On Error GoTo 0
 session.findById("wnd[0]").sendVKey 8
 
 Dim grid, retry
@@ -68,6 +74,11 @@ On Error GoTo 0
 If grid Is Nothing Then
     WScript.Echo "ERROR_NO_GRID: ZPPM6680 ALV Grid did not load within 30 seconds."
     WScript.Quit 5
+End If
+
+If grid.rowCount = 0 Then
+    WScript.Echo "ERROR_ZERO_ROWS: ZPPM6680 Plant " & plant & " (" & startMonth & " ~ " & endMonth & ") has 0 planned orders."
+    WScript.Quit 6
 End If
 
 grid.currentCellRow = 1

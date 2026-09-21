@@ -2008,8 +2008,38 @@ DST: 22. 지티테크`;
         }
 
         async function triggerSapSync() {
+            // Check if active filters or allData has month information
+            let startMonth = null, endMonth = null;
+            if (activeFilters && activeFilters.months && activeFilters.months.length > 0) {
+                const mList = activeFilters.months.map(m => parseInt(m.replace(/[^0-9]/g, ''))).filter(n => n >= 1 && n <= 12);
+                if (mList.length > 0) {
+                    const firstM = mList[0];
+                    const lastM = mList[mList.length - 1];
+                    const y = new Date().getFullYear();
+                    const y1 = firstM < 6 && lastM >= 6 ? y + 1 : y;
+                    const y2 = lastM < firstM ? y + 1 : y;
+                    startMonth = `${y}.${String(firstM).padStart(2, '0')}`;
+                    endMonth = `${y2}.${String(lastM).padStart(2, '0')}`;
+                }
+            } else if (typeof allData !== 'undefined' && Array.isArray(allData) && allData.length > 0) {
+                const allMonths = new Set();
+                allData.forEach(r => {
+                    if (r.month) {
+                        const m = parseInt(String(r.month).replace(/[^0-9]/g, ''));
+                        if (m >= 1 && m <= 12) allMonths.add(m);
+                    }
+                });
+                const sortedM = Array.from(allMonths).sort((a, b) => a - b);
+                if (sortedM.length > 0) {
+                    const y = new Date().getFullYear();
+                    startMonth = `${y}.${String(sortedM[0]).padStart(2, '0')}`;
+                    endMonth = `${y}.${String(sortedM[sortedM.length - 1]).padStart(2, '0')}`;
+                }
+            }
+
+            const promptDates = startMonth && endMonth ? `\n(수집 대상 기간: ${startMonth} ~ ${endMonth})` : "";
             const confirmMsg = 
-                "SAP ERP 최신 소요 결합 데이터를 지금 즉시 자동으로 수집하시겠습니까?\n\n" +
+                "SAP ERP 최신 소요 결합 데이터를 지금 즉시 자동으로 수집하시겠습니까?" + promptDates + "\n\n" +
                 "■ 원스톱 수집 파이프라인:\n" +
                 " 1. 남산+(1840) 생산계획 데이터 수집 (ZPPM6680)\n" +
                 " 2. 남산+(1840) 가공품 소요량 데이터 수집 (ZPPR6470)\n" +
@@ -2023,7 +2053,7 @@ DST: 22. 지티테크`;
                 const res = await fetch('/api/sync-sap', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ startMonth, endMonth })
                 });
                 const data = await res.json();
                 if (data.success) {
