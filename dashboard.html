@@ -856,30 +856,33 @@
                             
                             <!-- 4 File Status List -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.6rem; font-size: 0.72rem;">
-                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                <div id="sap-card-1840" style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s;">
                                     <div style="color: #cbd5e1; font-weight: 600;">1840 남산+ 생산계획</div>
                                     <div id="sap-status-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
-                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                <div id="sap-card-comp-1840" style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s;">
                                     <div style="color: #cbd5e1; font-weight: 600;">1840 남산+ 부품 소요량</div>
                                     <div id="sap-status-comp-1840" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
-                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                <div id="sap-card-1842" style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s;">
                                     <div style="color: #cbd5e1; font-weight: 600;">1842 성주 생산계획</div>
                                     <div id="sap-status-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
-                                <div style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                                <div id="sap-card-comp-1842" style="background: rgba(15, 23, 42, 0.5); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s;">
                                     <div style="color: #cbd5e1; font-weight: 600;">1842 성주 부품 소요량</div>
                                     <div id="sap-status-comp-1842" style="color: var(--text-secondary); font-size: 0.68rem;">확인 중...</div>
                                 </div>
                             </div>
 
-                            <!-- Progress Bar & Status Text -->
-                            <div id="sap-sync-progress-box" style="display: none; margin-bottom: 0.6rem;">
-                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
-                                    <div id="sap-sync-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.3s;"></div>
+                            <!-- Progress Bar & Status Text with Percentage -->
+                            <div id="sap-sync-progress-box" style="display: none; margin-bottom: 0.6rem; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.6rem 0.8rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                    <div id="sap-sync-live-text" style="font-size: 0.76rem; color: #93c5fd; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 82%;">동기화 준비 중...</div>
+                                    <div id="sap-sync-pct" style="font-size: 0.82rem; color: #38bdf8; font-weight: 700; font-family: monospace;">0%</div>
                                 </div>
-                                <div id="sap-sync-live-text" style="font-size: 0.75rem; color: #93c5fd; font-weight: 500;">동기화 진행 중...</div>
+                                <div style="width: 100%; height: 7px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div id="sap-sync-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981); transition: width 0.4s ease;"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -2099,6 +2102,8 @@ DST: 22. 지티테크`;
                     const el1840 = document.getElementById('sap-status-1840');
                     const elComp1840 = document.getElementById('sap-status-comp-1840');
                     const el1842 = document.getElementById('sap-status-1842');
+                    const elComp1842 = document.getElementById('sap-status-comp-1842');
+
                     const fmtFileText = (f) => {
                         if (!f) return '미수집';
                         const rowsText = f.rows ? ` · ${Number(f.rows).toLocaleString()}건` : '';
@@ -2114,29 +2119,55 @@ DST: 22. 지티테크`;
                 const progressBox = document.getElementById('sap-sync-progress-box');
                 const progressBar = document.getElementById('sap-sync-progress-bar');
                 const liveText = document.getElementById('sap-sync-live-text');
+                const pctEl = document.getElementById('sap-sync-pct');
                 const syncBtn = document.getElementById('sap-sync-btn');
                 const headerBtn = document.getElementById('header-sap-sync-btn');
 
+                const resetCardHighlights = () => {
+                    ['sap-card-1840', 'sap-card-comp-1840', 'sap-card-1842', 'sap-card-comp-1842'].forEach(id => {
+                        const card = document.getElementById(id);
+                        if (card) {
+                            card.style.borderColor = 'rgba(255,255,255,0.06)';
+                            card.style.background = 'rgba(15, 23, 42, 0.5)';
+                        }
+                    });
+                };
+
                 if (data.running) {
+                    const step = data.currentStep || 1;
+                    const total = data.totalSteps || 4;
+                    const pct = Math.min(100, Math.round((step / total) * 100));
+
                     if (badge) {
                         badge.style.background = 'rgba(234, 179, 8, 0.2)';
                         badge.style.color = '#facc15';
-                        badge.innerText = `진행 중 [${data.currentStep}/${data.totalSteps}]`;
+                        badge.innerText = `진행 중 [${step}/${total}단계] (${pct}%)`;
                     }
                     if (progressBox) progressBox.style.display = 'block';
-                    if (progressBar) progressBar.style.width = `${(data.currentStep / data.totalSteps) * 100}%`;
-                    if (liveText) liveText.innerText = data.statusText || '동기화 진행 중...';
+                    if (progressBar) progressBar.style.width = `${pct}%`;
+                    if (pctEl) pctEl.innerText = `${pct}%`;
+                    if (liveText) liveText.innerText = data.statusText || `동기화 진행 중 (${pct}%)...`;
+                    
                     if (syncBtn) {
                         syncBtn.disabled = true;
-                        syncBtn.style.opacity = '0.6';
-                        syncBtn.innerHTML = '<span>⏳</span> <span>SAP 데이터 수집 중...</span>';
+                        syncBtn.style.opacity = '0.7';
+                        syncBtn.innerHTML = `<span>⏳</span> <span>동기화 진행 중 [${step}/4] (${pct}%)</span>`;
                     }
                     if (headerBtn) {
                         headerBtn.disabled = true;
-                        headerBtn.style.opacity = '0.6';
-                        headerBtn.innerHTML = '<span>⏳</span> 수집 중...';
+                        headerBtn.style.opacity = '0.7';
+                        headerBtn.innerHTML = `<span>⏳</span> 수집 중 (${pct}%)`;
+                    }
+
+                    resetCardHighlights();
+                    const activeCardId = step === 1 ? 'sap-card-1840' : (step === 2 ? 'sap-card-comp-1840' : (step === 3 ? 'sap-card-1842' : 'sap-card-comp-1842'));
+                    const activeCard = document.getElementById(activeCardId);
+                    if (activeCard) {
+                        activeCard.style.borderColor = '#38bdf8';
+                        activeCard.style.background = 'rgba(56, 189, 248, 0.12)';
                     }
                 } else {
+                    resetCardHighlights();
                     if (syncBtn) {
                         syncBtn.disabled = false;
                         syncBtn.style.opacity = '1';
@@ -2155,15 +2186,17 @@ DST: 22. 지티테크`;
                             badge.innerText = '오류 발생';
                         }
                         if (progressBox) progressBox.style.display = 'block';
+                        if (pctEl) pctEl.innerText = '중단';
                         if (liveText) liveText.innerHTML = `<span style="color: var(--danger)">❌ ${data.error}</span>`;
                     } else if (data.finishedAt) {
                         if (badge) {
                             badge.style.background = 'rgba(16, 185, 129, 0.2)';
                             badge.style.color = '#34d399';
-                            badge.innerText = '동기화 완료';
+                            badge.innerText = '동기화 완료 (100%)';
                         }
                         if (progressBox) progressBox.style.display = 'block';
                         if (progressBar) progressBar.style.width = '100%';
+                        if (pctEl) pctEl.innerText = '100%';
                         if (liveText) liveText.innerHTML = '<span style="color: #34d399">✅ 4개 파일 최신 동기화 완료!</span>';
                         if (typeof loadSavedSapFiles === 'function') {
                             loadSavedSapFiles();
@@ -2222,6 +2255,29 @@ DST: 22. 지티테크`;
 
             if (!confirm(confirmMsg)) return;
 
+            // Instant UI feedback
+            const progressBox = document.getElementById('sap-sync-progress-box');
+            const progressBar = document.getElementById('sap-sync-progress-bar');
+            const pctEl = document.getElementById('sap-sync-pct');
+            const liveText = document.getElementById('sap-sync-live-text');
+            const syncBtn = document.getElementById('sap-sync-btn');
+            const badge = document.getElementById('sap-sync-badge');
+
+            if (progressBox) progressBox.style.display = 'block';
+            if (progressBar) progressBar.style.width = '5%';
+            if (pctEl) pctEl.innerText = '0%';
+            if (liveText) liveText.innerText = '동기화 작업 요청 및 SAP 연결 확인 중...';
+            if (badge) {
+                badge.style.background = 'rgba(234, 179, 8, 0.2)';
+                badge.style.color = '#facc15';
+                badge.innerText = '시작 중 (0%)';
+            }
+            if (syncBtn) {
+                syncBtn.disabled = true;
+                syncBtn.style.opacity = '0.7';
+                syncBtn.innerHTML = '<span>⏳</span> <span>SAP 동기화 시작 중...</span>';
+            }
+
             try {
                 const res = await fetch('/api/sync-sap', {
                     method: 'POST',
@@ -2234,9 +2290,13 @@ DST: 22. 지티테크`;
                     sapSyncPollingInterval = setInterval(fetchSapSyncStatus, 1500);
                     fetchSapSyncStatus();
                 } else {
+                    if (progressBox) progressBox.style.display = 'none';
+                    if (syncBtn) { syncBtn.disabled = false; syncBtn.style.opacity = '1'; syncBtn.innerHTML = '<span>🚀</span> <span>SAP 최신 데이터 동기화 시작</span>'; }
                     alert('동기화 요청 실패: ' + data.error);
                 }
             } catch (e) {
+                if (progressBox) progressBox.style.display = 'none';
+                if (syncBtn) { syncBtn.disabled = false; syncBtn.style.opacity = '1'; syncBtn.innerHTML = '<span>🚀</span> <span>SAP 최신 데이터 동기화 시작</span>'; }
                 alert('서버 연결 실패: ' + e.message);
             }
         }
