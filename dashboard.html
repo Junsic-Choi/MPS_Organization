@@ -887,8 +887,8 @@
                             <button id="sap-sync-btn" onclick="triggerSapSync()" style="flex: 1; background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; border: none; padding: 0.65rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
                                 <span id="sap-sync-icon">🚀</span> <span>SAP 최신 데이터 동기화 시작</span>
                             </button>
-                            <button id="sap-preview-btn" onclick="openSapPreviewModal()" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15); padding: 0.65rem 0.9rem; border-radius: 8px; font-weight: 600; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" title="수집된 4개 SAP 데이터의 상세 건수, 컬럼, 상위 행을 직접 확인하고 원본을 다운로드합니다.">
-                                <span>🔍</span> <span>데이터 검증</span>
+                            <button id="sap-diff-btn" onclick="openSapDiffModal()" style="background: linear-gradient(135deg, #059669, #0d9488); color: #ffffff; border: none; padding: 0.65rem 0.95rem; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(13,148,136,0.3);" title="이전 동기화 대비 하위 가공품(BOM)의 신규/삭제/소요량 변동(설변)을 실시간으로 비교 분석합니다.">
+                                <span>🔄</span> <span>설변/가공품 변동 분석</span>
                             </button>
                         </div>
                     </div>
@@ -1026,6 +1026,120 @@
 
                 <div class="master-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; background: rgba(0,0,0,0.05); border-radius: 0 0 16px 16px; margin-top: 0;">
                     <button class="btn" onclick="closeCompareDetail()" style="padding: 0.6rem 1.5rem; background: var(--accent-color); color: white;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAP Diff & Engineering Change (설변) Modal -->
+        <div id="sap-diff-overlay" class="master-editor-overlay" onclick="if(event.target === this) closeSapDiffModal()">
+            <div class="master-editor" style="max-width: 1200px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; padding: 1.5rem;" onclick="event.stopPropagation()">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.8rem; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.5rem;">🔄</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <span>ERP 설계변경(설변) 및 하위 가공품 소요량 변동 분석</span>
+                                <span id="diff-status-badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(59,130,246,0.15); color: #60a5fa; font-weight: 600;">실시간 비교 완료</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">동기화 시점 간 ZPPR6470(가공품 소요량)의 신규 부품 투입, 단종/삭제, 소요 수량 증감을 즉시 추적합니다.</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button onclick="openSapPreviewModal()" class="btn-small" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer;">🔍 원본 파일 검증</button>
+                        <span onclick="closeSapDiffModal()" style="font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; line-height: 1; padding: 4px;">&times;</span>
+                    </div>
+                </div>
+
+                <!-- Comparison Timeline & Selection Bar -->
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 0.8rem;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                        <span style="color: var(--text-secondary); font-weight: 600;">비교 기준 (과거):</span>
+                        <select id="sap-diff-base-select" onchange="runSapDiffCompare()" style="background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
+                        <span style="color: #60a5fa; font-weight: 700;">➔</span>
+                        <span style="color: var(--text-secondary); font-weight: 600;">비교 대상 (최신):</span>
+                        <select id="sap-diff-target-select" onchange="runSapDiffCompare()" style="background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
+                        <button onclick="loadSapDiffHistory(true)" class="btn-small" style="background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; color: #93c5fd; padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 0.78rem;">🔄 다시 비교</button>
+                    </div>
+                    <div>
+                        <button id="diff-excel-btn" onclick="exportSapDiffToExcel()" class="btn-small" style="background: #10b981; color: white; border: none; padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
+                            <span>📥</span> <span>변동 내역 엑셀 다운로드</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards (4 Cards) -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-bottom: 0.8rem;">
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.75rem; color: #34d399; font-weight: 600; margin-bottom: 2px;">🆕 신규 투입 부품 (설변)</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;"><span id="diff-kpi-new">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.75rem; color: #f87171; font-weight: 600; margin-bottom: 2px;">❌ 삭제/단종 부품 (제외)</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #ef4444;"><span id="diff-kpi-deleted">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    </div>
+                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.75rem; color: #fbbf24; font-weight: 600; margin-bottom: 2px;">⚠️ 소요 수량 변동</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;"><span id="diff-kpi-qty">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.75rem; color: #60a5fa; font-weight: 600; margin-bottom: 2px;">📦 영향받는 모기종/오더</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"><span id="diff-kpi-orders">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    </div>
+                </div>
+
+                <!-- Filters & Search Toolbar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); margin-right: 2px;">플랜트:</span>
+                        <button class="diff-plant-btn active" onclick="setDiffPlantFilter('ALL')" id="diff-plant-ALL" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: none; background: var(--accent-color); color: white; cursor: pointer;">전체</button>
+                        <button class="diff-plant-btn" onclick="setDiffPlantFilter('1840')" id="diff-plant-1840" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">1840 남산+</button>
+                        <button class="diff-plant-btn" onclick="setDiffPlantFilter('1842')" id="diff-plant-1842" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">1842 성주</button>
+                        
+                        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+                        
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); margin-right: 2px;">유형:</span>
+                        <button class="diff-type-btn active" onclick="setDiffTypeFilter('ALL')" id="diff-type-ALL" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: none; background: var(--accent-color); color: white; cursor: pointer;">전체</button>
+                        <button class="diff-type-btn" onclick="setDiffTypeFilter('NEW')" id="diff-type-NEW" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">🆕 신규투입</button>
+                        <button class="diff-type-btn" onclick="setDiffTypeFilter('DELETED')" id="diff-type-DELETED" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">❌ 제외/단종</button>
+                        <button class="diff-type-btn" onclick="setDiffTypeFilter('QTY_CHANGE')" id="diff-type-QTY_CHANGE" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">⚠️ 수량변동</button>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="sap-diff-search" placeholder="가공품번, 품명, S/O, 기종 검색..." oninput="renderSapDiffTable()" style="background: #1e293b; border: 1px solid var(--border-color); color: white; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; width: 220px;">
+                        <span id="diff-count-label" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0건</span>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;" id="sap-diff-table">
+                        <thead style="position: sticky; top: 0; background: #1e293b; color: #f8fafc; font-weight: 700; border-bottom: 2px solid var(--border-color);">
+                            <tr>
+                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 40px;">No.</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 85px;">변동구분</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 80px;">플랜트</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 95px;">S/O 번호</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 110px;">호기(Serial)</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color);">완제품 기종 (모품번/품명)</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); width: 130px;">가공품 품번</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color);">가공품 품명</th>
+                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 45px;">단위</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 75px;">이전소요</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 75px;">최신소요</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 85px;">변동차이</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 75px;">생산월</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sap-diff-tbody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Footer -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem; font-size: 0.75rem; color: var(--text-secondary);">
+                    <span>※ 가공품(BOM) 소요량 비교 키: 플랜트 + S/O오더 + 호기(시리얼) + 자품번(Component)</span>
+                    <button onclick="closeSapDiffModal()" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.4rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600;">닫기</button>
                 </div>
             </div>
         </div>
@@ -2124,6 +2238,277 @@ DST: 22. 지티테크`;
                 }
             } catch (e) {
                 alert('서버 연결 실패: ' + e.message);
+            }
+        }
+
+        let sapDiffHistoryList = [];
+        let sapDiffCurrentResult = null;
+        let currentDiffPlant = 'ALL';
+        let currentDiffType = 'ALL';
+
+        async function openSapDiffModal() {
+            const overlay = document.getElementById('sap-diff-overlay');
+            if (overlay) overlay.style.display = 'flex';
+            await loadSapDiffHistory();
+        }
+
+        function closeSapDiffModal() {
+            const overlay = document.getElementById('sap-diff-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        async function loadSapDiffHistory(forceCompare = false) {
+            try {
+                const res = await fetch('/api/sap-diff/history');
+                const data = await res.json();
+                if (data.success && data.snapshots) {
+                    sapDiffHistoryList = data.snapshots;
+                    populateDiffSelects();
+                    await runSapDiffCompare();
+                }
+            } catch (e) {
+                console.error('Diff history load error:', e);
+            }
+        }
+
+        function populateDiffSelects() {
+            const baseSelect = document.getElementById('sap-diff-base-select');
+            const targetSelect = document.getElementById('sap-diff-target-select');
+            if (!baseSelect || !targetSelect) return;
+
+            const prevBase = baseSelect.value;
+            const prevTarget = targetSelect.value;
+
+            baseSelect.innerHTML = '';
+            targetSelect.innerHTML = '';
+
+            sapDiffHistoryList.forEach(s => {
+                const opt1 = document.createElement('option');
+                opt1.value = s.id;
+                opt1.textContent = s.title;
+                baseSelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = s.id;
+                opt2.textContent = s.title;
+                targetSelect.appendChild(opt2);
+            });
+
+            if (prevTarget && sapDiffHistoryList.some(s => s.id === prevTarget)) {
+                targetSelect.value = prevTarget;
+            } else {
+                targetSelect.value = 'current';
+            }
+
+            if (prevBase && sapDiffHistoryList.some(s => s.id === prevBase)) {
+                baseSelect.value = prevBase;
+            } else {
+                const nonCurrent = sapDiffHistoryList.filter(s => s.id !== 'current');
+                baseSelect.value = nonCurrent.length > 0 ? nonCurrent[0].id : 'current';
+            }
+        }
+
+        async function runSapDiffCompare() {
+            const baseSelect = document.getElementById('sap-diff-base-select');
+            const targetSelect = document.getElementById('sap-diff-target-select');
+            const baseId = baseSelect ? baseSelect.value : '';
+            const targetId = targetSelect ? targetSelect.value : 'current';
+
+            const tbody = document.getElementById('sap-diff-tbody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 25px; color: #94a3b8;">동기화 시점 간 소요량 변동(설변) 분석 중...</td></tr>';
+            }
+
+            try {
+                const res = await fetch('/api/sap-diff/compare', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ baseId, targetId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sapDiffCurrentResult = data;
+                    updateDiffKpis(data.summary);
+                    renderSapDiffTable();
+                } else {
+                    alert('변동 분석 실패: ' + data.error);
+                }
+            } catch (e) {
+                alert('서버 연결 실패: ' + e.message);
+            }
+        }
+
+        function updateDiffKpis(summary) {
+            if (!summary) return;
+            document.getElementById('diff-kpi-new').textContent = Number(summary.totalNew || 0).toLocaleString();
+            document.getElementById('diff-kpi-deleted').textContent = Number(summary.totalDeleted || 0).toLocaleString();
+            document.getElementById('diff-kpi-qty').textContent = Number(summary.totalQtyChanged || 0).toLocaleString();
+            document.getElementById('diff-kpi-orders').textContent = Number(summary.totalOrdersAffected || 0).toLocaleString();
+
+            const badge = document.getElementById('diff-status-badge');
+            if (badge) {
+                const total = summary.totalChanges || 0;
+                if (total > 0) {
+                    badge.textContent = `⚠️ 변동 ${total.toLocaleString()}건 감지`;
+                    badge.style.background = 'rgba(245, 158, 11, 0.2)';
+                    badge.style.color = '#fbbf24';
+                } else {
+                    badge.textContent = `✅ 변동 없음 (동일)`;
+                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    badge.style.color = '#34d399';
+                }
+            }
+        }
+
+        function setDiffPlantFilter(plant) {
+            currentDiffPlant = plant;
+            ['ALL', '1840', '1842'].forEach(p => {
+                const btn = document.getElementById(`diff-plant-${p}`);
+                if (!btn) return;
+                if (p === plant) {
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.color = 'white';
+                    btn.style.border = 'none';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.border = '1px solid var(--border-color)';
+                }
+            });
+            renderSapDiffTable();
+        }
+
+        function setDiffTypeFilter(type) {
+            currentDiffType = type;
+            ['ALL', 'NEW', 'DELETED', 'QTY_CHANGE'].forEach(t => {
+                const btn = document.getElementById(`diff-type-${t}`);
+                if (!btn) return;
+                if (t === type) {
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.color = 'white';
+                    btn.style.border = 'none';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.border = '1px solid var(--border-color)';
+                }
+            });
+            renderSapDiffTable();
+        }
+
+        function renderSapDiffTable() {
+            if (!sapDiffCurrentResult || !sapDiffCurrentResult.changes) return;
+            const changes = sapDiffCurrentResult.changes;
+            const search = (document.getElementById('sap-diff-search')?.value || '').trim().toLowerCase();
+
+            const filtered = changes.filter(c => {
+                if (currentDiffPlant !== 'ALL' && c.plant !== currentDiffPlant) return false;
+                if (currentDiffType !== 'ALL' && c.changeType !== currentDiffType) return false;
+                if (search) {
+                    const match = (c.component && c.component.toLowerCase().includes(search)) ||
+                                  (c.compDesc && c.compDesc.toLowerCase().includes(search)) ||
+                                  (c.soOrder && c.soOrder.toLowerCase().includes(search)) ||
+                                  (c.serial && c.serial.toLowerCase().includes(search)) ||
+                                  (c.material && c.material.toLowerCase().includes(search)) ||
+                                  (c.matDesc && c.matDesc.toLowerCase().includes(search));
+                    if (!match) return false;
+                }
+                return true;
+            });
+
+            document.getElementById('diff-count-label').textContent = `${filtered.length.toLocaleString()}건 / 전체 ${changes.length.toLocaleString()}건`;
+
+            const tbody = document.getElementById('sap-diff-tbody');
+            if (filtered.length === 0) {
+                if (changes.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="13" style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                                <div style="font-size: 2rem; margin-bottom: 8px;">✨</div>
+                                <div style="font-size: 0.95rem; font-weight: 600; color: #e2e8f0;">선택하신 두 동기화 시점 간에 하위 가공품(BOM) 소요량 변동(설변)이 없습니다.</div>
+                                <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">ERP 생산계획 및 부품 소요량이 이전과 동일하게 유지되고 있습니다.</div>
+                            </td>
+                        </tr>`;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 30px; color: #94a3b8;">선택하신 필터 조건에 일치하는 변동 내역이 없습니다.</td></tr>';
+                }
+                return;
+            }
+
+            let html = '';
+            filtered.forEach((c, idx) => {
+                const bg = idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                
+                let typeBadge = '';
+                if (c.changeType === 'NEW') {
+                    typeBadge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">🆕 신규</span>';
+                } else if (c.changeType === 'DELETED') {
+                    typeBadge = '<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">❌ 삭제</span>';
+                } else {
+                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">⚠️ 변동</span>';
+                }
+
+                const plantText = c.plant === '1840' ? '<span style="color: #60a5fa; font-weight: 600;">1840 남산+</span>' : '<span style="color: #c084fc; font-weight: 600;">1842 성주</span>';
+                
+                const diffVal = Number(c.diffQty);
+                const diffColor = diffVal > 0 ? '#34d399' : '#f87171';
+                const diffPrefix = diffVal > 0 ? '+' : '';
+
+                html += `<tr style="background: ${bg}; border-bottom: 1px solid var(--border-color); font-size: 0.76rem;">
+                    <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${idx + 1}</td>
+                    <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${typeBadge}</td>
+                    <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${plantText}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; color: #f8fafc; border-right: 1px solid var(--border-color);">${c.soOrder || '-'}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; color: #cbd5e1; border-right: 1px solid var(--border-color);">${c.serial || '-'}</td>
+                    <td style="padding: 6px 10px; border-right: 1px solid var(--border-color);" title="${c.matDesc || ''}">
+                        <div style="font-weight: 600; color: #f8fafc;">${c.material || '-'}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.matDesc || ''}</div>
+                    </td>
+                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: #38bdf8; border-right: 1px solid var(--border-color);">${c.component}</td>
+                    <td style="padding: 6px 10px; color: #e2e8f0; border-right: 1px solid var(--border-color); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.compDesc}">${c.compDesc}</td>
+                    <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.unit || '-'}</td>
+                    <td style="padding: 6px 10px; text-align: right; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${Number(c.oldQty).toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #f8fafc; border-right: 1px solid var(--border-color);">${Number(c.newQty).toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: ${diffColor}; border-right: 1px solid var(--border-color);">${diffPrefix}${Number(c.diffQty).toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: var(--text-secondary);">${c.prodMonth || '-'}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        async function exportSapDiffToExcel() {
+            if (!sapDiffCurrentResult || !sapDiffCurrentResult.changes || sapDiffCurrentResult.changes.length === 0) {
+                alert('다운로드할 변동 내역이 없습니다.');
+                return;
+            }
+            try {
+                const btn = document.getElementById('diff-excel-btn');
+                if (btn) btn.disabled = true;
+                const res = await fetch('/api/sap-diff/export-excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        changes: sapDiffCurrentResult.changes,
+                        baseTitle: sapDiffCurrentResult.baseTitle,
+                        targetTitle: sapDiffCurrentResult.targetTitle
+                    })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const d = new Date().toISOString().slice(0,10).replace(/-/g,'');
+                a.download = `ERP_설변_가공품변동_${d}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('엑셀 다운로드 실패: ' + e.message);
+            } finally {
+                const btn = document.getElementById('diff-excel-btn');
+                if (btn) btn.disabled = false;
             }
         }
 

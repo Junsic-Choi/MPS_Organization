@@ -135,6 +135,47 @@ async function waitForNewExportFile(sinceTimestamp, maxWaitSec = 180) {
     return null;
 }
 
+function archiveCurrentSapSnapshot() {
+    try {
+        const files = ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'];
+        const existing = files.filter(f => fs.existsSync(path.join(WORKSPACE_DIR, f)));
+        if (existing.length === 0) return null;
+
+        const historyDir = path.join(WORKSPACE_DIR, 'sap_history');
+        if (!fs.existsSync(historyDir)) fs.mkdirSync(historyDir, { recursive: true });
+
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const tsId = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const snapshotDir = path.join(historyDir, tsId);
+        fs.mkdirSync(snapshotDir, { recursive: true });
+
+        const stats = {};
+        existing.forEach(f => {
+            const src = path.join(WORKSPACE_DIR, f);
+            const dst = path.join(snapshotDir, f);
+            fs.copyFileSync(src, dst);
+            const st = fs.statSync(src);
+            stats[f] = { size: st.size, mtime: st.mtime };
+        });
+
+        const meta = {
+            id: tsId,
+            title: `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`,
+            timestamp: now.getTime(),
+            createdAt: now.toISOString(),
+            files: existing,
+            fileStats: stats
+        };
+        fs.writeFileSync(path.join(snapshotDir, 'metadata.json'), JSON.stringify(meta, null, 2), 'utf8');
+        console.log(`[Snapshot] Archived current SAP files to sap_history/${tsId}`);
+        return tsId;
+    } catch (e) {
+        console.error('[Snapshot] Archive error:', e.message);
+        return null;
+    }
+}
+
 function copyExportToWorkspace(sourcePath, targetFilename) {
     const dest = path.join(WORKSPACE_DIR, targetFilename);
     fs.copyFileSync(sourcePath, dest);
@@ -221,7 +262,10 @@ async function runSapSync(options = {}) {
         console.log(`  [SAP One-Stop Sync] Starting Sync for ${startMonth} ~ ${endMonth}`);
         console.log("=======================================================\n");
 
-        // 0. Initial cleanup: Close prior SAP export windows and return SAP to home
+        // 0. Auto Archive previous sync files to sap_history
+        archiveCurrentSapSnapshot();
+
+        // Initial cleanup: Close prior SAP export windows and return SAP to home
         closeSapExcel();
         cleanSapExportDir();
         try { runVbs("return_home.vbs"); } catch (e) {}

@@ -5,6 +5,8 @@ tmp_extraction/
 
 # Excel / 대용량 데이터 파일 (필요 시 특정 파일만 제외)
 *.MHTML
+*.mhtml
+sap_history/
 *.xlsb
 *.xlsm
 *.xls

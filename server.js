@@ -4,6 +4,7 @@ const cors = require('cors');
 const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const multer = require('multer');
+const XLSX = require('xlsx');
 const { processMpsFile } = require('./extractor');
 
 
@@ -338,6 +339,302 @@ app.get('/api/sap-preview', (req, res) => {
         res.json({ success: true, data: result });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+// ==========================================
+// SAP Diff & Engineering Change (설변) APIs
+// ==========================================
+const HISTORY_DIR = path.join(__dirname, 'sap_history');
+
+function parseComponentMhtml(filePath) {
+    if (!fs.existsSync(filePath)) return [];
+    const content = fs.readFileSync(filePath, 'utf8');
+    const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+    if (trs.length < 2) return [];
+
+    const headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
+        .map(c => c.replace(/<[^>]+>/g, '').trim().toUpperCase());
+
+    const idxPlant = headers.findIndex(h => h.includes('PLANT') || h.includes('플랜트'));
+    const idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
+    const idxSO = headers.findIndex(h => h.includes('S/O') || h.includes('SALES'));
+    const idxOrder = headers.findIndex(h => h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O'));
+    const idxMonth = headers.findIndex(h => h.includes('PROD.MONTH') || h.includes('생산월'));
+    const idxMat = headers.findIndex(h => h.includes('MATERIAL NUMBER') || h.includes('자재'));
+    const idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
+    const idxComp = headers.findIndex(h => h === 'COMPONENT' || h.includes('구성부품'));
+    const idxCompDesc = headers.findIndex(h => h.includes('COMP.DESC') || h.includes('구성부품내역'));
+    const idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('소요량'));
+    const idxUnit = headers.findIndex(h => h.includes('BASE UNIT') || h.includes('단위'));
+
+    const records = [];
+    for (let i = 1; i < trs.length; i++) {
+        const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
+            .map(c => c.replace(/<[^>]+>/g, '').trim());
+        if (cells.length === 0) continue;
+
+        const comp = cells[idxComp] || '';
+        if (!comp) continue;
+
+        records.push({
+            plant: cells[idxPlant] || '',
+            serial: cells[idxSerial] || '',
+            soOrder: cells[idxSO] || '',
+            order: cells[idxOrder] || '',
+            prodMonth: cells[idxMonth] || '',
+            material: cells[idxMat] || '',
+            matDesc: cells[idxMatDesc] || '',
+            component: comp,
+            compDesc: cells[idxCompDesc] || '',
+            qty: parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0,
+            unit: cells[idxUnit] || ''
+        });
+    }
+    return records;
+}
+
+function getSnapshotDir(snapshotId) {
+    if (!snapshotId || snapshotId === 'current') return __dirname;
+    return path.join(HISTORY_DIR, snapshotId);
+}
+
+function loadComponentDataset(snapshotId) {
+    const dir = getSnapshotDir(snapshotId);
+    const f1840 = path.join(dir, 'sap_component_1840.mhtml');
+    const f1842 = path.join(dir, 'sap_component_1842.mhtml');
+
+    const records = [];
+    if (fs.existsSync(f1840)) records.push(...parseComponentMhtml(f1840));
+    if (fs.existsSync(f1842)) records.push(...parseComponentMhtml(f1842));
+    return records;
+}
+
+function getSnapshotList() {
+    const list = [
+        {
+            id: 'current',
+            title: '현재 수집 데이터 (최신 Live)',
+            timestamp: Date.now(),
+            isCurrent: true
+        }
+    ];
+    if (fs.existsSync(HISTORY_DIR)) {
+        const dirs = fs.readdirSync(HISTORY_DIR).filter(d => {
+            const full = path.join(HISTORY_DIR, d);
+            return fs.statSync(full).isDirectory();
+        });
+        dirs.forEach(d => {
+            const metaPath = path.join(HISTORY_DIR, d, 'metadata.json');
+            if (fs.existsSync(metaPath)) {
+                try {
+                    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                    list.push({
+                        id: meta.id || d,
+                        title: meta.title || d,
+                        timestamp: meta.timestamp || 0,
+                        createdAt: meta.createdAt || ''
+                    });
+                } catch (e) {
+                    list.push({ id: d, title: d, timestamp: 0 });
+                }
+            } else {
+                list.push({ id: d, title: d, timestamp: 0 });
+            }
+        });
+    }
+    return list.sort((a, b) => {
+        if (a.id === 'current') return -1;
+        if (b.id === 'current') return 1;
+        return (b.timestamp || 0) - (a.timestamp || 0);
+    });
+}
+
+function calculateComponentDiff(recordsA, recordsB) {
+    const aggregate = (records) => {
+        const map = new Map();
+        for (const r of records) {
+            const key = [r.plant, r.soOrder || r.order || '', r.serial || '', r.component].join('|');
+            if (!map.has(key)) {
+                map.set(key, { ...r, qty: 0 });
+            }
+            map.get(key).qty += r.qty;
+        }
+        return map;
+    };
+
+    const mapA = aggregate(recordsA);
+    const mapB = aggregate(recordsB);
+
+    const changes = [];
+    const ordersAffected = new Set();
+
+    // Check items in B
+    for (const [key, itemB] of mapB) {
+        if (!mapA.has(key)) {
+            changes.push({
+                changeType: 'NEW',
+                plant: itemB.plant,
+                soOrder: itemB.soOrder,
+                serial: itemB.serial,
+                order: itemB.order,
+                prodMonth: itemB.prodMonth,
+                material: itemB.material,
+                matDesc: itemB.matDesc,
+                component: itemB.component,
+                compDesc: itemB.compDesc,
+                unit: itemB.unit,
+                oldQty: 0,
+                newQty: itemB.qty,
+                diffQty: itemB.qty
+            });
+            ordersAffected.add(itemB.soOrder || itemB.order || itemB.serial);
+        } else {
+            const itemA = mapA.get(key);
+            if (Math.abs(itemA.qty - itemB.qty) > 0.0001) {
+                const diff = itemB.qty - itemA.qty;
+                changes.push({
+                    changeType: 'QTY_CHANGE',
+                    plant: itemB.plant,
+                    soOrder: itemB.soOrder,
+                    serial: itemB.serial,
+                    order: itemB.order,
+                    prodMonth: itemB.prodMonth,
+                    material: itemB.material,
+                    matDesc: itemB.matDesc,
+                    component: itemB.component,
+                    compDesc: itemB.compDesc,
+                    unit: itemB.unit,
+                    oldQty: itemA.qty,
+                    newQty: itemB.qty,
+                    diffQty: diff
+                });
+                ordersAffected.add(itemB.soOrder || itemB.order || itemB.serial);
+            }
+        }
+    }
+
+    // Check items deleted from A
+    for (const [key, itemA] of mapA) {
+        if (!mapB.has(key)) {
+            changes.push({
+                changeType: 'DELETED',
+                plant: itemA.plant,
+                soOrder: itemA.soOrder,
+                serial: itemA.serial,
+                order: itemA.order,
+                prodMonth: itemA.prodMonth,
+                material: itemA.material,
+                matDesc: itemA.matDesc,
+                component: itemA.component,
+                compDesc: itemA.compDesc,
+                unit: itemA.unit,
+                oldQty: itemA.qty,
+                newQty: 0,
+                diffQty: -itemA.qty
+            });
+            ordersAffected.add(itemA.soOrder || itemA.order || itemA.serial);
+        }
+    }
+
+    const summary = {
+        totalNew: changes.filter(c => c.changeType === 'NEW').length,
+        totalDeleted: changes.filter(c => c.changeType === 'DELETED').length,
+        totalQtyChanged: changes.filter(c => c.changeType === 'QTY_CHANGE').length,
+        totalOrdersAffected: ordersAffected.size,
+        totalChanges: changes.length
+    };
+
+    return { summary, changes };
+}
+
+app.get('/api/sap-diff/history', (req, res) => {
+    try {
+        const list = getSnapshotList();
+        res.json({ success: true, snapshots: list });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/sap-diff/compare', (req, res) => {
+    try {
+        const snapshots = getSnapshotList();
+        let targetId = req.body.targetId || 'current';
+        let baseId = req.body.baseId;
+
+        if (!baseId) {
+            const prev = snapshots.find(s => s.id !== targetId);
+            baseId = prev ? prev.id : targetId;
+        }
+
+        const baseTitle = (snapshots.find(s => s.id === baseId) || {}).title || baseId;
+        const targetTitle = (snapshots.find(s => s.id === targetId) || {}).title || targetId;
+
+        const baseRecords = loadComponentDataset(baseId);
+        const targetRecords = loadComponentDataset(targetId);
+
+        const diffResult = calculateComponentDiff(baseRecords, targetRecords);
+
+        res.json({
+            success: true,
+            baseId,
+            baseTitle,
+            targetId,
+            targetTitle,
+            summary: diffResult.summary,
+            changes: diffResult.changes
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/sap-diff/export-excel', (req, res) => {
+    try {
+        const { changes } = req.body;
+        if (!Array.isArray(changes)) {
+            return res.status(400).send('Invalid changes data');
+        }
+
+        const rows = changes.map(c => ({
+            '변동유형': c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'),
+            '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
+            'S/O번호': c.soOrder,
+            '시리얼': c.serial,
+            '계획오더': c.order,
+            '생산월': c.prodMonth,
+            '모품번(기종)': c.material,
+            '기종내역': c.matDesc,
+            '가공품번(Component)': c.component,
+            '가공품명(Comp.Desc)': c.compDesc,
+            '단위': c.unit,
+            '이전 소요량': c.oldQty,
+            '최신 소요량': c.newQty,
+            '소요량 차이(+/-)': c.diffQty
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        const colWidths = [
+            { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 },
+            { wch: 14 }, { wch: 10 }, { wch: 22 }, { wch: 30 },
+            { wch: 18 }, { wch: 28 }, { wch: 8 }, { wch: 12 },
+            { wch: 12 }, { wch: 14 }
+        ];
+        ws['!cols'] = colWidths;
+
+        XLSX.utils.book_append_sheet(wb, ws, 'ERP설변_가공품변동');
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const filename = `ERP_Component_Changes_${dateStr}.xlsx`;
+
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buf);
+    } catch (e) {
+        res.status(500).send(e.message);
     }
 });
 
