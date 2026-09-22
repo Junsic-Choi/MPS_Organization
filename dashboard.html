@@ -1238,50 +1238,61 @@
                     📋 SALES DOC 복사
                 </button>
             </div>
-            <div id="sap-join-section" style="width: 100%; display: flex; align-items: center; gap: 1rem; padding: 1.2rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent-color); border-radius: 12px; display:none; margin-top: 1rem;">
-                <div style="flex: 1;">
-                    <div style="margin-bottom: 0.35rem;">
-                        <span style="font-weight: 700; color: var(--accent-color); font-size: 1.05rem;">🔗 SAP 상세 정보 및 가공품 소요 결합</span>
+            <!-- SAP Manual Join Section (Collapsible Accordion) -->
+            <div id="sap-join-section" style="width: 100%; border: 1px dashed var(--accent-color); border-radius: 12px; background: rgba(59, 130, 246, 0.04); margin-top: 1rem; display: none; flex-direction: column; overflow: hidden; transition: all 0.2s;">
+                <!-- Collapsible Header / Toggle Bar -->
+                <div onclick="toggleSapJoinSection()" style="display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 1.2rem; cursor: pointer; user-select: none; background: rgba(59, 130, 246, 0.06); transition: background 0.2s;" onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" onmouseout="this.style.background='rgba(59, 130, 246, 0.06)'">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.1rem;">🔗</span>
+                        <span style="font-weight: 700; color: var(--accent-color); font-size: 0.95rem;">SAP 상세 정보 및 가공품 소요 결합 관리</span>
+                        <span id="sap-join-auto-badge" style="font-size: 0.72rem; padding: 2px 7px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600;">✅ 자동 결합 적용됨</span>
+                        <span id="sap-last-sync-time" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 4px;"></span>
                     </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <span id="sap-sync-desc">서버에 저장된 최신 SAP 파일(남산+/성주)을 불러오거나 필요 시 수동으로 파일을 등록하여 결합합니다.</span>
-                        <span id="sap-last-sync-time" style="font-size: 0.75rem; color: #10b981; font-weight: 600;"></span>
-                    </div>
+                    <button id="sap-join-toggle-btn" type="button" class="btn-small" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 4px; pointer-events: none;">
+                        <span id="sap-join-toggle-icon">▼</span> <span id="sap-join-toggle-text">수동 관리 펼치기</span>
+                    </button>
                 </div>
-                <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                        <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1842(성주)</label>
-                        <input type="file" id="sap-1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1842')">
-                        <div style="display: flex; gap: 4px;">
-                            <button onclick="document.getElementById('sap-1842').click()" class="btn-small" id="btn-1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
-                            <button onclick="cancelSapFile('1842')" class="btn-small" id="btn-cancel-1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
-                        </div>
+
+                <!-- Collapsible Content Body (Default Hidden) -->
+                <div id="sap-join-body" style="display: none; padding: 1rem 1.2rem; border-top: 1px solid rgba(59, 130, 246, 0.15); align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); max-width: 280px; line-height: 1.4;">
+                        원스톱 동기화 데이터가 기본 적용되어 있습니다. 별도의 수동 MHTML 파일로 개별 덮어쓰기할 때만 아래에서 선택 후 [결합 실행]을 누르세요.
                     </div>
-                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                        <label for="sap-1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1840(남산+)</label>
-                        <input type="file" id="sap-1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1840')">
-                        <div style="display: flex; gap: 4px;">
-                            <button onclick="document.getElementById('sap-1840').click()" class="btn-small" id="btn-1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
-                            <button onclick="cancelSapFile('1840')" class="btn-small" id="btn-cancel-1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <label for="sap-1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1842(성주)</label>
+                            <input type="file" id="sap-1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1842')">
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="document.getElementById('sap-1842').click()" class="btn-small" id="btn-1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                                <button onclick="cancelSapFile('1842')" class="btn-small" id="btn-cancel-1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                        <label for="sap-component_1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1842)</label>
-                        <input type="file" id="sap-component_1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1842')">
-                        <div style="display: flex; gap: 4px;">
-                            <button onclick="document.getElementById('sap-component_1842').click()" class="btn-small" id="btn-component_1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
-                            <button onclick="cancelSapFile('component_1842')" class="btn-small" id="btn-cancel-component_1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <label for="sap-1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">1840(남산+)</label>
+                            <input type="file" id="sap-1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, '1840')">
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="document.getElementById('sap-1840').click()" class="btn-small" id="btn-1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                                <button onclick="cancelSapFile('1840')" class="btn-small" id="btn-cancel-1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                        <label for="sap-component_1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1840)</label>
-                        <input type="file" id="sap-component_1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1840')">
-                        <div style="display: flex; gap: 4px;">
-                            <button onclick="document.getElementById('sap-component_1840').click()" class="btn-small" id="btn-component_1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
-                            <button onclick="cancelSapFile('component_1840')" class="btn-small" id="btn-cancel-component_1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                        <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <label for="sap-component_1842" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1842)</label>
+                            <input type="file" id="sap-component_1842" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1842')">
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="document.getElementById('sap-component_1842').click()" class="btn-small" id="btn-component_1842" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                                <button onclick="cancelSapFile('component_1842')" class="btn-small" id="btn-cancel-component_1842" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                            </div>
                         </div>
+                        <div class="sap-upload-box" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <label for="sap-component_1840" class="sap-label" style="display:block; font-size:0.75rem; color:var(--text-secondary); text-align:center;">가공품소요(1840)</label>
+                            <input type="file" id="sap-component_1840" accept=".mhtml,.html" style="display:none;" onchange="handleSapFile(this, 'component_1840')">
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="document.getElementById('sap-component_1840').click()" class="btn-small" id="btn-component_1840" style="background:var(--surface-hover); color:var(--text-primary); border:1px solid var(--border-color); padding:0.5rem 1rem; border-radius:6px; cursor:pointer;">파일 선택</button>
+                                <button onclick="cancelSapFile('component_1840')" class="btn-small" id="btn-cancel-component_1840" style="display: none; background: #ef4444; color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 6px; cursor: pointer;" title="파일 등록 취소">취소</button>
+                            </div>
+                        </div>
+                        <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
                     </div>
-                    <button onclick="joinSapDetails()" class="btn" id="join-btn" style="background: var(--accent-color); color:white; padding: 0.8rem 1.5rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; opacity:0.5;" disabled>결합 실행</button>
                 </div>
             </div>
 
@@ -5405,15 +5416,41 @@ DST: 22. 지티테크`;
             reader.readAsText(file);
         }
 
+        let isSapJoinCollapsed = true;
+
+        function toggleSapJoinSection(forceOpen = null) {
+            const body = document.getElementById('sap-join-body');
+            const icon = document.getElementById('sap-join-toggle-icon');
+            const text = document.getElementById('sap-join-toggle-text');
+            if (!body) return;
+
+            if (forceOpen !== null) {
+                isSapJoinCollapsed = !forceOpen;
+            } else {
+                isSapJoinCollapsed = !isSapJoinCollapsed;
+            }
+
+            if (isSapJoinCollapsed) {
+                body.style.display = 'none';
+                if (icon) icon.textContent = '▼';
+                if (text) text.textContent = '수동 관리 펼치기';
+            } else {
+                body.style.display = 'flex';
+                if (icon) icon.textContent = '▲';
+                if (text) text.textContent = '수동 관리 접기';
+            }
+        }
+
         function checkJoinReady() {
             const hasData = (sapData['1842'] && sapData['1842'].length > 0) || (sapData['1840'] && sapData['1840'].length > 0);
             const btn = document.getElementById('join-btn');
+            const isAlreadyJoined = Array.isArray(rawData) && rawData.some(r => r.Serial || r.SalesDoc);
+
             if (btn) {
                 btn.disabled = !hasData;
                 btn.style.opacity = hasData ? '1' : '0.5';
                 btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
 
-                const isAlreadyJoined = Array.isArray(rawData) && rawData.some(r => r.Serial || r.SalesDoc);
                 if (isAlreadyJoined) {
                     btn.innerHTML = '<span>✅</span> <span>자동 결합 완료 (재실행 가능)</span>';
                     btn.style.background = 'linear-gradient(135deg, #059669, #10b981)';
@@ -5424,6 +5461,24 @@ DST: 22. 지티테크`;
                     btn.style.boxShadow = 'none';
                 }
             }
+
+            const autoBadge = document.getElementById('sap-join-auto-badge');
+            if (autoBadge) {
+                if (isAlreadyJoined) {
+                    autoBadge.style.display = 'inline-block';
+                    autoBadge.textContent = '✅ 자동 결합 적용됨';
+                    autoBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    autoBadge.style.color = '#34d399';
+                } else if (hasData) {
+                    autoBadge.style.display = 'inline-block';
+                    autoBadge.textContent = '⚡ SAP 데이터 준비됨';
+                    autoBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+                    autoBadge.style.color = '#60a5fa';
+                } else {
+                    autoBadge.style.display = 'none';
+                }
+            }
+
             const hasComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
             const tabComp = document.getElementById('tab-component');
             if (tabComp) {
