@@ -2941,6 +2941,7 @@ DST: 22. 지티테크`;
 
                 // SAP 결합 섹션 표시
                 document.getElementById('sap-join-section').style.display = 'flex';
+                checkJoinReady();
 
             } catch (err) {
                 const isFetchFailed = err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'));
@@ -5309,6 +5310,13 @@ DST: 22. 지티테크`;
                 }
                 rebuildComponentIndex();
                 checkJoinReady();
+
+                // 만약 이미 화면에 분석된 MPS 데이터가 있다면, 새로 수집된 최신 SAP 데이터로 즉시 자동 결합 및 화면 갱신
+                if (originalRawData && originalRawData.length > 0) {
+                    console.log('[SAP Sync] Automatically updating active table with latest SAP details...');
+                    joinSapDetails(true);
+                    checkJoinReady();
+                }
             } catch (err) {
                 console.error('Failed to load saved SAP files from server:', err);
             }
@@ -5404,6 +5412,17 @@ DST: 22. 지티테크`;
                 btn.disabled = !hasData;
                 btn.style.opacity = hasData ? '1' : '0.5';
                 btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
+
+                const isAlreadyJoined = Array.isArray(rawData) && rawData.some(r => r.Serial || r.SalesDoc);
+                if (isAlreadyJoined) {
+                    btn.innerHTML = '<span>✅</span> <span>자동 결합 완료 (재실행 가능)</span>';
+                    btn.style.background = 'linear-gradient(135deg, #059669, #10b981)';
+                    btn.style.boxShadow = '0 2px 8px rgba(16,185,129,0.3)';
+                } else {
+                    btn.innerHTML = '<span>🔗</span> <span>결합 실행</span>';
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.boxShadow = 'none';
+                }
             }
             const hasComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
             const tabComp = document.getElementById('tab-component');
