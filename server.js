@@ -245,23 +245,97 @@ app.post('/api/sync-sap', async (req, res) => {
     }
 });
 
+const sapFileCache = {};
+
+function getSapFileStats(fn, fp) {
+    if (!fs.existsSync(fp)) return null;
+    const stat = fs.statSync(fp);
+    const cached = sapFileCache[fn];
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+        return cached;
+    }
+    let rowCount = 0;
+    try {
+        const content = fs.readFileSync(fp, 'utf8');
+        const trs = content.match(/<tr[^>]*>/gi);
+        if (trs && trs.length > 1) rowCount = trs.length - 1;
+    } catch (e) {}
+
+    const result = {
+        size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+        mtime: stat.mtime,
+        mtimeMs: stat.mtimeMs,
+        rows: rowCount
+    };
+    sapFileCache[fn] = result;
+    return result;
+}
+
 app.get('/api/sync-sap/status', (req, res) => {
     try {
         const status = getSyncStatus();
         const files = {};
         ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'].forEach(fn => {
             const fp = path.join(__dirname, fn);
-            if (fs.existsSync(fp)) {
-                const stat = fs.statSync(fp);
-                files[fn] = {
-                    size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
-                    mtime: stat.mtime
-                };
-            } else {
-                files[fn] = null;
-            }
+            files[fn] = getSapFileStats(fn, fp);
         });
         res.json({ success: true, ...status, files });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/download-sap/:filename', (req, res) => {
+    const valid = ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'];
+    const fn = req.params.filename;
+    if (!valid.includes(fn)) return res.status(400).send('Invalid file name');
+    const fp = path.join(__dirname, fn);
+    if (!fs.existsSync(fp)) return res.status(404).send('File not found');
+    res.download(fp, fn);
+});
+
+app.get('/api/sap-preview', (req, res) => {
+    try {
+        const targetFiles = {
+            '1840': { name: '1840 남산+ 생산계획', file: 'sap_1840.mhtml' },
+            'comp_1840': { name: '1840 남산+ 부품소요량', file: 'sap_component_1840.mhtml' },
+            '1842': { name: '1842 성주 생산계획', file: 'sap_1842.mhtml' },
+            'comp_1842': { name: '1842 성주 부품소요량', file: 'sap_component_1842.mhtml' }
+        };
+        const result = {};
+        for (const [key, info] of Object.entries(targetFiles)) {
+            const fp = path.join(__dirname, info.file);
+            if (!fs.existsSync(fp)) {
+                result[key] = { exists: false, name: info.name, file: info.file };
+                continue;
+            }
+            const stat = fs.statSync(fp);
+            const content = fs.readFileSync(fp, 'utf8');
+            const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+            let headers = [];
+            let rows = [];
+            if (trs.length > 0) {
+                headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
+                    .map(c => c.replace(/<[^>]+>/g, '').trim())
+                    .filter(c => c.length > 0);
+                for (let i = 1; i < Math.min(trs.length, 11); i++) {
+                    const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
+                        .map(c => c.replace(/<[^>]+>/g, '').trim());
+                    if (cells.length > 0) rows.push(cells);
+                }
+            }
+            result[key] = {
+                exists: true,
+                name: info.name,
+                file: info.file,
+                size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+                mtime: stat.mtime,
+                totalRows: Math.max(0, trs.length - 1),
+                headers: headers.slice(0, 15),
+                sampleRows: rows.map(r => r.slice(0, 15))
+            };
+        }
+        res.json({ success: true, data: result });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

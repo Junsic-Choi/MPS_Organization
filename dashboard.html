@@ -883,9 +883,14 @@
                             </div>
                         </div>
 
-                        <button id="sap-sync-btn" onclick="triggerSapSync()" style="background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; border: none; padding: 0.65rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(37,99,235,0.3); width: 100%; margin-top: 0.4rem;">
-                            <span id="sap-sync-icon">🚀</span> <span>SAP 최신 데이터 동기화 시작</span>
-                        </button>
+                        <div style="display: flex; gap: 8px; margin-top: 0.4rem;">
+                            <button id="sap-sync-btn" onclick="triggerSapSync()" style="flex: 1; background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; border: none; padding: 0.65rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
+                                <span id="sap-sync-icon">🚀</span> <span>SAP 최신 데이터 동기화 시작</span>
+                            </button>
+                            <button id="sap-preview-btn" onclick="openSapPreviewModal()" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15); padding: 0.65rem 0.9rem; border-radius: 8px; font-weight: 600; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" title="수집된 4개 SAP 데이터의 상세 건수, 컬럼, 상위 행을 직접 확인하고 원본을 다운로드합니다.">
+                                <span>🔍</span> <span>데이터 검증</span>
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -1025,7 +1030,56 @@
             </div>
         </div>
 
-        <div class="tab-system" id="tab-system" style="display: none;">
+        <!-- SAP Sync Data Preview & Verification Modal -->
+        <div id="sap-preview-overlay" class="master-editor-overlay" onclick="if(event.target === this) closeSapPreviewModal()">
+            <div class="master-editor" style="max-width: 1050px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; padding: 1.5rem;" onclick="event.stopPropagation()">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.8rem; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.4rem;">🔍</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary);">수집된 SAP ERP 데이터 검증 및 미리보기</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary);">SAP에서 자동 수집된 4개 파일의 실제 건수, 최신 시각 및 테이블 상위 데이터를 직접 확인합니다.</div>
+                        </div>
+                    </div>
+                    <span onclick="closeSapPreviewModal()" style="font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; line-height: 1; padding: 4px;">&times;</span>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div style="display: flex; gap: 6px; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;" id="sap-preview-tabs">
+                    <button class="sap-prev-tab active" onclick="switchSapPreviewTab('1840')" id="tab-btn-1840" style="padding: 0.45rem 1rem; border-radius: 6px; border: none; background: var(--accent-color); color: white; font-weight: 600; font-size: 0.82rem; cursor: pointer;">1840 남산+ 생산계획</button>
+                    <button class="sap-prev-tab" onclick="switchSapPreviewTab('comp_1840')" id="tab-btn-comp_1840" style="padding: 0.45rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.82rem; cursor: pointer;">1840 남산+ 부품소요량</button>
+                    <button class="sap-prev-tab" onclick="switchSapPreviewTab('1842')" id="tab-btn-1842" style="padding: 0.45rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.82rem; cursor: pointer;">1842 성주 생산계획</button>
+                    <button class="sap-prev-tab" onclick="switchSapPreviewTab('comp_1842')" id="tab-btn-comp_1842" style="padding: 0.45rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.82rem; cursor: pointer;">1842 성주 부품소요량</button>
+                </div>
+
+                <!-- Info Bar -->
+                <div id="sap-preview-infobar" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.65rem 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                    <div style="display: flex; gap: 1.2rem; font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
+                        <span>총 데이터 건수: <b id="sap-prev-rows" style="color: #38bdf8; font-size: 0.95rem;">-</b></span>
+                        <span>파일 크기: <b id="sap-prev-size" style="color: #cbd5e1;">-</b></span>
+                        <span>최근 수집: <b id="sap-prev-mtime" style="color: #34d399;">-</b></span>
+                    </div>
+                    <a id="sap-prev-download-link" href="#" download class="btn-small" style="background: #10b981; color: white; text-decoration: none; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.3);">
+                        <span>📥</span> <span>엑셀 원본 파일 다운로드</span>
+                    </a>
+                </div>
+
+                <!-- Table Container -->
+                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;" id="sap-preview-table">
+                        <thead style="position: sticky; top: 0; background: #1e293b; color: #f8fafc; font-weight: 700; border-bottom: 2px solid var(--border-color);" id="sap-preview-thead">
+                        </thead>
+                        <tbody id="sap-preview-tbody" style="color: var(--text-secondary);">
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem; font-size: 0.75rem; color: var(--text-secondary);">
+                    <span>※ 상위 10개 행 데이터 미리보기입니다. 전체 데이터는 우측 상단의 [엑셀 원본 파일 다운로드]로 확인하실 수 있습니다.</span>
+                    <button onclick="closeSapPreviewModal()" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.4rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600;">닫기</button>
+                </div>
+            </div>
+        </div>
             <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
             <button class="tab-btn" id="tab-summary" style="margin-left: auto;">📈 요약 대시보드</button>
             <button class="tab-btn" id="tab-pivot" style="margin-left: 0.5rem;">🧩 나만의 피벗테이블</button>
@@ -1929,12 +1983,15 @@ DST: 22. 지티테크`;
                     const el1840 = document.getElementById('sap-status-1840');
                     const elComp1840 = document.getElementById('sap-status-comp-1840');
                     const el1842 = document.getElementById('sap-status-1842');
-                    const elComp1842 = document.getElementById('sap-status-comp-1842');
-
-                    if (el1840) el1840.innerText = data.files['sap_1840.mhtml'] ? `${fmtDate(data.files['sap_1840.mhtml'].mtime)} (${data.files['sap_1840.mhtml'].size})` : '미수집';
-                    if (elComp1840) elComp1840.innerText = data.files['sap_component_1840.mhtml'] ? `${fmtDate(data.files['sap_component_1840.mhtml'].mtime)} (${data.files['sap_component_1840.mhtml'].size})` : '미수집';
-                    if (el1842) el1842.innerText = data.files['sap_1842.mhtml'] ? `${fmtDate(data.files['sap_1842.mhtml'].mtime)} (${data.files['sap_1842.mhtml'].size})` : '미수집';
-                    if (elComp1842) elComp1842.innerText = data.files['sap_component_1842.mhtml'] ? `${fmtDate(data.files['sap_component_1842.mhtml'].mtime)} (${data.files['sap_component_1842.mhtml'].size})` : '미수집';
+                    const fmtFileText = (f) => {
+                        if (!f) return '미수집';
+                        const rowsText = f.rows ? ` · ${Number(f.rows).toLocaleString()}건` : '';
+                        return `${fmtDate(f.mtime)} (${f.size}${rowsText})`;
+                    };
+                    if (el1840) el1840.innerText = fmtFileText(data.files['sap_1840.mhtml']);
+                    if (elComp1840) elComp1840.innerText = fmtFileText(data.files['sap_component_1840.mhtml']);
+                    if (el1842) el1842.innerText = fmtFileText(data.files['sap_1842.mhtml']);
+                    if (elComp1842) elComp1842.innerText = fmtFileText(data.files['sap_component_1842.mhtml']);
                 }
 
                 const badge = document.getElementById('sap-sync-badge');
@@ -2066,6 +2123,110 @@ DST: 22. 지티테크`;
             } catch (e) {
                 alert('서버 연결 실패: ' + e.message);
             }
+        }
+
+        let sapPreviewData = null;
+        let currentSapTab = '1840';
+
+        async function openSapPreviewModal() {
+            const overlay = document.getElementById('sap-preview-overlay');
+            if (overlay) overlay.style.display = 'flex';
+            
+            document.getElementById('sap-prev-rows').textContent = '로딩 중...';
+            document.getElementById('sap-prev-size').textContent = '-';
+            document.getElementById('sap-prev-mtime').textContent = '-';
+            document.getElementById('sap-preview-thead').innerHTML = '<tr><th style="padding: 10px;">불러오는 중...</th></tr>';
+            document.getElementById('sap-preview-tbody').innerHTML = '';
+
+            try {
+                const res = await fetch('/api/sap-preview');
+                const data = await res.json();
+                if (data.success) {
+                    sapPreviewData = data.data;
+                    switchSapPreviewTab(currentSapTab || '1840');
+                } else {
+                    alert('미리보기 로드 실패: ' + data.error);
+                }
+            } catch (e) {
+                alert('서버 연결 실패: ' + e.message);
+            }
+        }
+
+        function closeSapPreviewModal() {
+            const overlay = document.getElementById('sap-preview-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function switchSapPreviewTab(tabKey) {
+            currentSapTab = tabKey;
+            
+            const tabs = ['1840', 'comp_1840', '1842', 'comp_1842'];
+            tabs.forEach(k => {
+                const btn = document.getElementById(`tab-btn-${k}`);
+                if (!btn) return;
+                if (k === tabKey) {
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.color = '#ffffff';
+                    btn.style.border = 'none';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.border = '1px solid var(--border-color)';
+                }
+            });
+
+            if (!sapPreviewData || !sapPreviewData[tabKey]) return;
+            const info = sapPreviewData[tabKey];
+
+            if (!info.exists) {
+                document.getElementById('sap-prev-rows').textContent = '미수집';
+                document.getElementById('sap-prev-size').textContent = '-';
+                document.getElementById('sap-prev-mtime').textContent = '-';
+                document.getElementById('sap-prev-download-link').style.display = 'none';
+                document.getElementById('sap-preview-thead').innerHTML = '<tr><th style="padding: 12px; color: #f87171;">파일이 존재하지 않습니다. 먼저 동기화를 실행해 주세요.</th></tr>';
+                document.getElementById('sap-preview-tbody').innerHTML = '';
+                return;
+            }
+
+            document.getElementById('sap-prev-rows').textContent = `${Number(info.totalRows).toLocaleString()}건`;
+            document.getElementById('sap-prev-size').textContent = info.size;
+            document.getElementById('sap-prev-mtime').textContent = new Date(info.mtime).toLocaleString('ko-KR', {
+                month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+            });
+
+            const dlLink = document.getElementById('sap-prev-download-link');
+            dlLink.style.display = 'inline-flex';
+            dlLink.href = `/api/download-sap/${encodeURIComponent(info.file)}`;
+            dlLink.download = info.file;
+
+            // Render table header
+            const thead = document.getElementById('sap-preview-thead');
+            let headerHtml = '<tr><th style="padding: 6px 10px; background: #1e293b; color: #94a3b8; border: 1px solid var(--border-color); text-align: center; width: 45px;">No.</th>';
+            info.headers.forEach(h => {
+                headerHtml += `<th style="padding: 6px 10px; background: #1e293b; color: #e2e8f0; border: 1px solid var(--border-color); white-space: nowrap;">${h}</th>`;
+            });
+            headerHtml += '</tr>';
+            thead.innerHTML = headerHtml;
+
+            // Render table body
+            const tbody = document.getElementById('sap-preview-tbody');
+            if (!info.sampleRows || info.sampleRows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="' + (info.headers.length + 1) + '" style="padding: 20px; text-align: center; color: var(--text-secondary);">표시할 행 데이터가 없습니다.</td></tr>';
+                return;
+            }
+
+            let bodyHtml = '';
+            info.sampleRows.forEach((row, idx) => {
+                const bg = idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                bodyHtml += `<tr style="background: ${bg}; border-bottom: 1px solid var(--border-color); font-size: 0.76rem;">`;
+                bodyHtml += `<td style="padding: 5px 10px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${idx + 1}</td>`;
+                info.headers.forEach((_, colIdx) => {
+                    const val = row[colIdx] !== undefined ? row[colIdx] : '';
+                    bodyHtml += `<td style="padding: 5px 10px; white-space: nowrap; border-right: 1px solid var(--border-color); color: var(--text-primary); font-family: monospace;">${val}</td>`;
+                });
+                bodyHtml += '</tr>';
+            });
+            tbody.innerHTML = bodyHtml;
         }
 
         function handleDrop(event) {
