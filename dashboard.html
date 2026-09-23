@@ -1055,14 +1055,14 @@
                 </div>
 
                 <!-- Comparison Timeline & Selection Bar -->
-                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 0.8rem;">
+                <div style="background: var(--surface-hover); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 0.8rem;">
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
                         <span style="color: var(--text-secondary); font-weight: 600;">비교 기준 (과거):</span>
-                        <select id="sap-diff-base-select" onchange="runSapDiffCompare()" style="background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
-                        <span style="color: #60a5fa; font-weight: 700;">➔</span>
+                        <select id="sap-diff-base-select" onchange="runSapDiffCompare()" style="background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
+                        <span style="color: var(--accent-color); font-weight: 700;">➔</span>
                         <span style="color: var(--text-secondary); font-weight: 600;">비교 대상 (최신):</span>
-                        <select id="sap-diff-target-select" onchange="runSapDiffCompare()" style="background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
-                        <button onclick="loadSapDiffHistory(true)" class="btn-small" style="background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; color: #93c5fd; padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 0.78rem;">🔄 다시 비교</button>
+                        <select id="sap-diff-target-select" onchange="runSapDiffCompare()" style="background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;"></select>
+                        <button onclick="loadSapDiffHistory(true)" class="btn-small" style="background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; color: var(--accent-color); padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 0.78rem; font-weight: 600;">🔄 다시 비교</button>
                     </div>
                     <div>
                         <button id="diff-excel-btn" onclick="exportSapDiffToExcel()" class="btn-small" style="background: #10b981; color: white; border: none; padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
@@ -1074,19 +1074,19 @@
                 <!-- KPI Cards (4 Cards) -->
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-bottom: 0.8rem;">
                     <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #34d399; font-weight: 600; margin-bottom: 2px;">🆕 신규 투입 부품 (설변)</div>
+                        <div style="font-size: 0.75rem; color: #10b981; font-weight: 600; margin-bottom: 2px;">🆕 신규 투입 부품 (설변)</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;"><span id="diff-kpi-new">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
                     <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #f87171; font-weight: 600; margin-bottom: 2px;">❌ 삭제/단종 부품 (제외)</div>
+                        <div style="font-size: 0.75rem; color: #ef4444; font-weight: 600; margin-bottom: 2px;">❌ 삭제/단종 부품 (제외)</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #ef4444;"><span id="diff-kpi-deleted">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
                     <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #fbbf24; font-weight: 600; margin-bottom: 2px;">⚠️ 소요 수량 변동</div>
+                        <div style="font-size: 0.75rem; color: #f59e0b; font-weight: 600; margin-bottom: 2px;">⚠️ 소요 수량 변동</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;"><span id="diff-kpi-qty">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
                     <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #60a5fa; font-weight: 600; margin-bottom: 2px;">📦 영향받는 모기종/오더</div>
+                        <div style="font-size: 0.75rem; color: #3b82f6; font-weight: 600; margin-bottom: 2px;">📦 영향받는 모기종/오더</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"><span id="diff-kpi-orders">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
                 </div>
@@ -1109,15 +1109,15 @@
                     </div>
 
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="sap-diff-search" placeholder="가공품번, 품명, S/O, 기종 검색..." oninput="renderSapDiffTable()" style="background: #1e293b; border: 1px solid var(--border-color); color: white; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; width: 220px;">
+                        <input type="text" id="sap-diff-search" placeholder="가공품번, 품명, S/O, 기종 검색..." oninput="renderSapDiffTable()" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; width: 220px;">
                         <span id="diff-count-label" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0건</span>
                     </div>
                 </div>
 
                 <!-- Table Container -->
-                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh;">
+                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh; background: var(--surface-color);">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;" id="sap-diff-table">
-                        <thead style="position: sticky; top: 0; background: #1e293b; color: #f8fafc; font-weight: 700; border-bottom: 2px solid var(--border-color);">
+                        <thead style="position: sticky; top: 0; background: var(--surface-hover); color: var(--text-primary); font-weight: 700; border-bottom: 2px solid var(--border-color);">
                             <tr>
                                 <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 40px;">No.</th>
                                 <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 85px;">변동구분</th>
@@ -2494,52 +2494,52 @@ DST: 22. 지티테크`;
                 if (changes.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="13" style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                            <td colspan="13" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
                                 <div style="font-size: 2rem; margin-bottom: 8px;">✨</div>
-                                <div style="font-size: 0.95rem; font-weight: 600; color: #e2e8f0;">선택하신 두 동기화 시점 간에 하위 가공품(BOM) 소요량 변동(설변)이 없습니다.</div>
-                                <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">ERP 생산계획 및 부품 소요량이 이전과 동일하게 유지되고 있습니다.</div>
+                                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">선택하신 두 동기화 시점 간에 하위 가공품(BOM) 소요량 변동(설변)이 없습니다.</div>
+                                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">ERP 생산계획 및 부품 소요량이 이전과 동일하게 유지되고 있습니다.</div>
                             </td>
                         </tr>`;
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 30px; color: #94a3b8;">선택하신 필터 조건에 일치하는 변동 내역이 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 30px; color: var(--text-secondary);">선택하신 필터 조건에 일치하는 변동 내역이 없습니다.</td></tr>';
                 }
                 return;
             }
 
             let html = '';
             filtered.forEach((c, idx) => {
-                const bg = idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                const bg = idx % 2 === 0 ? 'var(--surface-color)' : 'var(--surface-hover)';
                 
                 let typeBadge = '';
                 if (c.changeType === 'NEW') {
-                    typeBadge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">🆕 신규</span>';
+                    typeBadge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(16, 185, 129, 0.3);">🆕 신규</span>';
                 } else if (c.changeType === 'DELETED') {
-                    typeBadge = '<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">❌ 삭제</span>';
+                    typeBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(239, 68, 68, 0.3);">❌ 삭제</span>';
                 } else {
-                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">⚠️ 변동</span>';
+                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 변동</span>';
                 }
 
-                const plantText = c.plant === '1840' ? '<span style="color: #60a5fa; font-weight: 600;">1840 남산+</span>' : '<span style="color: #c084fc; font-weight: 600;">1842 성주</span>';
+                const plantText = c.plant === '1840' ? '<span style="color: #2563eb; font-weight: 700;">1840 남산+</span>' : '<span style="color: #9333ea; font-weight: 700;">1842 성주</span>';
                 
                 const diffVal = Number(c.diffQty);
-                const diffColor = diffVal > 0 ? '#34d399' : '#f87171';
+                const diffColor = diffVal > 0 ? '#10b981' : '#ef4444';
                 const diffPrefix = diffVal > 0 ? '+' : '';
 
                 html += `<tr style="background: ${bg}; border-bottom: 1px solid var(--border-color); font-size: 0.76rem;">
                     <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${idx + 1}</td>
                     <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${typeBadge}</td>
                     <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${plantText}</td>
-                    <td style="padding: 6px 10px; font-family: monospace; color: #f8fafc; border-right: 1px solid var(--border-color);">${c.soOrder || '-'}</td>
-                    <td style="padding: 6px 10px; font-family: monospace; color: #cbd5e1; border-right: 1px solid var(--border-color);">${c.serial || '-'}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color);">${c.soOrder || '-'}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.serial || '-'}</td>
                     <td style="padding: 6px 10px; border-right: 1px solid var(--border-color);" title="${c.matDesc || ''}">
-                        <div style="font-weight: 600; color: #f8fafc;">${c.material || '-'}</div>
+                        <div style="font-weight: 700; color: var(--text-primary);">${c.material || '-'}</div>
                         <div style="font-size: 0.7rem; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.matDesc || ''}</div>
                     </td>
-                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: #38bdf8; border-right: 1px solid var(--border-color);">${c.component}</td>
-                    <td style="padding: 6px 10px; color: #e2e8f0; border-right: 1px solid var(--border-color); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.compDesc}">${c.compDesc}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: var(--accent-color); border-right: 1px solid var(--border-color);">${c.component}</td>
+                    <td style="padding: 6px 10px; color: var(--text-primary); border-right: 1px solid var(--border-color); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.compDesc}">${c.compDesc}</td>
                     <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.unit || '-'}</td>
                     <td style="padding: 6px 10px; text-align: right; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${Number(c.oldQty).toLocaleString()}</td>
-                    <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #f8fafc; border-right: 1px solid var(--border-color);">${Number(c.newQty).toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color);">${Number(c.newQty).toLocaleString()}</td>
                     <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: ${diffColor}; border-right: 1px solid var(--border-color);">${diffPrefix}${Number(c.diffQty).toLocaleString()}</td>
                     <td style="padding: 6px 10px; text-align: center; color: var(--text-secondary);">${c.prodMonth || '-'}</td>
                 </tr>`;

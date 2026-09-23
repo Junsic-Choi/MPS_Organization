@@ -346,7 +346,50 @@ app.get('/api/sap-preview', (req, res) => {
 // ==========================================
 const HISTORY_DIR = path.join(__dirname, 'sap_history');
 
-function parseComponentMhtml(filePath) {
+function parsePlanMhtml(filePath) {
+    const orderToSerial = new Map();
+    const soToSerial = new Map();
+    const orderToMonth = new Map();
+    const orderToMatDesc = new Map();
+    if (!fs.existsSync(filePath)) return { orderToSerial, soToSerial, orderToMonth, orderToMatDesc };
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+        if (trs.length < 2) return { orderToSerial, soToSerial, orderToMonth, orderToMatDesc };
+
+        const headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
+            .map(c => c.replace(/<[^>]+>/g, '').trim().toUpperCase());
+
+        const idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
+        const idxSO = headers.findIndex(h => h.includes('SALES DOC') || h.includes('S/O') || h.includes('SALES'));
+        const idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
+        const idxMonth = headers.findIndex(h => h.includes('PROD.MON') || h.includes('PROD.MONTH') || h.includes('생산월'));
+        const idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
+
+        for (let i = 1; i < trs.length; i++) {
+            const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
+                .map(c => c.replace(/<[^>]+>/g, '').trim());
+            if (cells.length === 0) continue;
+
+            const order = idxOrder !== -1 ? cells[idxOrder] : '';
+            const so = idxSO !== -1 ? cells[idxSO] : '';
+            const serial = idxSerial !== -1 ? cells[idxSerial] : '';
+            const month = idxMonth !== -1 ? cells[idxMonth] : '';
+            const matDesc = idxMatDesc !== -1 ? cells[idxMatDesc] : '';
+
+            if (order && serial) orderToSerial.set(order, serial);
+            if (so && serial) soToSerial.set(so, serial);
+            if (order && month) orderToMonth.set(order, month);
+            if (order && matDesc) orderToMatDesc.set(order, matDesc);
+        }
+    } catch (e) {
+        console.error('[SAP Diff] parsePlanMhtml error:', e.message);
+    }
+    return { orderToSerial, soToSerial, orderToMonth, orderToMatDesc };
+}
+
+function parseComponentMhtml(filePath, planData = null) {
     if (!fs.existsSync(filePath)) return [];
     const content = fs.readFileSync(filePath, 'utf8');
     const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
@@ -358,14 +401,15 @@ function parseComponentMhtml(filePath) {
     const idxPlant = headers.findIndex(h => h.includes('PLANT') || h.includes('플랜트'));
     const idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
     const idxSO = headers.findIndex(h => h.includes('S/O') || h.includes('SALES'));
-    const idxOrder = headers.findIndex(h => h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O'));
-    const idxMonth = headers.findIndex(h => h.includes('PROD.MONTH') || h.includes('생산월'));
-    const idxMat = headers.findIndex(h => h.includes('MATERIAL NUMBER') || h.includes('자재'));
+    const idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
+    const idxMonth = headers.findIndex(h => h.includes('PROD.MONTH') || h.includes('PROD.MON') || h.includes('생산월'));
+    const idxMat = headers.findIndex(h => h.includes('MATERIAL NUMBER') || (h.includes('MATERIAL') && !h.includes('DESCRIPTION')) || h.includes('자재'));
     const idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
     const idxComp = headers.findIndex(h => h === 'COMPONENT' || h.includes('구성부품'));
     const idxCompDesc = headers.findIndex(h => h.includes('COMP.DESC') || h.includes('구성부품내역'));
-    const idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('소요량'));
+    const idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('REQUIREMENT QTY') || h.includes('소요량'));
     const idxUnit = headers.findIndex(h => h.includes('BASE UNIT') || h.includes('단위'));
+    const idxDel = headers.findIndex(h => h.includes('DELETED ITEM') || h.includes('DELETED') || h.includes('삭제'));
 
     const records = [];
     for (let i = 1; i < trs.length; i++) {
@@ -376,17 +420,46 @@ function parseComponentMhtml(filePath) {
         const comp = cells[idxComp] || '';
         if (!comp) continue;
 
+        // SAP 삭제 품목 (Deleted Item = 'X') 필터링 - 설변 삭제 및 오더 취소 품목 제외
+        if (idxDel !== -1) {
+            const delVal = (cells[idxDel] || '').toUpperCase();
+            if (delVal === 'X' || delVal === 'TRUE') continue;
+        }
+
+        const plant = cells[idxPlant] || '';
+        const soOrder = cells[idxSO] || '';
+        const order = cells[idxOrder] || '';
+        let serial = cells[idxSerial] || '';
+        let prodMonth = cells[idxMonth] || '';
+        let matDesc = cells[idxMatDesc] || '';
+
+        // 계획오더 등으로 시리얼/생산월이 비어있을 경우 생산계획(ZPPM6680) 데이터로 자동 보강
+        if (planData) {
+            if (!serial || serial === '-') {
+                serial = planData.orderToSerial?.get(order) || planData.soToSerial?.get(soOrder) || '';
+            }
+            if (!prodMonth && planData.orderToMonth) {
+                prodMonth = planData.orderToMonth.get(order) || '';
+            }
+            if (!matDesc && planData.orderToMatDesc) {
+                matDesc = planData.orderToMatDesc.get(order) || '';
+            }
+        }
+
+        const qty = parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0;
+        if (qty <= 0) continue;
+
         records.push({
-            plant: cells[idxPlant] || '',
-            serial: cells[idxSerial] || '',
-            soOrder: cells[idxSO] || '',
-            order: cells[idxOrder] || '',
-            prodMonth: cells[idxMonth] || '',
+            plant,
+            serial,
+            soOrder,
+            order,
+            prodMonth,
             material: cells[idxMat] || '',
-            matDesc: cells[idxMatDesc] || '',
+            matDesc,
             component: comp,
             compDesc: cells[idxCompDesc] || '',
-            qty: parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0,
+            qty,
             unit: cells[idxUnit] || ''
         });
     }
@@ -402,10 +475,15 @@ function loadComponentDataset(snapshotId) {
     const dir = getSnapshotDir(snapshotId);
     const f1840 = path.join(dir, 'sap_component_1840.mhtml');
     const f1842 = path.join(dir, 'sap_component_1842.mhtml');
+    const plan1840 = path.join(dir, 'sap_1840.mhtml');
+    const plan1842 = path.join(dir, 'sap_1842.mhtml');
+
+    const pData1840 = parsePlanMhtml(plan1840);
+    const pData1842 = parsePlanMhtml(plan1842);
 
     const records = [];
-    if (fs.existsSync(f1840)) records.push(...parseComponentMhtml(f1840));
-    if (fs.existsSync(f1842)) records.push(...parseComponentMhtml(f1842));
+    if (fs.existsSync(f1840)) records.push(...parseComponentMhtml(f1840, pData1840));
+    if (fs.existsSync(f1842)) records.push(...parseComponentMhtml(f1842, pData1842));
     return records;
 }
 
