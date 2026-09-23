@@ -35,16 +35,18 @@ On Error Resume Next
 session.findById("wnd[0]").maximize
 On Error GoTo 0
 
-Dim plant, beskz, sobsl, layoutRow
+Dim plant, beskz, sobsl, layoutRow, wareCtrl
 plant = "1840"
 beskz = "e"
 sobsl = ""
 layoutRow = 18
+wareCtrl = ""
 
 If WScript.Arguments.Count >= 1 Then plant = Trim(WScript.Arguments(0))
 If WScript.Arguments.Count >= 2 Then beskz = Trim(WScript.Arguments(1))
 If WScript.Arguments.Count >= 3 Then sobsl = Trim(WScript.Arguments(2))
 If WScript.Arguments.Count >= 4 Then layoutRow = Trim(WScript.Arguments(3))
+If WScript.Arguments.Count >= 5 Then wareCtrl = Trim(WScript.Arguments(4))
 
 session.findById("wnd[0]/tbar[0]/okcd").text = "/nZPPR6470"
 session.findById("wnd[0]").sendVKey 0
@@ -69,6 +71,37 @@ If sobsl <> "" Then
     session.findById("wnd[0]/usr/ctxtSO_SOBSL-LOW").text = sobsl
 Else
     session.findById("wnd[0]/usr/ctxtSO_SOBSL-LOW").text = ""
+End If
+
+' Warehouse Controller (SO_WARE)
+If InStr(wareCtrl, ",") > 0 Then
+    Dim arrWare, wIdx, clipTxt
+    arrWare = Split(wareCtrl, ",")
+    clipTxt = ""
+    For wIdx = 0 To UBound(arrWare)
+        If Trim(arrWare(wIdx)) <> "" Then
+            If clipTxt <> "" Then clipTxt = clipTxt & vbCrLf
+            clipTxt = clipTxt & Trim(arrWare(wIdx))
+        End If
+    Next
+    SetClipboard clipTxt
+    WScript.Sleep 200
+    session.findById("wnd[0]/usr/btn%_SO_WARE_%_APP_%-VALU_PUSH").press
+    session.findById("wnd[1]/tbar[0]/btn[24]").press
+    session.findById("wnd[1]/tbar[0]/btn[8]").press
+ElseIf wareCtrl <> "" Then
+    On Error Resume Next
+    session.findById("wnd[0]/usr/ctxtSO_WARE-LOW").text = wareCtrl
+    If Err.Number <> 0 Then
+        Err.Clear
+        session.findById("wnd[0]/usr/txtSO_WARE-LOW").text = wareCtrl
+    End If
+    On Error GoTo 0
+Else
+    On Error Resume Next
+    session.findById("wnd[0]/usr/ctxtSO_WARE-LOW").text = ""
+    session.findById("wnd[0]/usr/txtSO_WARE-LOW").text = ""
+    On Error GoTo 0
 End If
 
 session.findById("wnd[0]").sendVKey 8
@@ -136,4 +169,16 @@ Sub HandleExportPopups()
         End If
         On Error GoTo 0
     Next
+End Sub
+
+Sub SetClipboard(txt)
+    Dim oExec
+    On Error Resume Next
+    Set oExec = CreateObject("WScript.Shell").Exec("clip")
+    If Err.Number = 0 Then
+        oExec.StdIn.Write txt
+        oExec.StdIn.Close
+        WScript.Sleep 200
+    End If
+    On Error GoTo 0
 End Sub

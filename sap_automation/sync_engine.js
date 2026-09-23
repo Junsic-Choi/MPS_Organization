@@ -176,6 +176,59 @@ function archiveCurrentSapSnapshot() {
     }
 }
 
+function mergeComponentMhtml(baseFilePath, appendFilePath) {
+    if (!fs.existsSync(appendFilePath)) return;
+    if (!fs.existsSync(baseFilePath)) {
+        fs.copyFileSync(appendFilePath, baseFilePath);
+        return;
+    }
+    try {
+        const baseContent = fs.readFileSync(baseFilePath, 'utf8');
+        const appendContent = fs.readFileSync(appendFilePath, 'utf8');
+
+        const baseTrs = baseContent.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+        const appendTrs = appendContent.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+
+        if (appendTrs.length <= 1) return;
+
+        // Build existing row keys from base to prevent duplicate counting
+        const existingKeys = new Set();
+        for (let i = 1; i < baseTrs.length; i++) {
+            const cells = (baseTrs[i].match(/<t[dh][^>]*>[\s\S]*?<\/td>/gi) || [])
+                .map(c => c.replace(/<[^>]+>/g, '').trim());
+            const key = [cells[1] || '', cells[2] || '', cells[3] || '', cells[4] || '', cells[7] || '', cells[12] || ''].join('|');
+            if (key) existingKeys.add(key);
+        }
+
+        const rowsToAdd = [];
+        for (let i = 1; i < appendTrs.length; i++) {
+            const cells = (appendTrs[i].match(/<t[dh][^>]*>[\s\S]*?<\/td>/gi) || [])
+                .map(c => c.replace(/<[^>]+>/g, '').trim());
+            const key = [cells[1] || '', cells[2] || '', cells[3] || '', cells[4] || '', cells[7] || '', cells[12] || ''].join('|');
+            if (!existingKeys.has(key)) {
+                existingKeys.add(key);
+                rowsToAdd.push(appendTrs[i]);
+            }
+        }
+
+        if (rowsToAdd.length === 0) {
+            console.log(`[Sync] PY/PZ items are already present in base file (0 new unique rows).`);
+            return;
+        }
+
+        const tableEndIdx = baseContent.lastIndexOf('</table>');
+        if (tableEndIdx !== -1) {
+            const merged = baseContent.substring(0, tableEndIdx) +
+                '\r\n' + rowsToAdd.join('\r\n') + '\r\n' +
+                baseContent.substring(tableEndIdx);
+            fs.writeFileSync(baseFilePath, merged, 'utf8');
+            console.log(`[Sync] Successfully merged ${rowsToAdd.length} unique PY/PZ component rows into ${path.basename(baseFilePath)}`);
+        }
+    } catch (err) {
+        console.error(`[Sync] mergeComponentMhtml error:`, err.message);
+    }
+}
+
 function copyExportToWorkspace(sourcePath, targetFilename) {
     const dest = path.join(WORKSPACE_DIR, targetFilename);
     fs.copyFileSync(sourcePath, dest);
@@ -292,18 +345,45 @@ async function runSapSync(options = {}) {
 
         // --- STEP 2: ZPPR6470 for 1840 (남산+) ---
         currentSyncState.currentStep = 2;
-        currentSyncState.statusText = `[2/4] 남산+(1840) 가공품 소요량 데이터 수집 중 (${docs1840.length}개 오더, ZPPR6470)...`;
+        currentSyncState.statusText = `[2/4] 남산+(1840) 사내 가공품(e) 소요량 수집 중 (${docs1840.length}개 오더, ZPPR6470)...`;
         onProgress(currentSyncState);
         console.log(currentSyncState.statusText);
 
         if (docs1840.length > 0) {
+            // 2-1: 사내 가공품 (조달구분 = e)
             setClipboardText(docs1840);
             stepStart = Date.now();
-            runVbs("zppr6470.vbs", ["1840", "e", "", "18"]);
+            runVbs("zppr6470.vbs", ["1840", "e", "", "18", ""]);
             
             const file2 = await waitForNewExportFile(stepStart, 240);
             if (!file2) throw new Error("남산+(1840) 가공품 소요량 MHTML 파일 생성 대기시간 초과 (240초)");
             copyExportToWorkspace(file2, "sap_component_1840.mhtml");
+
+            // Reset SAP to home before step 2-2
+            try { runVbs("return_home.vbs"); } catch (e) {}
+
+            // 2-2: Warehouse Controller PY, PZ 품목 수집 (조달구분='', wareCtrl='PY,PZ')
+            currentSyncState.statusText = `[2/4] 남산+(1840) 창고 관리자(PY, PZ) 가공품 소요량 추가 수집 중...`;
+            onProgress(currentSyncState);
+            console.log(currentSyncState.statusText);
+
+            setClipboardText(docs1840);
+            stepStart = Date.now();
+            try {
+                runVbs("zppr6470.vbs", ["1840", "", "", "18", "PY,PZ"]);
+                const file2_pypz = await waitForNewExportFile(stepStart, 180);
+                if (file2_pypz) {
+                    const tempPyFile = path.join(WORKSPACE_DIR, "sap_component_1840_pypz.mhtml");
+                    fs.copyFileSync(file2_pypz, tempPyFile);
+                    closeSapExcel();
+                    try { fs.unlinkSync(file2_pypz); } catch (e) {}
+
+                    mergeComponentMhtml(path.join(WORKSPACE_DIR, "sap_component_1840.mhtml"), tempPyFile);
+                    try { fs.unlinkSync(tempPyFile); } catch (e) {}
+                }
+            } catch (pypzErr) {
+                console.warn("[Sync] PY/PZ query skipped or returned 0 rows:", pypzErr.message);
+            }
         } else {
             console.warn("[Sync] No Sales Docs found for 1840, skipping ZPPR6470");
         }
