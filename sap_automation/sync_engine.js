@@ -378,11 +378,14 @@ async function runSapSync(options = {}) {
                     closeSapExcel();
                     try { fs.unlinkSync(file2_pypz); } catch (e) {}
 
-                    mergeComponentMhtml(path.join(WORKSPACE_DIR, "sap_component_1840.mhtml"), tempPyFile);
+                    const mergedCount = mergeComponentMhtml(path.join(WORKSPACE_DIR, "sap_component_1840.mhtml"), tempPyFile);
                     try { fs.unlinkSync(tempPyFile); } catch (e) {}
+                    currentSyncState.results.pypzMergedRows = mergedCount || 0;
+                    console.log(`[Sync] PY/PZ items successfully merged: ${mergedCount || 0} rows`);
                 }
             } catch (pypzErr) {
                 console.warn("[Sync] PY/PZ query skipped or returned 0 rows:", pypzErr.message);
+                currentSyncState.results.pypzWarning = pypzErr.message;
             }
         } else {
             console.warn("[Sync] No Sales Docs found for 1840, skipping ZPPR6470");
