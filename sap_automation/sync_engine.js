@@ -362,15 +362,15 @@ async function runSapSync(options = {}) {
             // Reset SAP to home before step 2-2
             try { runVbs("return_home.vbs"); } catch (e) {}
 
-            // 2-2: Warehouse Controller PY, PZ 품목 수집 (조달구분='', wareCtrl='PY,PZ')
-            currentSyncState.statusText = `[2/4] 남산+(1840) 창고 관리자(PY, PZ) 가공품 소요량 추가 수집 중...`;
+            // 2-2: Warehouse Controller PS, PZ (A급 유니트) 품목 수집 (조달구분='', wareCtrl='PS,PZ')
+            currentSyncState.statusText = `[2/4] 남산+(1840) 창고 관리자(PS, PZ - A급 유니트) 가공품 소요량 추가 수집 중...`;
             onProgress(currentSyncState);
             console.log(currentSyncState.statusText);
 
             setClipboardText(docs1840);
             stepStart = Date.now();
             try {
-                runVbs("zppr6470.vbs", ["1840", "", "", "18", "PY,PZ"]);
+                runVbs("zppr6470.vbs", ["1840", "", "", "18", "PS,PZ"]);
                 const file2_pypz = await waitForNewExportFile(stepStart, 180);
                 if (file2_pypz) {
                     const tempPyFile = path.join(WORKSPACE_DIR, "sap_component_1840_pypz.mhtml");
@@ -381,10 +381,10 @@ async function runSapSync(options = {}) {
                     const mergedCount = mergeComponentMhtml(path.join(WORKSPACE_DIR, "sap_component_1840.mhtml"), tempPyFile);
                     try { fs.unlinkSync(tempPyFile); } catch (e) {}
                     currentSyncState.results.pypzMergedRows = mergedCount || 0;
-                    console.log(`[Sync] PY/PZ items successfully merged: ${mergedCount || 0} rows`);
+                    console.log(`[Sync] PS/PZ (A급 유니트) items successfully merged: ${mergedCount || 0} rows`);
                 }
             } catch (pypzErr) {
-                console.warn("[Sync] PY/PZ query skipped or returned 0 rows:", pypzErr.message);
+                console.warn("[Sync] PS/PZ query skipped or returned 0 rows:", pypzErr.message);
                 currentSyncState.results.pypzWarning = pypzErr.message;
             }
         } else {

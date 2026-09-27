@@ -1491,6 +1491,10 @@
                         <input type="checkbox" id="filter-comp-no-history" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
                         시스템 생산 이력X만 보기
                     </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: #f59e0b;">
+                        <input type="checkbox" id="filter-comp-unit-a" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
+                        ⭐ A급 유니트(PS/PZ)만 보기
+                    </label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
                         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">가공품 품명 필터:</span>
                         <div class="custom-multiselect" style="position: relative; display: inline-block;">
@@ -1541,17 +1545,18 @@
 
         <!-- Item Detail Modal (including BOM/Component list) -->
         <div id="item-detail-overlay" class="master-editor-overlay" onclick="if(event.target === this) closeItemDetail()" style="display: none;">
-            <div id="item-detail-modal" class="master-editor" style="max-width: 750px; min-height: unset; max-height: 85vh; display: flex; flex-direction: column; padding: 0;" onclick="event.stopPropagation()">
+            <div id="item-detail-modal" class="master-editor" style="max-width: 840px; min-height: unset; max-height: 85vh; display: flex; flex-direction: column; padding: 0;" onclick="event.stopPropagation()">
                 <div class="master-header" style="padding: 1.5rem 1.5rem 1rem 1.5rem; margin-bottom: 0; border-bottom: 1px solid var(--border-color);">
-                    <div class="master-title" id="item-detail-title">🔍 상세 생산 정보 및 가공품 소요(BOM)</div>
+                    <div class="master-title" id="item-detail-title">🔍 상세 생산 정보 및 부품 소요(BOM)</div>
                     <span class="master-close-btn" onclick="closeItemDetail()" style="line-height: 1;">×</span>
                 </div>
                 
-                <div id="item-detail-body" style="padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.5rem; font-size: 0.95rem; line-height: 1.5;">
+                <div id="item-detail-body" style="padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem; font-size: 0.95rem; line-height: 1.5;">
                     <!-- Content dynamically inserted -->
                 </div>
 
-                <div class="master-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; background: rgba(0,0,0,0.05); border-radius: 0 0 16px 16px; margin-top: 0;">
+                <div class="master-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.05); border-radius: 0 0 16px 16px; margin-top: 0;">
+                    <div id="item-detail-footer-left"></div>
                     <button class="btn" onclick="closeItemDetail()" style="padding: 0.6rem 1.5rem; background: var(--accent-color); color: white;">닫기</button>
                 </div>
             </div>
@@ -5139,6 +5144,27 @@ DST: 22. 지티테크`;
 
                     td.textContent = val;
                     if (h === 'Qty') td.style.fontWeight = 'bold';
+
+                    // Model 컬럼에 A급 유니트(PS/PZ) 포함 시 원클릭 바로가기 뱃지 표시
+                    if (h === 'Model' && !row.isUnmapped) {
+                        let rowComps = [];
+                        if (row.Serial && row.Serial !== '-') rowComps = compBySerial[row.Serial] || [];
+                        if (rowComps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') rowComps = compBySalesDoc[row.SalesDoc] || [];
+                        const unitACount = rowComps.filter(c => c.IsUnitA).length;
+                        if (unitACount > 0) {
+                            const badge = document.createElement('span');
+                            badge.className = 'badge';
+                            badge.style.cssText = 'margin-left: 6px; cursor: pointer; font-size: 0.72rem; padding: 1px 6px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600; vertical-align: middle; display: inline-flex; align-items: center; gap: 2px;';
+                            badge.title = `⭐ A급 유니트(${unitACount}종) 확인 (클릭 시 전용 조회)`;
+                            badge.innerHTML = `⭐ A급 <span style="font-weight:700;">${unitACount}</span>`;
+                            badge.onclick = (e) => {
+                                e.stopPropagation();
+                                showItemDetail(row, 'unita');
+                            };
+                            td.appendChild(badge);
+                        }
+                    }
+
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);
@@ -5152,7 +5178,7 @@ DST: 22. 지티테크`;
         let compMinMonthOrder = {};
         let selectedCompMaterials = [];
 
-        const allCompHeaders = ['Month', 'Model', 'ParentMat', 'SalesDoc', 'Serial', 'Component', 'CompDesc', 'Qty', 'Category'];
+        const allCompHeaders = ['Month', 'Model', 'ParentMat', 'SalesDoc', 'Serial', 'Component', 'CompDesc', 'Qty', 'WareCtrl', 'Category'];
         const compHeaderLabels = {
             'Month': '생산월',
             'Model': '기종',
@@ -5162,6 +5188,7 @@ DST: 22. 지티테크`;
             'Component': '가공품 품번 (Component)',
             'CompDesc': '가공품명 (Description)',
             'Qty': '소요량 (Qty)',
+            'WareCtrl': '창고관리자 (PS/PZ)',
             'Category': '구분'
         };
         let compUserVisibleHeaders = [...allCompHeaders];
@@ -5568,7 +5595,8 @@ DST: 22. 지티테크`;
                 parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
                 reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
                 sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬']),
-                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
+                deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제']),
+                wareCtrl: findIdx(['WAREHOUSE CONTROLLER', '창고관리자', '창고 관리자'])
             };
 
             const data = [];
@@ -5590,6 +5618,17 @@ DST: 22. 지티테크`;
 
                 if (!mNum || mNum > 12) continue;
 
+                let wCtrl = '';
+                let wDesc = '';
+                if (mapping.wareCtrl !== -1) {
+                    wCtrl = (cells[mapping.wareCtrl] || '').trim();
+                    if (cells.length > mapping.wareCtrl + 1) {
+                        wDesc = (cells[mapping.wareCtrl + 1] || '').trim();
+                    }
+                }
+                const sortStr = cells[mapping.sortString] || '';
+                const isUnitA = (wCtrl === 'PS' || wCtrl === 'PZ' || wDesc.includes('A급') || sortStr.includes('A급'));
+
                 data.push({
                     Month: mNum + '월',
                     SalesDoc: cells[mapping.salesDoc] || '',
@@ -5600,7 +5639,10 @@ DST: 22. 지티테크`;
                     Qty: parseFloat(cells[mapping.qty]) || 0,
                     ParentMat: cells[mapping.parentMat] || '',
                     ReqDate: cells[mapping.reqDate] || '',
-                    SortString: cells[mapping.sortString] || ''
+                    SortString: sortStr,
+                    WareCtrl: wCtrl,
+                    WareCtrlDesc: wDesc,
+                    IsUnitA: isUnitA
                 });
             }
             
@@ -7608,6 +7650,7 @@ DST: 22. 지티테크`;
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
             
             // Gather components from filteredData
             const uniqueMap = new Map();
@@ -7629,6 +7672,7 @@ DST: 22. 지티테크`;
                     // Apply other local filters (except selectedCompMaterials)
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
+                    if (showUnitAOnly && !c.IsUnitA) return;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
@@ -7708,6 +7752,7 @@ DST: 22. 지티테크`;
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
             const filteredComps = [];
             filteredData.forEach(r => {
                 if (r.isUnmapped) return; // Skip unmapped rows to avoid incorrect components
@@ -7728,6 +7773,7 @@ DST: 22. 지티테크`;
                     // Apply local filters
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
+                    if (showUnitAOnly && !c.IsUnitA) return;
                     if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
@@ -7950,10 +7996,24 @@ DST: 22. 지티테크`;
                         tdQty.style.textAlign = 'right';
                         tdQty.style.fontWeight = 'bold';
                         tr.appendChild(tdQty);
+                    } else if (h === 'WareCtrl') {
+                        const tdWare = document.createElement('td');
+                        tdWare.style.textAlign = 'center';
+                        if (c.WareCtrl) {
+                            const descStr = c.WareCtrlDesc ? ` (${c.WareCtrlDesc})` : '';
+                            tdWare.innerHTML = `<span class="badge" style="background: ${c.IsUnitA ? 'rgba(245, 158, 11, 0.2)' : 'var(--surface-hover)'}; color: ${c.IsUnitA ? '#f59e0b' : 'var(--text-secondary)'}; border: 1px solid ${c.IsUnitA ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-color)'}; font-weight: 600;">${c.WareCtrl}${descStr}</span>`;
+                        } else {
+                            tdWare.textContent = '-';
+                            tdWare.style.color = 'var(--text-secondary)';
+                        }
+                        tr.appendChild(tdWare);
                     } else if (h === 'Category') {
                         const tdPilot = document.createElement('td');
                         tdPilot.style.textAlign = 'center';
-                        if (c.IsSq) {
+                        if (c.IsUnitA) {
+                            const wCtrlLabel = c.WareCtrl ? ` (${c.WareCtrl})` : '';
+                            tdPilot.innerHTML = `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">⭐ A급 유니트${wCtrlLabel}</span>`;
+                        } else if (c.IsSq) {
                             tdPilot.innerHTML = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">초도품(SQ)</span>';
                         } else if (c.IsNoHistory) {
                             tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">시스템 생산 이력X</span>';
@@ -7968,58 +8028,19 @@ DST: 22. 지티테크`;
             }
         }
 
-        function showItemDetail(row) {
+        function showItemDetail(row, initialTab = 'auto') {
             const overlay = document.getElementById('item-detail-overlay');
             const titleEl = document.getElementById('item-detail-title');
             const bodyEl = document.getElementById('item-detail-body');
+            const footerLeft = document.getElementById('item-detail-footer-left');
             
             if (!overlay || !bodyEl) return;
             
             const isPilot = isInitialProduction(row.Model, row.Month);
             
-            titleEl.innerHTML = `🔍 <b>[${row.Model || '기종 불명'}]</b> 상세 정보 및 BOM 내역`;
+            titleEl.innerHTML = `🔍 <b>[${row.Model || '기종 불명'}]</b> 상세 생산 정보 및 부품 소요(BOM)`;
             bodyEl.innerHTML = '';
-            
-            const infoSection = document.createElement('div');
-            infoSection.style.display = 'grid';
-            infoSection.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
-            infoSection.style.gap = '1rem';
-            infoSection.style.background = 'var(--surface-hover)';
-            infoSection.style.padding = '1.2rem';
-            infoSection.style.borderRadius = '8px';
-            infoSection.style.border = '1px solid var(--border-color)';
-            
-            const fields = [
-                { label: '생산월', val: row.Month || '-' },
-                { label: '생산처 (Site)', val: row.Site || '-' },
-                { label: '기종분류', val: row.Group || '-' },
-                { label: '기종 (Model)', val: row.Model || '-' },
-                { label: '품명 (Product)', val: row.Product || row.ProductName || '-' },
-                { label: '주문번호 (Order)', val: row.OrderNum || '-' },
-                { label: 'Sales Doc', val: row.SalesDoc || '-' },
-                { label: '시리얼번호 (Serial)', val: row.Serial || '-' },
-                { label: '시작일', val: row.StartDate || '-' },
-                { label: '고객명', val: row.Customer || '-' },
-                { label: '구분', val: isPilot ? '<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight:600;">초도품</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-weight:600;">양산품</span>' }
-            ];
-            
-            fields.forEach(f => {
-                const itemDiv = document.createElement('div');
-                itemDiv.innerHTML = `
-                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight:600; text-transform:uppercase;">${f.label}</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-weight:500; margin-top: 2px;">${f.val}</div>
-                `;
-                infoSection.appendChild(itemDiv);
-            });
-            bodyEl.appendChild(infoSection);
-            
-            const bomTitle = document.createElement('h3');
-            bomTitle.textContent = '🔩 하위 가공품 소요 (BOM) 내역';
-            bomTitle.style.fontSize = '1.05rem';
-            bomTitle.style.fontWeight = '600';
-            bomTitle.style.marginTop = '0.5rem';
-            bomTitle.style.color = 'var(--accent-color)';
-            bodyEl.appendChild(bomTitle);
+            if (footerLeft) footerLeft.innerHTML = '';
             
             let matchedComps = [];
             if (!row.isUnmapped) {
@@ -8030,45 +8051,205 @@ DST: 22. 지티테크`;
                     matchedComps = compBySalesDoc[row.SalesDoc] || [];
                 }
             }
+
+            const inhouseComps = matchedComps.filter(c => !c.IsUnitA);
+            const unitAComps = matchedComps.filter(c => !!c.IsUnitA);
             
-            if (matchedComps.length === 0) {
-                const emptyDiv = document.createElement('div');
-                emptyDiv.style.textAlign = 'center';
-                emptyDiv.style.padding = '2rem';
-                emptyDiv.style.color = 'var(--text-secondary)';
-                emptyDiv.style.background = 'rgba(255,255,255,0.01)';
-                emptyDiv.style.border = '1px dashed var(--border-color)';
-                emptyDiv.style.borderRadius = '8px';
-                emptyDiv.textContent = '매칭된 하위 가공품(BOM) 내역이 없습니다.';
-                bodyEl.appendChild(emptyDiv);
-            } else {
-                const bomTableWrapper = document.createElement('div');
-                bomTableWrapper.className = 'table-container active';
-                bomTableWrapper.style.border = '1px solid var(--border-color)';
-                bomTableWrapper.style.borderRadius = '8px';
-                bomTableWrapper.style.maxHeight = '300px';
-                bomTableWrapper.style.overflowY = 'auto';
-                
-                const bomTable = document.createElement('table');
-                bomTable.style.width = '100%';
-                bomTable.style.borderCollapse = 'collapse';
-                
-                bomTable.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th style="padding: 0.5rem; text-align: left;">가공품 품번</th>
-                            <th style="padding: 0.5rem; text-align: left;">가공품명</th>
-                            <th style="padding: 0.5rem; text-align: right; width: 100px;">소요량</th>
-                            <th style="padding: 0.5rem; text-align: left; width: 120px;">소요예정일</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
+            // 1. Info Summary Card
+            const infoSection = document.createElement('div');
+            infoSection.style.display = 'grid';
+            infoSection.style.gridTemplateColumns = 'repeat(auto-fit, minmax(180px, 1fr))';
+            infoSection.style.gap = '0.85rem';
+            infoSection.style.background = 'var(--surface-hover)';
+            infoSection.style.padding = '1.1rem';
+            infoSection.style.borderRadius = '8px';
+            infoSection.style.border = '1px solid var(--border-color)';
+            
+            const unitABadge = unitAComps.length > 0 
+                ? `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight:700;">포함 (${unitAComps.length}종)</span>`
+                : `<span style="color: var(--text-secondary); font-size: 0.88rem;">미포함</span>`;
+
+            const fields = [
+                { label: '생산월', val: row.Month || '-' },
+                { label: '생산처 (Site)', val: row.Site || '-' },
+                { label: '기종분류', val: row.Group || '-' },
+                { label: '기종 (Model)', val: row.Model || '-' },
+                { label: '품명 (Product)', val: row.Product || row.ProductName || '-' },
+                { label: '주문번호 (Order)', val: row.OrderNum || '-' },
+                { label: 'Sales Doc', val: row.SalesDoc || '-' },
+                { label: '시리얼번호 (Serial)', val: row.Serial || '-' },
+                { label: '시작일', val: row.StartDate || '-' },
+                { label: '구분', val: isPilot ? '<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight:600;">초도품</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-weight:600;">양산품</span>' },
+                { label: '⭐ A급 유니트(PS/PZ)', val: unitABadge }
+            ];
+            
+            fields.forEach(f => {
+                const itemDiv = document.createElement('div');
+                itemDiv.innerHTML = `
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); font-weight:600; text-transform:uppercase;">${f.label}</div>
+                    <div style="font-size: 0.92rem; color: var(--text-primary); font-weight:500; margin-top: 2px;">${f.val}</div>
                 `;
+                infoSection.appendChild(itemDiv);
+            });
+            bodyEl.appendChild(infoSection);
+
+            // 2. Banner & Quick 'A급 유니트 확인' Button (if A급 유니트 exist)
+            if (unitAComps.length > 0) {
+                const unitABanner = document.createElement('div');
+                unitABanner.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 1rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; margin-top: -0.25rem;';
+                unitABanner.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600; color: #f59e0b;">
+                        <span style="font-size: 1.15rem;">⭐</span>
+                        <span>창고관리자(PS/PZ) <b>A급 유니트</b>가 총 <b>${unitAComps.length}종</b> 포함되어 있습니다.</span>
+                    </div>
+                    <button id="btn-quick-view-unita" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; padding: 0.45rem 1rem; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35); transition: all 0.15s ease;">
+                        ⭐ A급 유니트 확인
+                    </button>
+                `;
+                bodyEl.appendChild(unitABanner);
+
+                if (footerLeft) {
+                    footerLeft.innerHTML = `
+                        <button id="footer-btn-quick-unita" class="btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 600; padding: 0.55rem 1.1rem; display: flex; align-items: center; gap: 6px; font-size: 0.85rem; box-shadow: 0 2px 5px rgba(245, 158, 11, 0.3); cursor: pointer;">
+                            ⭐ A급 유니트 확인 (${unitAComps.length}종)
+                        </button>
+                    `;
+                }
+            }
+            
+            // 3. Segmented Tabs
+            const tabHeader = document.createElement('div');
+            tabHeader.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-top: 0.25rem;';
+            
+            const btnInhouse = document.createElement('button');
+            const btnUnitA = document.createElement('button');
+            const btnAll = document.createElement('button');
+            
+            btnInhouse.textContent = `🔩 사내 가공품 (${inhouseComps.length}종)`;
+            btnUnitA.textContent = `⭐ A급 유니트 (${unitAComps.length}종)`;
+            btnAll.textContent = `📋 전체 내역 (${matchedComps.length}종)`;
+            
+            [btnInhouse, btnUnitA, btnAll].forEach(btn => {
+                btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;';
+            });
+            
+            tabHeader.appendChild(btnInhouse);
+            tabHeader.appendChild(btnUnitA);
+            tabHeader.appendChild(btnAll);
+            bodyEl.appendChild(tabHeader);
+            
+            // 4. Content container
+            const contentContainer = document.createElement('div');
+            bodyEl.appendChild(contentContainer);
+            
+            let currentTab = 'inhouse';
+            if (initialTab === 'unita') currentTab = 'unita';
+            else if (initialTab === 'inhouse') currentTab = 'inhouse';
+            else if (initialTab === 'all') currentTab = 'all';
+            else {
+                if (inhouseComps.length === 0 && unitAComps.length > 0) currentTab = 'unita';
+                else currentTab = 'inhouse';
+            }
+            
+            function renderTableForTab(tabKey) {
+                currentTab = tabKey;
                 
-                const bomTbody = bomTable.querySelector('tbody');
+                // Style tabs
+                btnInhouse.style.background = tabKey === 'inhouse' ? 'var(--accent-color)' : 'var(--surface-color)';
+                btnInhouse.style.color = tabKey === 'inhouse' ? 'white' : 'var(--text-secondary)';
+                btnInhouse.style.borderColor = tabKey === 'inhouse' ? 'var(--accent-color)' : 'var(--border-color)';
+                
+                btnUnitA.style.background = tabKey === 'unita' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--surface-color)';
+                btnUnitA.style.color = tabKey === 'unita' ? 'white' : 'var(--text-secondary)';
+                btnUnitA.style.borderColor = tabKey === 'unita' ? '#f59e0b' : 'var(--border-color)';
+                
+                btnAll.style.background = tabKey === 'all' ? 'var(--text-primary)' : 'var(--surface-color)';
+                btnAll.style.color = tabKey === 'all' ? 'var(--bg-color)' : 'var(--text-secondary)';
+                btnAll.style.borderColor = tabKey === 'all' ? 'var(--text-primary)' : 'var(--border-color)';
+                
+                contentContainer.innerHTML = '';
+                
+                let targetList = [];
+                if (tabKey === 'inhouse') targetList = inhouseComps;
+                else if (tabKey === 'unita') targetList = unitAComps;
+                else targetList = matchedComps;
+                
+                if (targetList.length === 0) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.style.textAlign = 'center';
+                    emptyDiv.style.padding = '2.5rem 1rem';
+                    emptyDiv.style.color = 'var(--text-secondary)';
+                    emptyDiv.style.background = 'rgba(255,255,255,0.01)';
+                    emptyDiv.style.border = '1px dashed var(--border-color)';
+                    emptyDiv.style.borderRadius = '8px';
+                    if (tabKey === 'unita') {
+                        emptyDiv.innerHTML = '⭐ 등록된 <b>A급 유니트(창고관리자 PS/PZ)</b> 소요 내역이 없습니다.';
+                    } else if (tabKey === 'inhouse') {
+                        emptyDiv.innerHTML = '🔩 등록된 <b>사내 가공품</b> 소요 내역이 없습니다.';
+                    } else {
+                        emptyDiv.innerHTML = '매칭된 하위 소요 내역이 없습니다.';
+                    }
+                    contentContainer.appendChild(emptyDiv);
+                    return;
+                }
+                
+                const tableWrapper = document.createElement('div');
+                tableWrapper.className = 'table-container active';
+                tableWrapper.style.border = '1px solid var(--border-color)';
+                tableWrapper.style.borderRadius = '8px';
+                tableWrapper.style.maxHeight = '320px';
+                tableWrapper.style.overflowY = 'auto';
+                
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+                
+                let theadHtml = '';
+                if (tabKey === 'unita') {
+                    theadHtml = `
+                        <thead>
+                            <tr>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">유니트 품번</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">유니트 품명</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: center; width: 115px;">창고관리자</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: right; width: 90px;">소요량</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left; width: 110px;">소요예정일</th>
+                            </tr>
+                        </thead>
+                    `;
+                } else if (tabKey === 'inhouse') {
+                    theadHtml = `
+                        <thead>
+                            <tr>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">가공품 품번</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">가공품명</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: right; width: 100px;">소요량</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left; width: 120px;">소요예정일</th>
+                            </tr>
+                        </thead>
+                    `;
+                } else {
+                    theadHtml = `
+                        <thead>
+                            <tr>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">품번</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left;">품명</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: center; width: 115px;">분류</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: right; width: 90px;">소요량</th>
+                                <th style="padding: 0.55rem 0.8rem; text-align: left; width: 110px;">소요예정일</th>
+                            </tr>
+                        </thead>
+                    `;
+                }
+                
+                table.innerHTML = theadHtml + '<tbody></tbody><tfoot></tfoot>';
+                const tbody = table.querySelector('tbody');
+                const tfoot = table.querySelector('tfoot');
+                
+                // Aggregate
                 const aggregated = {};
-                matchedComps.forEach(c => {
+                let sumQty = 0;
+                targetList.forEach(c => {
                     const key = `${c.Component}||${c.CompDesc}`;
                     if (!aggregated[key]) {
                         aggregated[key] = { ...c, Qty: 0 };
@@ -8077,19 +8258,76 @@ DST: 22. 지티테크`;
                 });
                 
                 Object.values(aggregated).forEach(c => {
+                    sumQty += c.Qty;
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="padding: 0.6rem 0.8rem; font-family: monospace;">${c.Component}</td>
-                        <td style="padding: 0.6rem 0.8rem;">${c.CompDesc}</td>
-                        <td style="padding: 0.6rem 0.8rem; text-align: right; font-weight: bold; color: var(--success);">${c.Qty.toLocaleString()}</td>
-                        <td style="padding: 0.6rem 0.8rem; color: var(--text-secondary);">${c.ReqDate || '-'}</td>
-                    `;
-                    bomTbody.appendChild(tr);
+                    
+                    if (tabKey === 'unita') {
+                        const wareBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">${c.WareCtrl || 'PS/PZ'}${c.WareCtrlDesc ? ' ' + c.WareCtrlDesc : ''}</span>`;
+                        tr.innerHTML = `
+                            <td style="padding: 0.55rem 0.8rem; font-family: monospace;">${c.Component}</td>
+                            <td style="padding: 0.55rem 0.8rem; font-weight: 500;">${c.CompDesc}</td>
+                            <td style="padding: 0.55rem 0.8rem; text-align: center;">${wareBadge}</td>
+                            <td style="padding: 0.55rem 0.8rem; text-align: right; font-weight: bold; color: #f59e0b;">${c.Qty.toLocaleString()}</td>
+                            <td style="padding: 0.55rem 0.8rem; color: var(--text-secondary);">${c.ReqDate || '-'}</td>
+                        `;
+                    } else if (tabKey === 'inhouse') {
+                        tr.innerHTML = `
+                            <td style="padding: 0.55rem 0.8rem; font-family: monospace;">${c.Component}</td>
+                            <td style="padding: 0.55rem 0.8rem;">${c.CompDesc}</td>
+                            <td style="padding: 0.55rem 0.8rem; text-align: right; font-weight: bold; color: var(--success);">${c.Qty.toLocaleString()}</td>
+                            <td style="padding: 0.55rem 0.8rem; color: var(--text-secondary);">${c.ReqDate || '-'}</td>
+                        `;
+                    } else {
+                        const catBadge = c.IsUnitA 
+                            ? `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">⭐ A급(${c.WareCtrl || 'PS/PZ'})</span>`
+                            : `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">사내</span>`;
+                        const qtyColor = c.IsUnitA ? '#f59e0b' : 'var(--success)';
+                        tr.innerHTML = `
+                            <td style="padding: 0.55rem 0.8rem; font-family: monospace;">${c.Component}</td>
+                            <td style="padding: 0.55rem 0.8rem;">${c.CompDesc}</td>
+                            <td style="padding: 0.55rem 0.8rem; text-align: center;">${catBadge}</td>
+                            <td style="padding: 0.55rem 0.8rem; text-align: right; font-weight: bold; color: ${qtyColor};">${c.Qty.toLocaleString()}</td>
+                            <td style="padding: 0.55rem 0.8rem; color: var(--text-secondary);">${c.ReqDate || '-'}</td>
+                        `;
+                    }
+                    tbody.appendChild(tr);
                 });
                 
-                bomTableWrapper.appendChild(bomTable);
-                bodyEl.appendChild(bomTableWrapper);
+                // Add total summary in tfoot
+                const trFoot = document.createElement('tr');
+                trFoot.style.background = 'var(--surface-hover)';
+                trFoot.style.fontWeight = 'bold';
+                trFoot.style.borderTop = '2px solid var(--border-color)';
+                const colspan = (tabKey === 'inhouse') ? 2 : 3;
+                trFoot.innerHTML = `
+                    <td colspan="${colspan}" style="padding: 0.55rem 0.8rem; text-align: right; color: var(--text-secondary);">총 소요량 합계:</td>
+                    <td style="padding: 0.55rem 0.8rem; text-align: right; color: ${tabKey === 'unita' ? '#f59e0b' : 'var(--success)'}; font-size: 1rem;">${sumQty.toLocaleString()}</td>
+                    <td></td>
+                `;
+                tfoot.appendChild(trFoot);
+                
+                tableWrapper.appendChild(table);
+                contentContainer.appendChild(tableWrapper);
             }
+            
+            btnInhouse.onclick = () => renderTableForTab('inhouse');
+            btnUnitA.onclick = () => renderTableForTab('unita');
+            btnAll.onclick = () => renderTableForTab('all');
+            
+            const quickBtn = document.getElementById('btn-quick-view-unita');
+            if (quickBtn) {
+                quickBtn.onclick = () => renderTableForTab('unita');
+            }
+            const footerQuickBtn = document.getElementById('footer-btn-quick-unita');
+            if (footerQuickBtn) {
+                footerQuickBtn.onclick = () => renderTableForTab('unita');
+            }
+            
+            renderTableForTab(currentTab);
+            
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
             
             overlay.style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -8110,6 +8348,7 @@ DST: 22. 지티테크`;
             const searchVal = searchModel.value.toLowerCase().trim();
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
+            const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
             
             const exportData = [];
             
@@ -8131,6 +8370,7 @@ DST: 22. 지티테크`;
                     
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
+                    if (showUnitAOnly && !c.IsUnitA) return;
                     if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
@@ -8147,7 +8387,8 @@ DST: 22. 지티테크`;
                     }
                     
                     let typeLabel = '양산품';
-                    if (isSq) typeLabel = '초도품(SQ)';
+                    if (c.IsUnitA) typeLabel = `A급 유니트 (${c.WareCtrl || 'PS/PZ'})`;
+                    else if (isSq) typeLabel = '초도품(SQ)';
                     else if (isNoHistory) typeLabel = '시스템 생산 이력X';
                     
                     const rowObj = {};
@@ -8160,6 +8401,7 @@ DST: 22. 지티테크`;
                         else if (h === 'Component') rowObj['가공품 품번 (Component)'] = c.Component || '';
                         else if (h === 'CompDesc') rowObj['가공품명 (Description)'] = c.CompDesc || '';
                         else if (h === 'Qty') rowObj['소요량 (Qty)'] = c.Qty;
+                        else if (h === 'WareCtrl') rowObj['창고관리자'] = c.WareCtrl ? (c.WareCtrlDesc ? `${c.WareCtrl} (${c.WareCtrlDesc})` : c.WareCtrl) : '';
                         else if (h === 'Category') rowObj['구분'] = typeLabel;
                     });
                     exportData.push(rowObj);

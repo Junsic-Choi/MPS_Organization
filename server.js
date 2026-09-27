@@ -410,6 +410,8 @@ function parseComponentMhtml(filePath, planData = null) {
     const idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('REQUIREMENT QTY') || h.includes('소요량'));
     const idxUnit = headers.findIndex(h => h.includes('BASE UNIT') || h.includes('단위'));
     const idxDel = headers.findIndex(h => h.includes('DELETED ITEM') || h.includes('DELETED') || h.includes('삭제'));
+    const idxWareCtrl = headers.findIndex(h => h.includes('WAREHOUSE CONTROLLER') || h.includes('창고관리자') || h.includes('창고 관리자'));
+    const idxSortStr = headers.findIndex(h => h.includes('SORT STRING') || h.includes('정렬 문자열') || h.includes('정렬'));
 
     const records = [];
     for (let i = 1; i < trs.length; i++) {
@@ -449,6 +451,17 @@ function parseComponentMhtml(filePath, planData = null) {
         const qty = parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0;
         if (qty <= 0) continue;
 
+        let wareCtrl = '';
+        let wareCtrlDesc = '';
+        if (idxWareCtrl !== -1) {
+            wareCtrl = (cells[idxWareCtrl] || '').trim();
+            if (cells.length > idxWareCtrl + 1) {
+                wareCtrlDesc = (cells[idxWareCtrl + 1] || '').trim();
+            }
+        }
+        const sortStr = idxSortStr !== -1 ? (cells[idxSortStr] || '').trim() : '';
+        const isUnitA = (wareCtrl === 'PS' || wareCtrl === 'PZ' || wareCtrlDesc.includes('A급') || sortStr.includes('A급'));
+
         records.push({
             plant,
             serial,
@@ -460,7 +473,11 @@ function parseComponentMhtml(filePath, planData = null) {
             component: comp,
             compDesc: cells[idxCompDesc] || '',
             qty,
-            unit: cells[idxUnit] || ''
+            unit: cells[idxUnit] || '',
+            wareCtrl,
+            wareCtrlDesc,
+            sortStr,
+            isUnitA
         });
     }
     return records;
@@ -561,6 +578,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                 component: itemB.component,
                 compDesc: itemB.compDesc,
                 unit: itemB.unit,
+                wareCtrl: itemB.wareCtrl || '',
+                wareCtrlDesc: itemB.wareCtrlDesc || '',
+                isUnitA: !!itemB.isUnitA,
                 oldQty: 0,
                 newQty: itemB.qty,
                 diffQty: itemB.qty
@@ -582,6 +602,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                     component: itemB.component,
                     compDesc: itemB.compDesc,
                     unit: itemB.unit,
+                    wareCtrl: itemB.wareCtrl || itemA.wareCtrl || '',
+                    wareCtrlDesc: itemB.wareCtrlDesc || itemA.wareCtrlDesc || '',
+                    isUnitA: !!(itemB.isUnitA || itemA.isUnitA),
                     oldQty: itemA.qty,
                     newQty: itemB.qty,
                     diffQty: diff
@@ -606,6 +629,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                 component: itemA.component,
                 compDesc: itemA.compDesc,
                 unit: itemA.unit,
+                wareCtrl: itemA.wareCtrl || '',
+                wareCtrlDesc: itemA.wareCtrlDesc || '',
+                isUnitA: !!itemA.isUnitA,
                 oldQty: itemA.qty,
                 newQty: 0,
                 diffQty: -itemA.qty
@@ -685,6 +711,8 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
             '기종내역': c.matDesc,
             '가공품번(Component)': c.component,
             '가공품명(Comp.Desc)': c.compDesc,
+            '창고관리자': c.wareCtrl ? (c.wareCtrlDesc ? `${c.wareCtrl} (${c.wareCtrlDesc})` : c.wareCtrl) : '',
+            '유니트구분': c.isUnitA ? '⭐ A급 유니트' : '사내 가공품',
             '단위': c.unit,
             '이전 소요량': c.oldQty,
             '최신 소요량': c.newQty,
@@ -697,7 +725,7 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
         const colWidths = [
             { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 },
             { wch: 14 }, { wch: 10 }, { wch: 22 }, { wch: 30 },
-            { wch: 18 }, { wch: 28 }, { wch: 8 }, { wch: 12 },
+            { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 12 },
             { wch: 12 }, { wch: 14 }
         ];
         ws['!cols'] = colWidths;

@@ -75,42 +75,51 @@ End If
 
 ' Warehouse Controller (SO_WARE)
 If InStr(wareCtrl, ",") > 0 Then
-    Dim arrWare, wLow, wHigh
+    Dim arrWare, wIdx, clipTxt
     arrWare = Split(wareCtrl, ",")
-    wLow = Trim(arrWare(0))
-    wHigh = Trim(arrWare(UBound(arrWare)))
-    
-    ' Method 1: If exactly 2 sequential values (like PY, PZ), set LOW and HIGH directly (fast & reliable, no popup needed)
-    If UBound(arrWare) = 1 And wLow = "PY" And wHigh = "PZ" Then
-        On Error Resume Next
-        session.findById("wnd[0]/usr/ctxtSO_WARE-LOW").text = wLow
-        session.findById("wnd[0]/usr/ctxtSO_WARE-HIGH").text = wHigh
-        If Err.Number <> 0 Then
-            Err.Clear
-            session.findById("wnd[0]/usr/txtSO_WARE-LOW").text = wLow
-            session.findById("wnd[0]/usr/txtSO_WARE-HIGH").text = wHigh
+    clipTxt = ""
+    For wIdx = 0 To UBound(arrWare)
+        If Trim(arrWare(wIdx)) <> "" Then
+            If clipTxt <> "" Then clipTxt = clipTxt & vbCrLf
+            clipTxt = clipTxt & Trim(arrWare(wIdx))
         End If
-        On Error GoTo 0
-    Else
-        ' Method 2: Multi-selection popup via clipboard
-        Dim wIdx, clipTxt
-        clipTxt = ""
-        For wIdx = 0 To UBound(arrWare)
-            If Trim(arrWare(wIdx)) <> "" Then
-                If clipTxt <> "" Then clipTxt = clipTxt & vbCrLf
-                clipTxt = clipTxt & Trim(arrWare(wIdx))
-            End If
-        Next
-        SetClipboard clipTxt
-        WScript.Sleep 300
-        On Error Resume Next
-        session.findById("wnd[0]/usr/btn%_SO_WARE_%_APP_%-VALU_PUSH").press
-        WScript.Sleep 500
-        session.findById("wnd[1]/tbar[0]/btn[24]").press
-        WScript.Sleep 300
-        session.findById("wnd[1]/tbar[0]/btn[8]").press
-        On Error GoTo 0
+    Next
+    
+    ' Clear LOW and HIGH first
+    On Error Resume Next
+    session.findById("wnd[0]/usr/ctxtSO_WARE-LOW").text = ""
+    session.findById("wnd[0]/usr/ctxtSO_WARE-HIGH").text = ""
+    session.findById("wnd[0]/usr/txtSO_WARE-LOW").text = ""
+    session.findById("wnd[0]/usr/txtSO_WARE-HIGH").text = ""
+    On Error GoTo 0
+    
+    ' Copy to clipboard for fallback
+    SetClipboard clipTxt
+    WScript.Sleep 200
+    
+    On Error Resume Next
+    session.findById("wnd[0]/usr/btn%_SO_WARE_%_APP_%-VALU_PUSH").press
+    WScript.Sleep 400
+    
+    ' Try direct cell assignment in wnd[1] table control
+    Dim setDirectSuccess
+    setDirectSuccess = False
+    Err.Clear
+    session.findById("wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE/ctxtRSCSEL_255-SLOW_I[1,0]").text = Trim(arrWare(0))
+    If UBound(arrWare) >= 1 Then
+        session.findById("wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE/ctxtRSCSEL_255-SLOW_I[1,1]").text = Trim(arrWare(1))
     End If
+    If Err.Number = 0 Then setDirectSuccess = True
+    Err.Clear
+    
+    ' If direct cell assignment wasn't available, paste from clipboard via btn[24]
+    If Not setDirectSuccess Then
+        session.findById("wnd[1]/tbar[0]/btn[24]").press
+    End If
+    
+    WScript.Sleep 200
+    session.findById("wnd[1]/tbar[0]/btn[8]").press
+    On Error GoTo 0
 ElseIf wareCtrl <> "" Then
     On Error Resume Next
     session.findById("wnd[0]/usr/ctxtSO_WARE-LOW").text = wareCtrl
