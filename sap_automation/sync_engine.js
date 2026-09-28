@@ -4,6 +4,16 @@ const { execSync } = require("child_process");
 
 const SAP_GUI_DIR = "C:\\Users\\i0215099\\Documents\\SAP\\SAP GUI";
 const WORKSPACE_DIR = path.resolve(__dirname, "..");
+const USER_PROFILE = process.env.USERPROFILE || "C:\\Users\\i0215099";
+
+// SAP XXL export can save to various default directories based on user history
+const WATCH_DIRS = [
+    SAP_GUI_DIR,
+    path.join(USER_PROFILE, "Desktop", "원본데이터"),
+    path.join(USER_PROFILE, "Desktop"),
+    path.join(USER_PROFILE, "Downloads"),
+    process.env.TEMP || path.join(USER_PROFILE, "AppData", "Local", "Temp")
+];
 
 let currentSyncState = {
     running: false,
@@ -21,20 +31,22 @@ function getSyncStatus() {
 }
 
 function cleanSapExportDir() {
-    if (!fs.existsSync(SAP_GUI_DIR)) return;
-    try {
-        const files = fs.readdirSync(SAP_GUI_DIR);
-        files.forEach(f => {
-            if (/\.mhtml$/i.test(f)) {
-                try {
-                    fs.unlinkSync(path.join(SAP_GUI_DIR, f));
-                } catch (e) {}
-            }
-        });
-    } catch (e) {}
+    WATCH_DIRS.forEach(dir => {
+        if (!fs.existsSync(dir)) return;
+        try {
+            const files = fs.readdirSync(dir);
+            files.forEach(f => {
+                if (/^export.*\.mhtml$/i.test(f)) {
+                    try {
+                        fs.unlinkSync(path.join(dir, f));
+                    } catch (e) {}
+                }
+            });
+        } catch (e) {}
+    });
 }
 
-function closeSapExcel() {
+function closeSapExcel(specificPath = null) {
     // 1. First try to cleanly close only SAP export workbooks without killing user's own work
     try {
         const script = path.join(__dirname, "close_sap_excel.vbs");
@@ -43,16 +55,18 @@ function closeSapExcel() {
         }
     } catch (e) {}
 
-    // 2. If export.MHTML is still locked, kill Excel to release file lock
-    const p = path.join(SAP_GUI_DIR, "export.MHTML");
-    if (fs.existsSync(p)) {
-        try {
-            fs.unlinkSync(p);
-        } catch (e) {
+    // 2. Release locks on candidate export files
+    const targets = specificPath ? [specificPath] : WATCH_DIRS.map(d => path.join(d, "export.MHTML"));
+    for (const p of targets) {
+        if (fs.existsSync(p)) {
             try {
-                execSync("taskkill /f /im excel.exe", { stdio: "ignore" });
-            } catch (kErr) {}
-            try { fs.unlinkSync(p); } catch (uErr) {}
+                fs.unlinkSync(p);
+            } catch (e) {
+                try {
+                    execSync("taskkill /f /im excel.exe", { stdio: "ignore" });
+                } catch (kErr) {}
+                try { fs.unlinkSync(p); } catch (uErr) {}
+            }
         }
     }
 }
@@ -104,33 +118,38 @@ async function waitForNewExportFile(sinceTimestamp, maxWaitSec = 180) {
 
     while ((Date.now() - startTime) < (maxWaitSec * 1000)) {
         await new Promise(r => setTimeout(r, 1000));
-        if (!fs.existsSync(SAP_GUI_DIR)) continue;
 
-        try {
-            const files = fs.readdirSync(SAP_GUI_DIR)
-                .filter(f => /\.mhtml$/i.test(f))
-                .map(f => {
-                    const full = path.join(SAP_GUI_DIR, f);
-                    const stat = fs.statSync(full);
-                    return { full, size: stat.size, mtime: stat.mtimeMs };
-                })
-                .filter(f => f.mtime >= sinceTimestamp - 3000 && f.size > 1000)
-                .sort((a, b) => b.mtime - a.mtime);
+        let candidateFiles = [];
+        for (const dir of WATCH_DIRS) {
+            if (!fs.existsSync(dir)) continue;
+            try {
+                const files = fs.readdirSync(dir)
+                    .filter(f => /\.mhtml$/i.test(f))
+                    .map(f => {
+                        const full = path.join(dir, f);
+                        const stat = fs.statSync(full);
+                        return { full, size: stat.size, mtime: stat.mtimeMs };
+                    })
+                    .filter(f => f.mtime >= sinceTimestamp - 3000 && f.size > 1000);
+                candidateFiles.push(...files);
+            } catch (e) {}
+        }
 
-            if (files.length > 0) {
-                const newest = files[0];
-                if (newest.full === lastPath && newest.size === lastSize) {
-                    stableCount++;
-                    if (stableCount >= 2) {
-                        return newest.full;
-                    }
-                } else {
-                    lastPath = newest.full;
-                    lastSize = newest.size;
-                    stableCount = 0;
+        if (candidateFiles.length > 0) {
+            candidateFiles.sort((a, b) => b.mtime - a.mtime);
+            const newest = candidateFiles[0];
+            if (newest.full === lastPath && newest.size === lastSize) {
+                stableCount++;
+                if (stableCount >= 2) {
+                    console.log(`[Engine] Detected export file: ${newest.full} (${(newest.size / 1024 / 1024).toFixed(2)} MB)`);
+                    return newest.full;
                 }
+            } else {
+                lastPath = newest.full;
+                lastSize = newest.size;
+                stableCount = 0;
             }
-        } catch (e) {}
+        }
     }
     return null;
 }
@@ -234,12 +253,27 @@ function mergeComponentMhtml(baseFilePath, appendFilePath) {
 
 function copyExportToWorkspace(sourcePath, targetFilename) {
     const dest = path.join(WORKSPACE_DIR, targetFilename);
-    fs.copyFileSync(sourcePath, dest);
+    let copied = false;
+    for (let retry = 0; retry < 5; retry++) {
+        try {
+            fs.copyFileSync(sourcePath, dest);
+            copied = true;
+            break;
+        } catch (e) {
+            closeSapExcel(sourcePath);
+            const waitEnd = Date.now() + 500;
+            while (Date.now() < waitEnd) {}
+        }
+    }
+    if (!copied) {
+        fs.copyFileSync(sourcePath, dest);
+    }
+
     const sizeMb = (fs.statSync(dest).size / 1024 / 1024).toFixed(2);
     console.log(`[Sync] Saved ${targetFilename} (${sizeMb} MB) from ${sourcePath}`);
     
     // Close Excel view and remove exported file so the next step has a clean path
-    closeSapExcel();
+    closeSapExcel(sourcePath);
     try { fs.unlinkSync(sourcePath); } catch (e) {}
     return dest;
 }

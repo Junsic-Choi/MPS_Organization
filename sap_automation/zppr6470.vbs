@@ -201,6 +201,10 @@ Sub HandleExportPopups()
         Set wnd = session.findById("wnd[1]")
         If Err.Number = 0 And Not wnd Is Nothing Then
             Err.Clear
+            wnd.findById("usr/ctxtDY_PATH").text = "C:\Users\i0215099\Documents\SAP\SAP GUI"
+            Err.Clear
+            wnd.findById("usr/ctxtDY_FILENAME").text = "export.MHTML"
+            Err.Clear
             wnd.findById("tbar[0]/btn[11]").press
             If Err.Number <> 0 Then
                 Err.Clear
