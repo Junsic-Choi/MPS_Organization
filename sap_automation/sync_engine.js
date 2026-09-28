@@ -212,8 +212,8 @@ function mergeComponentMhtml(baseFilePath, appendFilePath) {
         }
 
         if (rowsToAdd.length === 0) {
-            console.log(`[Sync] PY/PZ items are already present in base file (0 new unique rows).`);
-            return;
+            console.log(`[Sync] Items are already present in base file (0 new unique rows).`);
+            return 0;
         }
 
         const tableEndIdx = baseContent.lastIndexOf('</table>');
@@ -222,10 +222,13 @@ function mergeComponentMhtml(baseFilePath, appendFilePath) {
                 '\r\n' + rowsToAdd.join('\r\n') + '\r\n' +
                 baseContent.substring(tableEndIdx);
             fs.writeFileSync(baseFilePath, merged, 'utf8');
-            console.log(`[Sync] Successfully merged ${rowsToAdd.length} unique PY/PZ component rows into ${path.basename(baseFilePath)}`);
+            console.log(`[Sync] Successfully merged ${rowsToAdd.length} unique component rows into ${path.basename(baseFilePath)}`);
+            return rowsToAdd.length;
         }
+        return 0;
     } catch (err) {
         console.error(`[Sync] mergeComponentMhtml error:`, err.message);
+        return 0;
     }
 }
 
@@ -362,31 +365,48 @@ async function runSapSync(options = {}) {
             // Reset SAP to home before step 2-2
             try { runVbs("return_home.vbs"); } catch (e) {}
 
-            // 2-2: Warehouse Controller PS, PZ (A급 유니트) 품목 수집 (조달구분='', wareCtrl='PS,PZ')
-            currentSyncState.statusText = `[2/4] 남산+(1840) 창고 관리자(PS, PZ - A급 유니트) 가공품 소요량 추가 수집 중...`;
-            onProgress(currentSyncState);
-            console.log(currentSyncState.statusText);
-
-            setClipboardText(docs1840);
-            stepStart = Date.now();
-            try {
-                runVbs("zppr6470.vbs", ["1840", "", "", "18", "PS,PZ"]);
-                const file2_pypz = await waitForNewExportFile(stepStart, 180);
-                if (file2_pypz) {
-                    const tempPyFile = path.join(WORKSPACE_DIR, "sap_component_1840_pypz.mhtml");
-                    fs.copyFileSync(file2_pypz, tempPyFile);
-                    closeSapExcel();
-                    try { fs.unlinkSync(file2_pypz); } catch (e) {}
-
-                    const mergedCount = mergeComponentMhtml(path.join(WORKSPACE_DIR, "sap_component_1840.mhtml"), tempPyFile);
-                    try { fs.unlinkSync(tempPyFile); } catch (e) {}
-                    currentSyncState.results.pypzMergedRows = mergedCount || 0;
-                    console.log(`[Sync] PS/PZ (A급 유니트) items successfully merged: ${mergedCount || 0} rows`);
-                }
-            } catch (pypzErr) {
-                console.warn("[Sync] PS/PZ query skipped or returned 0 rows:", pypzErr.message);
-                currentSyncState.results.pypzWarning = pypzErr.message;
+            // 2-2: Warehouse Controller PS, PZ (A급 유니트) 품목 분할 수집 (조달구분='', wareCtrl='PS,PZ')
+            // 전체 5,000+개 오더를 한 번에 조회 시 SAP 메모리 부족(TSV_TNEW_PAGE_ALLOC_FAILED)이 발생하므로 1,000개 단위 분할 조회
+            const BATCH_SIZE = 1000;
+            const batches = [];
+            for (let i = 0; i < docs1840.length; i += BATCH_SIZE) {
+                batches.push(docs1840.slice(i, i + BATCH_SIZE));
             }
+            console.log(`[Sync] Splitting ${docs1840.length} orders into ${batches.length} batches (size: ${BATCH_SIZE}) for A-class unit query...`);
+
+            let totalUnitAMerged = 0;
+            const targetCompFile = path.join(WORKSPACE_DIR, "sap_component_1840.mhtml");
+
+            for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+                const batch = batches[bIdx];
+                currentSyncState.statusText = `[2/4] 남산+(1840) A급 유니트(PS, PZ) 분할 수집 중 [${bIdx + 1}/${batches.length}] (${batch.length}개 오더)...`;
+                onProgress(currentSyncState);
+                console.log(currentSyncState.statusText);
+
+                try { runVbs("return_home.vbs"); } catch (e) {}
+
+                setClipboardText(batch);
+                stepStart = Date.now();
+                try {
+                    runVbs("zppr6470.vbs", ["1840", "", "", "18", "PS,PZ"]);
+                    const fileUnitA = await waitForNewExportFile(stepStart, 180);
+                    if (fileUnitA) {
+                        const tempFile = path.join(WORKSPACE_DIR, `sap_component_1840_batch_${bIdx}.mhtml`);
+                        fs.copyFileSync(fileUnitA, tempFile);
+                        closeSapExcel();
+                        try { fs.unlinkSync(fileUnitA); } catch (e) {}
+
+                        const mergedCount = mergeComponentMhtml(targetCompFile, tempFile);
+                        try { fs.unlinkSync(tempFile); } catch (e) {}
+                        totalUnitAMerged += (mergedCount || 0);
+                        console.log(`[Sync] Batch ${bIdx + 1}/${batches.length}: merged ${mergedCount || 0} unique unit rows.`);
+                    }
+                } catch (bErr) {
+                    console.warn(`[Sync] Batch ${bIdx + 1}/${batches.length} skipped or no data:`, bErr.message);
+                }
+            }
+            currentSyncState.results.pypzMergedRows = totalUnitAMerged;
+            console.log(`[Sync] Total PS/PZ (A급 유니트) items successfully merged: ${totalUnitAMerged} rows`);
         } else {
             console.warn("[Sync] No Sales Docs found for 1840, skipping ZPPR6470");
         }
