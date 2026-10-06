@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
+const XLSX = require('xlsx');
 
 const app = express();
 const PORT = 8895;
@@ -1200,6 +1201,145 @@ app.get('/api/mps-plan-machines', (req, res) => {
         res.json({ success: true, machines });
     } catch (err) {
         console.error('[shopfloor] MPS plan fetch failed:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 엑셀 내보내기 API (지번별 조립현황 종합 및 직별 시트 분리)
+app.get('/api/shopfloor/export-excel', (req, res) => {
+    try {
+        let bays = [];
+        if (fs.existsSync(DATA_FILE)) {
+            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+            bays = data.bays || [];
+        } else {
+            bays = getDefaultBays();
+        }
+
+        function getProcessDesc(b) {
+            if (!b.assigned) return '공 지번 (대기)';
+            if (b.isShipped) return '조립 및 출하 완료 (MES 종료)';
+            const code = (b.currentProcess || '').trim().toUpperCase();
+            if (Array.isArray(b.routingSteps) && b.routingSteps.length > 0) {
+                const match = b.routingSteps.find(s => s.code && (s.code.toUpperCase() === code || code.includes(s.code.toUpperCase())));
+                if (match && match.name) return match.name;
+            }
+            return code ? `[${code}] 조립 진행` : '기본 조립 (BASE)';
+        }
+
+        const shiftTitleMap = {
+            'MC1직': 'MC 1직 (C동)',
+            'MC2직': 'MC 2직 (MC동)',
+            'MC3직': 'MC 3직 (MC동)',
+            'MC4직': 'MC 4직 (FA동)'
+        };
+        const shiftAreaMap = {
+            'MC1직': 'C동',
+            'MC2직': 'MC동',
+            'MC3직': 'MC동',
+            'MC4직': 'FA동'
+        };
+
+        function buildRows(bList) {
+            const rows = [];
+            let rowNum = 1;
+            bList.forEach(b => {
+                const statusText = b.assigned ? (b.isShipped ? "출하 완료" : "가동 중") : "공 지번";
+                const procDesc = getProcessDesc(b);
+                const shiftText = shiftTitleMap[b.shift] || b.shift || '';
+                const areaText = b.area || shiftAreaMap[b.shift] || '';
+                rows.push({
+                    "번호": rowNum++,
+                    "직 구분": shiftText,
+                    "공장 동": areaText,
+                    "지번(Bay)": b.bay || '',
+                    "구분": b.assigned ? "메인" : "-",
+                    "가동 상태": statusText,
+                    "기종명": b.model || '',
+                    "호기 시리얼": b.serial || '',
+                    "현재 진행 공정": procDesc,
+                    "공정 코드": b.assigned ? (b.currentProcess || '') : '',
+                    "담당 작업자": b.worker || '',
+                    "고객사": b.customer || '',
+                    "Sales Doc": b.salesDoc || '',
+                    "SPECIAL 시방서": b.spec || '',
+                    "조립 착수일": b.startDate || '',
+                    "출하 예정일(납기)": b.deliveryDate || '',
+                    "계획 월": b.planMonth || '',
+                    "특이사항 / 이슈": b.issue || ''
+                });
+
+                if (Array.isArray(b.subMachines) && b.subMachines.length > 0) {
+                    b.subMachines.forEach(sub => {
+                        rows.push({
+                            "번호": rowNum++,
+                            "직 구분": shiftText,
+                            "공장 동": areaText,
+                            "지번(Bay)": b.bay || '',
+                            "구분": "부속/동시",
+                            "가동 상태": "가동 중 (부속)",
+                            "기종명": sub.model || '',
+                            "호기 시리얼": sub.serial || '',
+                            "현재 진행 공정": getProcessDesc(sub),
+                            "공정 코드": sub.currentProcess || '',
+                            "담당 작업자": sub.worker || '',
+                            "고객사": sub.customer || '',
+                            "Sales Doc": sub.salesDoc || '',
+                            "SPECIAL 시방서": sub.spec || '',
+                            "조립 착수일": sub.startDate || '',
+                            "출하 예정일(납기)": sub.deliveryDate || '',
+                            "계획 월": sub.planMonth || '',
+                            "특이사항 / 이슈": sub.issue || ''
+                        });
+                    });
+                }
+            });
+            return rows;
+        }
+
+        const colWidths = [
+            { wch: 6 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+            { wch: 12 }, { wch: 18 }, { wch: 20 }, { wch: 45 }, { wch: 12 },
+            { wch: 12 }, { wch: 30 }, { wch: 16 }, { wch: 30 }, { wch: 12 },
+            { wch: 14 }, { wch: 12 }, { wch: 30 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+
+        // 1. 전체 지번별 조립현황
+        const allRows = buildRows(bays);
+        const wsAll = XLSX.utils.json_to_sheet(allRows);
+        wsAll['!cols'] = colWidths;
+        XLSX.utils.book_append_sheet(wb, wsAll, "전체_지번별_조립현황");
+
+        // 2. 직별 개별 탭
+        const shiftList = [
+            { shift: 'MC1직', title: 'MC 1직 (C동)' },
+            { shift: 'MC2직', title: 'MC 2직 (MC동)' },
+            { shift: 'MC3직', title: 'MC 3직 (MC동)' },
+            { shift: 'MC4직', title: 'MC 4직 (FA동)' }
+        ];
+
+        shiftList.forEach(s => {
+            const shiftBays = bays.filter(b => b.shift === s.shift);
+            if (shiftBays.length > 0) {
+                const shiftRows = buildRows(shiftBays);
+                const wsShift = XLSX.utils.json_to_sheet(shiftRows);
+                wsShift['!cols'] = colWidths;
+                const sheetName = s.title.replace(/[\\/?*\[\]]/g, '');
+                XLSX.utils.book_append_sheet(wb, wsShift, sheetName);
+            }
+        });
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const filename = `남산_MC_지번별_조립공정_현황_${todayStr}.xlsx`;
+
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buf);
+    } catch (err) {
+        console.error('[shopfloor] Export excel failed:', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });

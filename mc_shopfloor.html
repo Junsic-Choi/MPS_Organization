@@ -9,7 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- XLSX for Excel Export -->
+    <!-- XLSX for Excel Export (Local offline bundle first, CDN fallback) -->
+    <script src="/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
     <style>
@@ -3256,14 +3257,14 @@
                 if (bay.assigned && bay.worker && bay.worker.trim()) {
                     const wName = bay.worker.trim();
                     if (!workerMap.has(wName)) workerMap.set(wName, { name: wName, shift: bay.shift, tasks: [] });
-                    workerMap.get(wName).tasks.push({ type: '메인', bay: bay.bay, model: bay.model, serial: bay.serial, process: bay.currentProcess, customer: bay.customer });
+                    workerMap.get(wName).tasks.push({ type: '메인', bay: bay.bay, model: bay.model, serial: bay.serial, process: resolveProcessDescription(bay), customer: bay.customer });
                 }
                 if (Array.isArray(bay.subMachines)) {
                     bay.subMachines.forEach(sub => {
                         if (sub.worker && sub.worker.trim()) {
                             const wName = sub.worker.trim();
                             if (!workerMap.has(wName)) workerMap.set(wName, { name: wName, shift: bay.shift, tasks: [] });
-                            workerMap.get(wName).tasks.push({ type: '부속', bay: bay.bay, model: sub.model, serial: sub.serial, process: sub.currentProcess, customer: sub.customer });
+                            workerMap.get(wName).tasks.push({ type: '부속', bay: bay.bay, model: sub.model, serial: sub.serial, process: resolveProcessDescription(sub), customer: sub.customer });
                         }
                     });
                 }
@@ -3618,43 +3619,174 @@
             }
         }
 
-        // Export Shopfloor to Excel
+        // Helper: Format Process Description for a bay
+        function resolveProcessDescription(bay) {
+            if (!bay || !bay.assigned) return '공 지번 (대기)';
+            if (bay.isShipped) return '조립 및 출하 완료 (MES 종료)';
+
+            const code = (bay.currentProcess || '').trim().toUpperCase();
+
+            // 1. If routingSteps has a matching step
+            if (Array.isArray(bay.routingSteps) && bay.routingSteps.length > 0) {
+                const match = bay.routingSteps.find(s => s.code && (s.code.toUpperCase() === code || code.includes(s.code.toUpperCase())));
+                if (match && match.name) return match.name;
+            }
+
+            // 2. Try getProcessConfigForModel
+            try {
+                const config = getProcessConfigForModel(bay.model);
+                if (config && Array.isArray(config.steps)) {
+                    const step = config.steps.find(s => 
+                        (s.code && s.code.toUpperCase() === code) || 
+                        (s.alias && s.alias.some(a => a.toUpperCase() === code || code.includes(a.toUpperCase())))
+                    );
+                    if (step && step.name) return step.name;
+                }
+            } catch (e) {}
+
+            return code ? `[${code}] 조립 진행` : '기본 조립 (BASE)';
+        }
+
+        // Export Shopfloor to Excel (Multi-sheet: All Bays + Individual Shift Sheets)
         function exportExcel() {
-            const rows = allBays.map((b, idx) => ({
-                "번호": idx + 1,
-                "대조립 직": b.shift,
-                "지번": b.bay,
-                "배정 상태": b.assigned ? "가동 중" : "빈 지번",
-                "기종명": b.model || '',
-                "호기 시리얼": b.serial || '',
-                "고객사": b.customer || '',
-                "담당 작업자": b.worker || '',
-                "현재 공정 단계": b.assigned ? (PROCESS_MAP[b.currentProcess]?.name || b.currentProcess) : '',
-                "Sales Doc": b.salesDoc || '',
-                "SPECIAL 시방서": b.spec || '',
-                "특이사항 / 이슈": b.issue || ''
-            }));
+            try {
+                if (typeof XLSX === 'undefined') {
+                    console.warn('[Export] XLSX library not ready on client, downloading from server endpoint...');
+                    window.location.href = '/api/shopfloor/export-excel';
+                    return;
+                }
 
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws['!cols'] = [
-                { wch: 6 },  // 번호
-                { wch: 10 }, // 대조립 직
-                { wch: 8 },  // 지번
-                { wch: 10 }, // 배정 상태
-                { wch: 16 }, // 기종명
-                { wch: 18 }, // 호기 시리얼
-                { wch: 22 }, // 고객사
-                { wch: 12 }, // 담당 작업자
-                { wch: 18 }, // 현재 공정 단계
-                { wch: 14 }, // Sales Doc
-                { wch: 35 }, // SPECIAL 시방서
-                { wch: 30 }  // 특이사항 / 이슈
-            ];
+                const shiftTitleMap = {
+                    'MC1직': 'MC 1직 (C동)',
+                    'MC2직': 'MC 2직 (MC동)',
+                    'MC3직': 'MC 3직 (MC동)',
+                    'MC4직': 'MC 4직 (FA동)'
+                };
+                const shiftAreaMap = {
+                    'MC1직': 'C동',
+                    'MC2직': 'MC동',
+                    'MC3직': 'MC동',
+                    'MC4직': 'FA동'
+                };
 
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "MC_지번별_조립현황");
-            XLSX.writeFile(wb, `남산_MC_지번별_조립현황_${new Date().toISOString().slice(0,10)}.xlsx`);
-            showToast('엑셀 파일이 다운로드되었습니다.');
+                function buildSheetRows(baysList) {
+                    const rows = [];
+                    let rowNum = 1;
+
+                    baysList.forEach(b => {
+                        const statusText = b.assigned ? (b.isShipped ? "출하 완료" : "가동 중") : "공 지번";
+                        const procDesc = resolveProcessDescription(b);
+                        const shiftText = shiftTitleMap[b.shift] || b.shift || '';
+                        const areaText = b.area || shiftAreaMap[b.shift] || '';
+
+                        // Main Machine
+                        rows.push({
+                            "번호": rowNum++,
+                            "직 구분": shiftText,
+                            "공장 동": areaText,
+                            "지번(Bay)": b.bay || '',
+                            "구분": b.assigned ? "메인" : "-",
+                            "가동 상태": statusText,
+                            "기종명": b.model || '',
+                            "호기 시리얼": b.serial || '',
+                            "현재 진행 공정": procDesc,
+                            "공정 코드": b.assigned ? (b.currentProcess || '') : '',
+                            "담당 작업자": b.worker || '',
+                            "고객사": b.customer || '',
+                            "Sales Doc": b.salesDoc || '',
+                            "SPECIAL 시방서": b.spec || '',
+                            "조립 착수일": b.startDate || '',
+                            "출하 예정일(납기)": b.deliveryDate || '',
+                            "계획 월": b.planMonth || '',
+                            "특이사항 / 이슈": b.issue || ''
+                        });
+
+                        // Concurrent / Sub-machines
+                        if (Array.isArray(b.subMachines) && b.subMachines.length > 0) {
+                            b.subMachines.forEach(sub => {
+                                rows.push({
+                                    "번호": rowNum++,
+                                    "직 구분": shiftText,
+                                    "공장 동": areaText,
+                                    "지번(Bay)": b.bay || '',
+                                    "구분": "부속/동시",
+                                    "가동 상태": "가동 중 (부속)",
+                                    "기종명": sub.model || '',
+                                    "호기 시리얼": sub.serial || '',
+                                    "현재 진행 공정": resolveProcessDescription(sub),
+                                    "공정 코드": sub.currentProcess || '',
+                                    "담당 작업자": sub.worker || '',
+                                    "고객사": sub.customer || '',
+                                    "Sales Doc": sub.salesDoc || '',
+                                    "SPECIAL 시방서": sub.spec || '',
+                                    "조립 착수일": sub.startDate || '',
+                                    "출하 예정일(납기)": sub.deliveryDate || '',
+                                    "계획 월": sub.planMonth || '',
+                                    "특이사항 / 이슈": sub.issue || ''
+                                });
+                            });
+                        }
+                    });
+                    return rows;
+                }
+
+                const colWidths = [
+                    { wch: 6 },  // 번호
+                    { wch: 12 }, // 직 구분
+                    { wch: 10 }, // 공장 동
+                    { wch: 10 }, // 지번(Bay)
+                    { wch: 10 }, // 구분
+                    { wch: 12 }, // 가동 상태
+                    { wch: 18 }, // 기종명
+                    { wch: 20 }, // 호기 시리얼
+                    { wch: 45 }, // 현재 진행 공정
+                    { wch: 12 }, // 공정 코드
+                    { wch: 12 }, // 담당 작업자
+                    { wch: 30 }, // 고객사
+                    { wch: 16 }, // Sales Doc
+                    { wch: 30 }, // SPECIAL 시방서
+                    { wch: 12 }, // 조립 착수일
+                    { wch: 14 }, // 출하 예정일
+                    { wch: 12 }, // 계획 월
+                    { wch: 30 }  // 특이사항 / 이슈
+                ];
+
+                const wb = XLSX.utils.book_new();
+
+                // 1. Sheet 1: 전체 지번별 조립현황
+                const allRows = buildSheetRows(allBays);
+                const wsAll = XLSX.utils.json_to_sheet(allRows);
+                wsAll['!cols'] = colWidths;
+                XLSX.utils.book_append_sheet(wb, wsAll, "전체_지번별_조립현황");
+
+                // 2. Sheets 2~N: 직별 개별 탭
+                const shiftList = [
+                    { shift: 'MC1직', title: 'MC 1직 (C동)' },
+                    { shift: 'MC2직', title: 'MC 2직 (MC동)' },
+                    { shift: 'MC3직', title: 'MC 3직 (MC동)' },
+                    { shift: 'MC4직', title: 'MC 4직 (FA동)' }
+                ];
+
+                shiftList.forEach(s => {
+                    const shiftBays = allBays.filter(b => b.shift === s.shift);
+                    if (shiftBays.length > 0) {
+                        const shiftRows = buildSheetRows(shiftBays);
+                        const wsShift = XLSX.utils.json_to_sheet(shiftRows);
+                        wsShift['!cols'] = colWidths;
+                        const sheetName = s.title.replace(/[\\/?*\[\]]/g, '');
+                        XLSX.utils.book_append_sheet(wb, wsShift, sheetName);
+                    }
+                });
+
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const filename = `남산_MC_지번별_조립공정_현황_${todayStr}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                showToast(`엑셀 파일이 성공적으로 다운로드되었습니다. (${filename})`);
+            } catch (err) {
+                console.error('[Export Error]', err);
+                showToast('브라우저 변환 대신 서버를 통해 엑셀을 다운로드합니다...');
+                window.location.href = '/api/shopfloor/export-excel';
+            }
         }
     </script>
 </body>
