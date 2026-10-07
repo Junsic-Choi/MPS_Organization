@@ -462,6 +462,9 @@ function parseComponentMhtml(filePath, planData = null) {
         const sortStr = idxSortStr !== -1 ? (cells[idxSortStr] || '').trim() : '';
         const isUnitA = (wareCtrl === 'PS' || wareCtrl === 'PZ' || wareCtrlDesc.includes('A급') || sortStr.includes('A급'));
 
+        // A급 유니트(PS, PZ, A급)는 하위 소요량(가공품) 변동 분석 대상에서 제외 (불필요 및 속도 저하 방지)
+        if (isUnitA || wareCtrl === 'PS' || wareCtrl === 'PZ') continue;
+
         records.push({
             plant,
             serial,
