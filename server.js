@@ -3,6 +3,8 @@ const path = require('path');
 const cors = require('cors');
 const { exec, spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { processMpsFile } = require('./extractor');
@@ -20,6 +22,120 @@ const PORT = 8890;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
+
+// ==========================================
+// [보안 및 사내망 공유 관리자 권한 인증 시스템]
+// ==========================================
+// 서버 시작 시 무작위 관리자 세션 토큰 생성
+const ADMIN_SECRET = crypto.randomBytes(16).toString('hex');
+const DEFAULT_ADMIN_PIN = 'dnpc1234';
+
+function getPrimaryLanIp() {
+    try {
+        const ifaces = os.networkInterfaces();
+        for (const name of Object.keys(ifaces)) {
+            for (const iface of ifaces[name]) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    return iface.address;
+                }
+            }
+        }
+    } catch (e) {}
+    return '127.0.0.1';
+}
+
+function getLocalIpList() {
+    const ips = new Set(['127.0.0.1', '::1', 'localhost', '::ffff:127.0.0.1']);
+    try {
+        const ifaces = os.networkInterfaces();
+        for (const name of Object.keys(ifaces)) {
+            for (const iface of ifaces[name]) {
+                if (iface.address) {
+                    const addr = iface.address.toLowerCase();
+                    ips.add(addr);
+                    if (addr.startsWith('::ffff:')) {
+                        ips.add(addr.replace('::ffff:', ''));
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+    return ips;
+}
+
+function cleanIp(ip) {
+    if (!ip) return '';
+    let str = String(ip).trim().toLowerCase();
+    if (str.startsWith('::ffff:')) {
+        str = str.replace('::ffff:', '');
+    }
+    return str;
+}
+
+function isLocalClient(req) {
+    const rawIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '';
+    const cleaned = cleanIp(rawIp);
+    const localIps = getLocalIpList();
+    return localIps.has(cleaned) || cleaned === '127.0.0.1' || cleaned === '::1';
+}
+
+function verifyAdmin(req) {
+    // 1. 호스트 PC 로컬 접속(localhost, 127.0.0.1, 또는 호스트 본인 IP)은 자동으로 관리자 승인
+    if (isLocalClient(req)) return true;
+    
+    // 2. 외부 사내망에서 관리자 인증을 거친 토큰 확인 (헤더 또는 쿼리)
+    const token = req.headers['x-admin-token'] || req.query.admin_token;
+    if (token && token === ADMIN_SECRET) return true;
+    
+    return false;
+}
+
+function requireAdmin(req, res, next) {
+    if (verifyAdmin(req)) {
+        return next();
+    }
+    return res.status(403).json({
+        success: false,
+        error: '관리자 권한이 필요합니다. (사내 조회 전용 모드에서는 데이터 동기화 및 서버 관리 기능이 제한됩니다.)'
+    });
+}
+
+// 관리자 권한 상태 조회 API (클라이언트 UI 분기용)
+app.get('/api/auth/status', (req, res) => {
+    const isLocal = isLocalClient(req);
+    const isAdmin = verifyAdmin(req);
+    const clientIp = cleanIp(req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '');
+    const hostIp = getPrimaryLanIp();
+    res.json({
+        success: true,
+        isAdmin,
+        isLocal,
+        clientIp,
+        hostIp,
+        port: PORT
+    });
+});
+
+// 관리자 PIN 인증 API (원격 접속 시 PIN 번호로 관리자 권한 해제)
+app.post('/api/auth/verify-pin', (req, res) => {
+    const { pin } = req.body || {};
+    const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+    const prefPath = path.join(uploadDir, 'preferences.json');
+    let configuredPin = DEFAULT_ADMIN_PIN;
+    try {
+        if (fs.existsSync(prefPath)) {
+            const prefData = JSON.parse(fs.readFileSync(prefPath, 'utf8'));
+            if (prefData && prefData.adminPin) {
+                configuredPin = String(prefData.adminPin);
+            }
+        }
+    } catch (e) {}
+
+    if (pin && String(pin) === configuredPin) {
+        return res.json({ success: true, token: ADMIN_SECRET, message: '관리자 인증 성공' });
+    }
+    return res.status(401).json({ success: false, error: '관리자 PIN 번호가 일치하지 않습니다.' });
+});
 
 // 루트 경로(/) 접속 시 대시보드로 리다이렉트
 app.get('/', (req, res) => {
@@ -48,8 +164,8 @@ app.get('/api/list-files', (req, res) => {
     }
 });
 
-// [Live] 서버 사이드 실시간 추출 API (브라우저 메모리 부족 해결용)
-app.post('/api/extract-live', upload.single('file'), async (req, res) => {
+// [Live] 서버 사이드 실시간 추출 API (브라우저 메모리 부족 해결용 - 관리자 전용)
+app.post('/api/extract-live', requireAdmin, upload.single('file'), async (req, res) => {
     try {
         console.log(`[api] Received extract request: ${req.file ? req.file.originalname : 'No file'}`);
         
@@ -140,8 +256,8 @@ app.get('/api/preferences', (req, res) => {
     }
 });
 
-// 개인화 설정 저장 API
-app.post('/api/preferences', (req, res) => {
+// 개인화 설정 저장 API (관리자 전용)
+app.post('/api/preferences', requireAdmin, (req, res) => {
     try {
         const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
         const prefPath = path.join(uploadDir, 'preferences.json');
@@ -153,8 +269,8 @@ app.post('/api/preferences', (req, res) => {
     }
 });
 
-// SAP 파일 업로드 API (덮어쓰기)
-app.post('/api/upload-sap', upload.single('file'), (req, res) => {
+// SAP 파일 업로드 API (덮어쓰기 - 관리자 전용)
+app.post('/api/upload-sap', requireAdmin, upload.single('file'), (req, res) => {
     try {
         const { type } = req.body;
         if (!type || !['1842', '1840', 'component_1842', 'component_1840'].includes(type)) {
@@ -174,8 +290,8 @@ app.post('/api/upload-sap', upload.single('file'), (req, res) => {
     }
 });
 
-// SAP 파일 삭제 API
-app.post('/api/clear-sap', (req, res) => {
+// SAP 파일 삭제 API (관리자 전용)
+app.post('/api/clear-sap', requireAdmin, (req, res) => {
     try {
         const { type } = req.body;
         if (!type || !['1842', '1840', 'component_1842', 'component_1840'].includes(type)) {
@@ -226,10 +342,10 @@ app.post('/api/heartbeat', (req, res) => {
     res.sendStatus(200);
 });
 
-// SAP ERP 자동 동기화 API
+// SAP ERP 자동 동기화 API (관리자 전용)
 const { runSapSync, getSyncStatus } = require('./sap_automation/sync_engine');
 
-app.post('/api/sync-sap', async (req, res) => {
+app.post('/api/sync-sap', requireAdmin, async (req, res) => {
     try {
         const { startMonth, endMonth } = req.body || {};
         const status = getSyncStatus();
@@ -747,9 +863,9 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
     }
 });
 
-// 서버 종료 API
-app.post('/api/shutdown', (req, res) => {
-    console.log('[api] Shutdown requested. Exiting...');
+// 서버 종료 API (관리자 전용)
+app.post('/api/shutdown', requireAdmin, (req, res) => {
+    console.log('[api] Shutdown requested by admin. Exiting...');
     res.json({ success: true, message: 'Server is shutting down...' });
     setTimeout(() => {
         process.exit(0);
