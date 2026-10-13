@@ -2134,6 +2134,7 @@ DST: 22. 지티테크`;
         // SAP ERP One-Stop Auto Sync Logic
         // ==========================================
         let sapSyncPollingInterval = null;
+        let lastKnownSapMtimes = null;
 
         async function fetchSapSyncStatus() {
             try {
@@ -2142,8 +2143,22 @@ DST: 22. 지티테크`;
                 const data = await res.json();
                 if (!data.success) return;
 
-                // 4개 SAP 파일 최신 수정 시간 및 크기 렌더링
+                // 4개 SAP 파일 최신 수정 시간 감지 (사내망 열려있는 모든 동료 PC 화면에 실시간 자동 결합)
                 if (data.files) {
+                    const currentMtimes = Object.keys(data.files).sort().map(k => `${k}:${data.files[k]?.mtime || ''}`).join('|');
+                    if (lastKnownSapMtimes !== null && currentMtimes !== lastKnownSapMtimes && !data.running) {
+                        console.log('[SAP Sync] Server SAP files updated! Automatically reloading latest component data for all viewers...');
+                        lastKnownSapMtimes = currentMtimes;
+                        if (typeof loadSavedSapFiles === 'function') {
+                            loadSavedSapFiles();
+                            if (typeof showToast === 'function') {
+                                showToast('✨ 최신 SAP 가공품 소요 데이터가 실시간으로 자동 갱신되었습니다.');
+                            }
+                        }
+                    } else if (lastKnownSapMtimes === null) {
+                        lastKnownSapMtimes = currentMtimes;
+                    }
+
                     const fmtDate = (mtime) => {
                         if (!mtime) return '파일 없음';
                         const d = new Date(mtime);
@@ -2262,6 +2277,9 @@ DST: 22. 지티테크`;
                 console.warn('[fetchSapSyncStatus] error:', e);
             }
         }
+
+        // 사내망 열려있는 모든 브라우저에서 관리자의 SAP 동기화 완료를 실시간 감지하여 자동 반영 (12초 주기)
+        setInterval(fetchSapSyncStatus, 12000);
 
         // ==========================================
         // [사내망 공유 및 관리자 보안 제어 시스템]
