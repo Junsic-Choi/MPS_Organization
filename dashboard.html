@@ -1526,8 +1526,12 @@
                         시스템 생산 이력X만 보기
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: #f59e0b;">
-                        <input type="checkbox" id="filter-comp-unit-a" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
+                        <input type="checkbox" id="filter-comp-unit-a" onchange="if(this.checked){ const allCb = document.getElementById('filter-comp-all'); if(allCb) allCb.checked = false; } rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
                         ⭐ A급 유니트(PS/PZ)만 보기
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: var(--text-secondary);">
+                        <input type="checkbox" id="filter-comp-all" onchange="if(this.checked){ const uCb = document.getElementById('filter-comp-unit-a'); if(uCb) uCb.checked = false; } rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 15px; height: 15px; cursor: pointer;">
+                        전체 부품(F 구매품 포함) 보기
                     </label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
                         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">가공품 품명 필터:</span>
@@ -5787,7 +5791,10 @@ DST: 22. 지티테크`;
                 reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
                 sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬']),
                 deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제']),
-                wareCtrl: findIdx(['WAREHOUSE CONTROLLER', '창고관리자', '창고 관리자'])
+                wareCtrl: findIdx(['WAREHOUSE CONTROLLER', '창고관리자', '창고 관리자']),
+                plant: findIdx(['PLANT', '플랜트']),
+                procType: findIdx(['PROCUREMENT TYPE', 'PROCUREMENT', '조달유형', '조달']),
+                specProc: findIdx(['SPECIAL PROCUREMENT', '특별조달'])
             };
 
             const data = [];
@@ -5820,6 +5827,12 @@ DST: 22. 지티테크`;
                 const sortStr = cells[mapping.sortString] || '';
                 const isUnitA = (wCtrl === 'PS' || wCtrl === 'PZ' || wDesc.includes('A급') || sortStr.includes('A급'));
 
+                const plant = mapping.plant !== -1 ? (cells[mapping.plant] || '').trim() : '';
+                const procType = mapping.procType !== -1 ? (cells[mapping.procType] || '').trim().toUpperCase() : '';
+                const specProc = mapping.specProc !== -1 ? (cells[mapping.specProc] || '').trim().toUpperCase() : '';
+                // 사내 가공품(E) 판정: ProcType이 'E'이거나, 성주공장(1842) 외주가공(44) 품목이면서 A급 유니트가 아닌 경우
+                const isInhouse = procType ? (procType === 'E' || (plant === '1842' && !isUnitA)) : (!isUnitA);
+
                 data.push({
                     Month: mNum + '월',
                     SalesDoc: cells[mapping.salesDoc] || '',
@@ -5833,7 +5846,11 @@ DST: 22. 지티테크`;
                     SortString: sortStr,
                     WareCtrl: wCtrl,
                     WareCtrlDesc: wDesc,
-                    IsUnitA: isUnitA
+                    IsUnitA: isUnitA,
+                    Plant: plant,
+                    ProcType: procType,
+                    SpecProc: specProc,
+                    IsInhouse: isInhouse
                 });
             }
             
@@ -7858,6 +7875,7 @@ DST: 22. 지티테크`;
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
             const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
+            const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
             
             // Gather components from filteredData
             const uniqueMap = new Map();
@@ -7879,7 +7897,11 @@ DST: 22. 지티테크`;
                     // Apply other local filters (except selectedCompMaterials)
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
-                    if (showUnitAOnly && !c.IsUnitA) return;
+                    if (showUnitAOnly) {
+                        if (!c.IsUnitA) return;
+                    } else if (!showAllPurchased) {
+                        if (!c.IsInhouse) return;
+                    }
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
@@ -7960,6 +7982,7 @@ DST: 22. 지티테크`;
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
             const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
+            const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
             const filteredComps = [];
             filteredData.forEach(r => {
                 if (r.isUnmapped) return; // Skip unmapped rows to avoid incorrect components
@@ -7980,7 +8003,11 @@ DST: 22. 지티테크`;
                     // Apply local filters
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
-                    if (showUnitAOnly && !c.IsUnitA) return;
+                    if (showUnitAOnly) {
+                        if (!c.IsUnitA) return;
+                    } else if (!showAllPurchased) {
+                        if (!c.IsInhouse) return;
+                    }
                     if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
@@ -8018,11 +8045,17 @@ DST: 22. 지티테크`;
             
             const subEl = document.getElementById('component-count-sub');
             if (subEl) {
+                const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
+                const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
+                let modeText = '🔩 사내 가공품(E)만 표시 중';
+                if (showUnitAOnly) modeText = '⭐ A급 유니트(PS/PZ)만 표시 중';
+                else if (showAllPurchased) modeText = '📋 전체 부품(F 구매품 포함) 표시 중';
+
                 if (filteredComps.length > 2000) {
-                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 (상위 2,000건만 표시 중, 전체 데이터는 엑셀 내보내기를 이용해 주세요)`;
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span> (상위 2,000건만 표시 중, 전체 데이터는 엑셀 내보내기를 이용해 주세요)`;
                     subEl.style.color = 'var(--warning)';
                 } else {
-                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건`;
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span>`;
                     subEl.style.color = 'var(--text-secondary)';
                 }
             }
@@ -8224,8 +8257,11 @@ DST: 22. 지티테크`;
                             tdPilot.innerHTML = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">초도품(SQ)</span>';
                         } else if (c.IsNoHistory) {
                             tdPilot.innerHTML = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">시스템 생산 이력X</span>';
+                        } else if (c.IsInhouse) {
+                            const typeBadge = c.ProcType === 'E' ? '사내 가공품(E)' : (c.Plant === '1842' ? '외주 가공품(44)' : '사내 가공품');
+                            tdPilot.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600;">${typeBadge}</span>`;
                         } else {
-                            tdPilot.innerHTML = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">양산품</span>';
+                            tdPilot.innerHTML = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);">구매품(F)</span>';
                         }
                         tr.appendChild(tdPilot);
                     }
@@ -8259,7 +8295,7 @@ DST: 22. 지티테크`;
                 }
             }
 
-            const inhouseComps = matchedComps.filter(c => !c.IsUnitA);
+            const inhouseComps = matchedComps.filter(c => !!c.IsInhouse);
             const unitAComps = matchedComps.filter(c => !!c.IsUnitA);
             
             // 1. Info Summary Card
@@ -8487,7 +8523,9 @@ DST: 22. 지티테크`;
                     } else {
                         const catBadge = c.IsUnitA 
                             ? `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">⭐ A급(${c.WareCtrl || 'PS/PZ'})</span>`
-                            : `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">사내</span>`;
+                            : (c.IsInhouse
+                                ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600;">사내(E)</span>`
+                                : `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);">구매(F)</span>`);
                         const qtyColor = c.IsUnitA ? '#f59e0b' : 'var(--success)';
                         tr.innerHTML = `
                             <td style="padding: 0.55rem 0.8rem; font-family: monospace;">${c.Component}</td>
@@ -8552,6 +8590,7 @@ DST: 22. 지티테크`;
             const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
             const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
+            const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
             
             const exportData = [];
             
@@ -8573,7 +8612,11 @@ DST: 22. 지티테크`;
                     
                     if (showSqOnly && !isSq) return;
                     if (showNoHistoryOnly && !isNoHistory) return;
-                    if (showUnitAOnly && !c.IsUnitA) return;
+                    if (showUnitAOnly) {
+                        if (!c.IsUnitA) return;
+                    } else if (!showAllPurchased) {
+                        if (!c.IsInhouse) return;
+                    }
                     if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
                     
                     if (searchVal) {
@@ -8589,10 +8632,13 @@ DST: 22. 지티테크`;
                         if (!matchSearch) return;
                     }
                     
-                    let typeLabel = '양산품';
+                    let typeLabel = '사내 가공품';
                     if (c.IsUnitA) typeLabel = `A급 유니트 (${c.WareCtrl || 'PS/PZ'})`;
                     else if (isSq) typeLabel = '초도품(SQ)';
                     else if (isNoHistory) typeLabel = '시스템 생산 이력X';
+                    else if (c.ProcType === 'E') typeLabel = '사내 가공품(E)';
+                    else if (c.Plant === '1842') typeLabel = '외주 가공품(44)';
+                    else if (!c.IsInhouse) typeLabel = '구매품(F)';
                     
                     const rowObj = {};
                     compUserVisibleHeaders.forEach(h => {
