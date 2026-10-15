@@ -776,6 +776,12 @@
 
 <body>
 
+    <!-- Global Query Loading Indicator (Non-intrusive Top Floating Pill) -->
+    <div id="query-loading-indicator" style="display: none; position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%); z-index: 99999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); color: #ffffff; padding: 0.6rem 1.4rem; border-radius: 9999px; box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(59, 130, 246, 0.4); font-size: 0.88rem; font-weight: 600; align-items: center; gap: 0.65rem; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;">
+        <span style="width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.25); border-top-color: #38bdf8; border-radius: 50%; animation: rotation 0.8s linear infinite; display: inline-block;"></span>
+        <span id="query-loading-text">데이터 조회 및 분석 중...</span>
+    </div>
+
     <header style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; padding: 0 2rem;">
         <div class="logo">MPS 생산계획 대시보드 ✨ <span style="font-size: 0.8rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V3.3 - Material/품명 정밀 매칭 엔진 적용</span></div>
         <div style="display: flex; gap: 0.8rem; align-items: center;">
@@ -1518,19 +1524,19 @@
                 <!-- Local Filter Control Panel -->
                 <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: var(--surface-hover); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.25rem;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
-                        <input type="checkbox" id="filter-comp-sq" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        <input type="checkbox" id="filter-comp-sq" onchange="runWithLoading(() => { rebuildComponentMaterialDropdown(); renderComponentTable(); }, '초도품(SQ) 소요 조회 중...')" style="width: 16px; height: 16px; cursor: pointer;">
                         초도품(SQ)만 보기
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
-                        <input type="checkbox" id="filter-comp-no-history" onchange="rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer;">
+                        <input type="checkbox" id="filter-comp-no-history" onchange="runWithLoading(() => { rebuildComponentMaterialDropdown(); renderComponentTable(); }, '이력 확인 및 조회 중...')" style="width: 16px; height: 16px; cursor: pointer;">
                         시스템 생산 이력X만 보기
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; color: #f59e0b;">
-                        <input type="checkbox" id="filter-comp-unit-a" onchange="if(this.checked){ const allCb = document.getElementById('filter-comp-all'); if(allCb) allCb.checked = false; } rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
+                        <input type="checkbox" id="filter-comp-unit-a" onchange="if(this.checked){ const allCb = document.getElementById('filter-comp-all'); if(allCb) allCb.checked = false; } runWithLoading(() => { rebuildComponentMaterialDropdown(); renderComponentTable(); }, '⭐ A급 유니트 조회 중...')" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
                         ⭐ A급 유니트(PS/PZ)만 보기
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: var(--text-secondary);">
-                        <input type="checkbox" id="filter-comp-all" onchange="if(this.checked){ const uCb = document.getElementById('filter-comp-unit-a'); if(uCb) uCb.checked = false; } rebuildComponentMaterialDropdown(); renderComponentTable()" style="width: 15px; height: 15px; cursor: pointer;">
+                        <input type="checkbox" id="filter-comp-all" onchange="if(this.checked){ const uCb = document.getElementById('filter-comp-unit-a'); if(uCb) uCb.checked = false; } runWithLoading(() => { rebuildComponentMaterialDropdown(); renderComponentTable(); }, '전체 부품 데이터 조회 중...')" style="width: 15px; height: 15px; cursor: pointer;">
                         전체 부품(F 구매품 포함) 보기
                     </label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
@@ -1663,6 +1669,44 @@
         function sortMonthsChronologically(monthsArray) {
             const sorter = getChronologicalMonthSorter(monthsArray);
             return sorter.sort(monthsArray);
+        }
+
+        let queryLoadingCount = 0;
+        function showQueryLoading(msg = '데이터 조회 및 분석 중...') {
+            queryLoadingCount++;
+            const indicator = document.getElementById('query-loading-indicator');
+            const textEl = document.getElementById('query-loading-text');
+            if (indicator && textEl) {
+                textEl.textContent = msg;
+                indicator.style.display = 'inline-flex';
+                indicator.style.opacity = '1';
+            }
+        }
+
+        function hideQueryLoading() {
+            queryLoadingCount = Math.max(0, queryLoadingCount - 1);
+            if (queryLoadingCount === 0) {
+                const indicator = document.getElementById('query-loading-indicator');
+                if (indicator) {
+                    indicator.style.opacity = '0';
+                    setTimeout(() => {
+                        if (queryLoadingCount === 0) indicator.style.display = 'none';
+                    }, 200);
+                }
+            }
+        }
+
+        function runWithLoading(workFn, msg = '데이터 조회 중...') {
+            showQueryLoading(msg);
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    try {
+                        workFn();
+                    } finally {
+                        hideQueryLoading();
+                    }
+                }, 16);
+            });
         }
 
         const extractBtn = document.getElementById('extract-btn');
@@ -3450,7 +3494,9 @@ DST: 22. 지티테크`;
                         updateModelOptions();
                     }
 
-                    applyFilters();
+                    runWithLoading(() => {
+                        applyFilters();
+                    }, '필터 조건 적용 중...');
                 });
             });
 
@@ -3479,7 +3525,9 @@ DST: 22. 지티테크`;
                     updateModelOptions();
                 }
 
-                applyFilters();
+                runWithLoading(() => {
+                    applyFilters();
+                }, '필터 조건 적용 중...');
             });
 
             updateTriggerText(type);
@@ -3531,8 +3579,23 @@ DST: 22. 지티테크`;
             }
         });
 
-        searchModel.addEventListener('input', applyFilters);
-        checkUnmapped.addEventListener('change', applyFilters);
+        let searchDebounceTimer = null;
+        searchModel.addEventListener('input', () => {
+            showQueryLoading('검색 조건 반영 중...');
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                runWithLoading(() => {
+                    applyFilters();
+                }, '데이터 검색 및 조회 중...');
+            }, 180);
+        });
+
+        checkUnmapped.addEventListener('change', () => {
+            runWithLoading(() => {
+                applyFilters();
+            }, '미매칭 데이터 필터링 중...');
+        });
+
         function switchTab(tabId) {
             currentTab = tabId;
             tabMain.classList.toggle('active', tabId === 'main');
@@ -3554,8 +3617,15 @@ DST: 22. 지티테크`;
             if (overlay) overlay.style.display = 'none';
             document.body.style.overflow = 'auto';
 
-            populateFilters();
-            applyFilters();
+            let tabName = '생산계획';
+            if (tabId === 'summary') tabName = '월별 집계';
+            else if (tabId === 'pivot') tabName = '피벗 분석';
+            else if (tabId === 'component') tabName = '가공품 소요 현황';
+
+            runWithLoading(() => {
+                populateFilters();
+                applyFilters();
+            }, `${tabName} 데이터 조회 중...`);
         }
 
         tabMain.addEventListener('click', () => switchTab('main'));
@@ -3947,6 +4017,7 @@ DST: 22. 지티테크`;
             }
             
             // 6. Render rows
+            const summaryFrag = document.createDocumentFragment();
             rowList.forEach((item, idx) => {
                 const tr = document.createElement('tr');
                 
@@ -4089,8 +4160,9 @@ DST: 22. 지티테크`;
                 }
                 tr.appendChild(tdTotalVal);
                 
-                summaryBody.appendChild(tr);
+                summaryFrag.appendChild(tr);
             });
+            summaryBody.appendChild(summaryFrag);
         }
 
         window.compareMode = false;
@@ -5281,6 +5353,7 @@ DST: 22. 지티테크`;
             const activeHeaders = userVisibleHeaders;
             const labels = headerLabels;
 
+            const headFrag = document.createDocumentFragment();
             activeHeaders.forEach(h => {
                 const th = document.createElement('th');
                 th.style.cursor = 'pointer';
@@ -5302,12 +5375,14 @@ DST: 22. 지티테크`;
                         currentSortKey = h;
                         currentSortDirection = 'asc';
                     }
-                    applyFilters();
+                    runWithLoading(() => applyFilters(), '데이터 정렬 중...');
                 };
-                tableHead.appendChild(th);
+                headFrag.appendChild(th);
             });
+            tableHead.appendChild(headFrag);
 
             const limit = Math.min(filteredData.length, 1000);
+            const bodyFrag = document.createDocumentFragment();
             for (let i = 0; i < limit; i++) {
                 const row = filteredData[i];
                 const tr = document.createElement('tr');
@@ -5339,12 +5414,10 @@ DST: 22. 지티테크`;
                     td.textContent = val;
                     if (h === 'Qty') td.style.fontWeight = 'bold';
 
-                    // Model 컬럼에 A급 유니트(PS/PZ) 포함 시 원클릭 바로가기 뱃지 표시
+                    // Model 컬럼에 A급 유니트(PS/PZ) 포함 시 원클릭 바로가기 뱃지 표시 (O(1) 캐시 조회)
                     if (h === 'Model' && !row.isUnmapped) {
-                        let rowComps = [];
-                        if (row.Serial && row.Serial !== '-') rowComps = compBySerial[row.Serial] || [];
-                        if (rowComps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') rowComps = compBySalesDoc[row.SalesDoc] || [];
-                        const unitACount = rowComps.filter(c => c.IsUnitA).length;
+                        const unitACount = (row.Serial && compUnitACountBySerial[row.Serial]) || 
+                                           (row.SalesDoc && compUnitACountBySalesDoc[row.SalesDoc]) || 0;
                         if (unitACount > 0) {
                             const badge = document.createElement('span');
                             badge.className = 'badge';
@@ -5361,8 +5434,9 @@ DST: 22. 지티테크`;
 
                     tr.appendChild(td);
                 });
-                tableBody.appendChild(tr);
+                bodyFrag.appendChild(tr);
             }
+            tableBody.appendChild(bodyFrag);
         }
 
         // ========== SAP MHTML Detail Join Logic ==========
@@ -5483,19 +5557,35 @@ DST: 22. 지티테크`;
             }
         });
 
+        let compUnitACountBySerial = {};
+        let compUnitACountBySalesDoc = {};
+
         function rebuildComponentIndex() {
             compBySerial = {};
             compBySalesDoc = {};
             compMinMonthOrder = {};
+            compUnitACountBySerial = {};
+            compUnitACountBySalesDoc = {};
             const components = [...(sapData['component_1842'] || []), ...(sapData['component_1840'] || [])];
             components.forEach(c => {
+                // Precalculate lowercase strings for fast searches
+                if (!c._compLower) c._compLower = (c.Component || '').toLowerCase();
+                if (!c._descLower) c._descLower = (c.CompDesc || '').toLowerCase();
+                if (!c._parentLower) c._parentLower = (c.ParentMat || '').toLowerCase();
+
                 if (c.Serial && c.Serial !== '-') {
                     if (!compBySerial[c.Serial]) compBySerial[c.Serial] = [];
                     compBySerial[c.Serial].push(c);
+                    if (c.IsUnitA) {
+                        compUnitACountBySerial[c.Serial] = (compUnitACountBySerial[c.Serial] || 0) + 1;
+                    }
                 }
                 if (c.SalesDoc && c.SalesDoc !== '-') {
                     if (!compBySalesDoc[c.SalesDoc]) compBySalesDoc[c.SalesDoc] = [];
                     compBySalesDoc[c.SalesDoc].push(c);
+                    if (c.IsUnitA) {
+                        compUnitACountBySalesDoc[c.SalesDoc] = (compUnitACountBySalesDoc[c.SalesDoc] || 0) + 1;
+                    }
                 }
                 if (c.Component) {
                     const mOrder = getMonthOrder(c.Month);
@@ -7864,7 +7954,7 @@ DST: 22. 지티테크`;
                 }
             });
             updateCompMaterialBtnText();
-            renderComponentTable();
+            runWithLoading(() => renderComponentTable(), '가공품 필터 적용 중...');
         }
 
         function rebuildComponentMaterialDropdown() {
@@ -7905,9 +7995,9 @@ DST: 22. 지티테크`;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
-                        const compLower = (c.Component || '').toLowerCase();
-                        const descLower = (c.CompDesc || '').toLowerCase();
-                        const parentLower = (c.ParentMat || '').toLowerCase();
+                        const compLower = c._compLower || (c.Component || '').toLowerCase();
+                        const descLower = c._descLower || (c.CompDesc || '').toLowerCase();
+                        const parentLower = c._parentLower || (c.ParentMat || '').toLowerCase();
                         
                         const matchSearch = modelLower.includes(searchVal) ||
                                            compLower.includes(searchVal) ||
@@ -7928,6 +8018,7 @@ DST: 22. 지티테크`;
             const sortedKeys = Array.from(uniqueMap.keys()).sort();
             listContainer.innerHTML = '';
             
+            const listFrag = document.createDocumentFragment();
             sortedKeys.forEach(comp => {
                 const desc = uniqueMap.get(comp);
                 const isChecked = selectedCompMaterials.includes(comp);
@@ -7962,7 +8053,7 @@ DST: 22. 지티테크`;
                         selectedCompMaterials = selectedCompMaterials.filter(x => x !== comp);
                     }
                     updateCompMaterialBtnText();
-                    renderComponentTable();
+                    runWithLoading(() => renderComponentTable(), '가공품 필터 적용 중...');
                 };
                 
                 label.appendChild(cb);
@@ -7971,8 +8062,9 @@ DST: 22. 지티테크`;
                 textSpan.textContent = `${comp} (${desc})`;
                 label.appendChild(textSpan);
                 
-                listContainer.appendChild(label);
+                listFrag.appendChild(label);
             });
+            listContainer.appendChild(listFrag);
             
             updateCompMaterialBtnText();
         }
@@ -7983,6 +8075,7 @@ DST: 22. 지티테크`;
             const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
             const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
             const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
+            const selectedCompSet = new Set(selectedCompMaterials);
             const filteredComps = [];
             filteredData.forEach(r => {
                 if (r.isUnmapped) return; // Skip unmapped rows to avoid incorrect components
@@ -8008,13 +8101,13 @@ DST: 22. 지티테크`;
                     } else if (!showAllPurchased) {
                         if (!c.IsInhouse) return;
                     }
-                    if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
+                    if (selectedCompSet.size > 0 && !selectedCompSet.has(c.Component)) return;
                     
                     if (searchVal) {
                         const modelLower = model.toLowerCase();
-                        const compLower = (c.Component || '').toLowerCase();
-                        const descLower = (c.CompDesc || '').toLowerCase();
-                        const parentLower = (c.ParentMat || '').toLowerCase();
+                        const compLower = c._compLower || (c.Component || '').toLowerCase();
+                        const descLower = c._descLower || (c.CompDesc || '').toLowerCase();
+                        const parentLower = c._parentLower || (c.ParentMat || '').toLowerCase();
                         
                         const matchSearch = modelLower.includes(searchVal) ||
                                            compLower.includes(searchVal) ||
@@ -8094,7 +8187,7 @@ DST: 22. 지티테크`;
                             compSortKey = h;
                             compSortDirection = 'asc';
                         }
-                        renderComponentTable();
+                        runWithLoading(() => renderComponentTable(), '가공품 정렬 중...');
                     };
                     trHead.appendChild(th);
                 });
@@ -8185,6 +8278,7 @@ DST: 22. 지티테크`;
             }
             
             const limit = Math.min(filteredComps.length, 2000);
+            const frag = document.createDocumentFragment();
             for (let idx = 0; idx < limit; idx++) {
                 const c = filteredComps[idx];
                 const tr = document.createElement('tr');
@@ -8267,8 +8361,9 @@ DST: 22. 지티테크`;
                     }
                 });
                 
-                tbody.appendChild(tr);
+                frag.appendChild(tr);
             }
+            tbody.appendChild(frag);
         }
 
         function showItemDetail(row, initialTab = 'auto') {
