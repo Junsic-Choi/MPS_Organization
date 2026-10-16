@@ -1671,29 +1671,58 @@
             return sorter.sort(monthsArray);
         }
 
-        let queryLoadingCount = 0;
+        let queryLoadingHideTimer = null;
+        let queryLoadingSafetyTimer = null;
+
         function showQueryLoading(msg = '데이터 조회 및 분석 중...') {
-            queryLoadingCount++;
+            if (queryLoadingHideTimer) {
+                clearTimeout(queryLoadingHideTimer);
+                queryLoadingHideTimer = null;
+            }
+            if (queryLoadingSafetyTimer) {
+                clearTimeout(queryLoadingSafetyTimer);
+                queryLoadingSafetyTimer = null;
+            }
+
             const indicator = document.getElementById('query-loading-indicator');
             const textEl = document.getElementById('query-loading-text');
             if (indicator && textEl) {
                 textEl.textContent = msg;
                 indicator.style.display = 'inline-flex';
-                indicator.style.opacity = '1';
+                requestAnimationFrame(() => {
+                    indicator.style.opacity = '1';
+                });
             }
+
+            // Safety timeout: automatically force-hide after 3.5s to prevent any stuck state
+            queryLoadingSafetyTimer = setTimeout(() => {
+                hideQueryLoading(true);
+            }, 3500);
         }
 
-        function hideQueryLoading() {
-            queryLoadingCount = Math.max(0, queryLoadingCount - 1);
-            if (queryLoadingCount === 0) {
-                const indicator = document.getElementById('query-loading-indicator');
-                if (indicator) {
-                    indicator.style.opacity = '0';
-                    setTimeout(() => {
-                        if (queryLoadingCount === 0) indicator.style.display = 'none';
-                    }, 200);
-                }
+        function hideQueryLoading(force = false) {
+            if (queryLoadingSafetyTimer) {
+                clearTimeout(queryLoadingSafetyTimer);
+                queryLoadingSafetyTimer = null;
             }
+            if (queryLoadingHideTimer) {
+                clearTimeout(queryLoadingHideTimer);
+                queryLoadingHideTimer = null;
+            }
+
+            const indicator = document.getElementById('query-loading-indicator');
+            if (!indicator) return;
+
+            if (force) {
+                indicator.style.opacity = '0';
+                indicator.style.display = 'none';
+                return;
+            }
+
+            indicator.style.opacity = '0';
+            queryLoadingHideTimer = setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 220);
         }
 
         function runWithLoading(workFn, msg = '데이터 조회 중...') {
@@ -1702,6 +1731,8 @@
                 setTimeout(() => {
                     try {
                         workFn();
+                    } catch (err) {
+                        console.error('runWithLoading error:', err);
                     } finally {
                         hideQueryLoading();
                     }
