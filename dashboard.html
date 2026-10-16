@@ -2165,13 +2165,21 @@ DST: 22. 지티테크`;
                 item.onclick = () => selectSavedFile(file.filename);
                 
                 const infoDiv = document.createElement('div');
+                infoDiv.style.flex = '1';
+                infoDiv.style.minWidth = '0';
                 infoDiv.innerHTML = `
-                    <div style="font-weight:600; color:${isSelected ? 'var(--accent-color)' : 'var(--text-primary)'}; font-size:0.9rem;">📄 ${file.filename}</div>
+                    <div style="font-weight:600; color:${isSelected ? 'var(--accent-color)' : 'var(--text-primary)'}; font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ${file.filename}</div>
                     <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.2rem;">${sizeStr} | ${dateStr}</div>
                 `;
                 
-                const badge = document.createElement('div');
+                const rightDiv = document.createElement('div');
+                rightDiv.style.display = 'flex';
+                rightDiv.style.alignItems = 'center';
+                rightDiv.style.gap = '0.35rem';
+                rightDiv.style.flexShrink = '0';
+
                 if (file.filename === lastSavedFile) {
+                    const badge = document.createElement('div');
                     badge.textContent = '최근 분석됨';
                     badge.style.fontSize = '0.7rem';
                     badge.style.background = 'rgba(16,185,129,0.15)';
@@ -2179,15 +2187,86 @@ DST: 22. 지티테크`;
                     badge.style.border = '1px solid rgba(16,185,129,0.3)';
                     badge.style.padding = '0.1rem 0.3rem';
                     badge.style.borderRadius = '4px';
+                    rightDiv.appendChild(badge);
+                }
+
+                if (currentAuth.isAdmin) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn-file-delete';
+                    delBtn.innerHTML = '🗑️';
+                    delBtn.title = `${file.filename} 서버에서 영구 삭제`;
+                    delBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+                    delBtn.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    delBtn.style.color = '#ef4444';
+                    delBtn.style.padding = '2px 6px';
+                    delBtn.style.borderRadius = '5px';
+                    delBtn.style.fontSize = '0.8rem';
+                    delBtn.style.cursor = 'pointer';
+                    delBtn.style.lineHeight = '1';
+                    delBtn.style.transition = 'all 0.15s ease';
+                    delBtn.onmouseover = () => {
+                        delBtn.style.background = 'rgba(239, 68, 68, 0.25)';
+                        delBtn.style.borderColor = '#ef4444';
+                    };
+                    delBtn.onmouseout = () => {
+                        delBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+                        delBtn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    };
+                    delBtn.onclick = (e) => deleteSavedMpsFile(file.filename, e);
+                    rightDiv.appendChild(delBtn);
                 }
                 
                 item.appendChild(infoDiv);
-                if (file.filename === lastSavedFile) {
-                    item.appendChild(badge);
-                }
+                item.appendChild(rightDiv);
                 
                 listContainer.appendChild(item);
             });
+        }
+
+        async function deleteSavedMpsFile(filename, e) {
+            if (e) e.stopPropagation();
+            if (!currentAuth.isAdmin) {
+                alert('파일 삭제는 관리자만 가능합니다.');
+                return;
+            }
+            if (!confirm(`정말로 서버에서 "${filename}" 파일을 영구 삭제하시겠습니까?\n\n(삭제 후 복구할 수 없습니다)`)) {
+                return;
+            }
+
+            try {
+                showQueryLoading(`"${filename}" 파일 삭제 중...`);
+                const res = await fetch('/api/delete-file', {
+                    method: 'POST',
+                    headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ filename })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`"${filename}" 파일이 서버에서 삭제되었습니다.`);
+                    if (selectedSavedFile === filename) {
+                        selectedSavedFile = null;
+                        const fnDisplay = document.getElementById('file-name-display');
+                        if (fnDisplay) {
+                            fnDisplay.textContent = '클릭하여 .xlsx 파일을 선택하세요';
+                            fnDisplay.style.color = 'var(--accent-color)';
+                        }
+                        const dropZone = document.getElementById('drop-zone');
+                        if (dropZone) {
+                            dropZone.style.background = 'rgba(255,255,255,0.02)';
+                            dropZone.style.borderColor = 'var(--border-color)';
+                        }
+                        extractBtn.disabled = true;
+                        extractBtn.style.opacity = '0.5';
+                    }
+                    await fetchSavedMpsFiles();
+                } else {
+                    alert('파일 삭제 실패: ' + (data.error || '알 수 없는 오류'));
+                }
+            } catch (err) {
+                alert('파일 삭제 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                hideQueryLoading();
+            }
         }
 
         function selectSavedFile(filename) {
@@ -2424,6 +2503,9 @@ DST: 22. 지티테크`;
                 if (sapSyncBtn) sapSyncBtn.style.display = 'none';
                 if (syncLockNotice) syncLockNotice.style.display = 'flex';
                 if (dropZoneLockBadge) dropZoneLockBadge.style.display = 'block';
+            }
+            if (typeof renderSavedFilesList === 'function' && savedMpsFiles && savedMpsFiles.length > 0) {
+                renderSavedFilesList();
             }
         }
 

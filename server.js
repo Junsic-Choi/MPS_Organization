@@ -164,6 +164,36 @@ app.get('/api/list-files', (req, res) => {
     }
 });
 
+// 서버 저장 MPS 파일 삭제 API (관리자 전용)
+app.post('/api/delete-file', requireAdmin, (req, res) => {
+    try {
+        const { filename } = req.body || {};
+        if (!filename || typeof filename !== 'string') {
+            return res.status(400).json({ success: false, error: '삭제할 파일명이 올바르지 않습니다.' });
+        }
+
+        // 보안 검증: 경로 조작(Path Traversal) 방지 및 MPS .xlsx 확장자 확인
+        const cleanName = path.basename(filename);
+        if (cleanName !== filename || !cleanName.startsWith('MPS') || !cleanName.endsWith('.xlsx')) {
+            return res.status(400).json({ success: false, error: '유효한 MPS 엑셀(.xlsx) 파일만 삭제할 수 있습니다.' });
+        }
+
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const targetPath = path.join(uploadDir, cleanName);
+
+        if (!fs.existsSync(targetPath)) {
+            return res.status(404).json({ success: false, error: '삭제 대상 파일이 서버에 존재하지 않습니다.' });
+        }
+
+        fs.unlinkSync(targetPath);
+        console.log(`[api/delete-file] Deleted MPS file: ${cleanName}`);
+        res.json({ success: true, message: `${cleanName} 파일이 삭제되었습니다.` });
+    } catch (err) {
+        console.error('[api/delete-file] Delete failed:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // [Live] 서버 사이드 실시간 추출 API (브라우저 메모리 부족 해결용 - 관리자 전용)
 app.post('/api/extract-live', requireAdmin, upload.single('file'), async (req, res) => {
     try {
