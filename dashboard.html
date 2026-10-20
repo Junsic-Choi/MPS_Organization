@@ -2293,6 +2293,8 @@ DST: 22. 지티테크`;
         // ==========================================
         let sapSyncPollingInterval = null;
         let lastKnownSapMtimes = null;
+        let lastHandledSyncFinishedAt = null;
+        let wasSyncRunning = false;
 
         async function fetchSapSyncStatus() {
             try {
@@ -2357,6 +2359,7 @@ DST: 22. 지티테크`;
                 };
 
                 if (data.running) {
+                    wasSyncRunning = true;
                     const step = data.currentStep || 1;
                     const total = data.totalSteps || 4;
                     const pct = Math.min(100, Math.round((step / total) * 100));
@@ -2421,9 +2424,19 @@ DST: 22. 지티테크`;
                         if (progressBar) progressBar.style.width = '100%';
                         if (pctEl) pctEl.innerText = '100%';
                         if (liveText) liveText.innerHTML = '<span style="color: #34d399">✅ 4개 파일 최신 동기화 완료!</span>';
-                        if (typeof loadSavedSapFiles === 'function') {
-                            loadSavedSapFiles();
+                        // 방금 동기화가 완료된 시점에만 1회 로드 (12초 폴링마다 중복 재로드 방지)
+                        if (lastHandledSyncFinishedAt === null) {
+                            lastHandledSyncFinishedAt = data.finishedAt;
+                            if (wasSyncRunning && typeof loadSavedSapFiles === 'function') {
+                                loadSavedSapFiles();
+                            }
+                        } else if (lastHandledSyncFinishedAt !== data.finishedAt) {
+                            lastHandledSyncFinishedAt = data.finishedAt;
+                            if (typeof loadSavedSapFiles === 'function') {
+                                loadSavedSapFiles();
+                            }
                         }
+                        wasSyncRunning = false;
                     }
 
                     if (sapSyncPollingInterval) {
@@ -3777,9 +3790,24 @@ DST: 22. 지티테크`;
             }
         }
 
+        const koNumericCollator = new Intl.Collator('ko', { numeric: true });
+
         function applyFilters() {
             const searchVal = searchModel.value.toLowerCase().trim();
             const unmappedOnly = checkUnmapped.checked;
+
+            // Set 변환으로 다중 필터 O(1) 해시 조회 적용
+            const groupSet = new Set(activeFilters.selectedGroups);
+            const monthSet = new Set(activeFilters.selectedMonths);
+            const divisionSet = new Set(activeFilters.selectedDivisions);
+            const shiftSet = new Set(activeFilters.selectedShifts);
+            const modelSet = new Set(activeFilters.selectedModels);
+
+            const isAllGroupsSelected = activeFilters.selectedGroups.length === activeFilters.groups.length;
+            const isAllMonthsSelected = activeFilters.selectedMonths.length === activeFilters.months.length;
+            const isAllShiftsSelected = activeFilters.selectedShifts.length === activeFilters.shifts.length;
+            const isAllModelsSelected = activeFilters.selectedModels.length === activeFilters.models.length;
+            const hasAnyComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
 
             // 전체 데이터 (매칭 + 미매칭) 통합
             const combinedData = [...rawData, ...unusedData];
@@ -3788,45 +3816,46 @@ DST: 22. 지티테크`;
                 // '미매칭만 보기' 체크 시 필터링
                 if (unmappedOnly && !row.isUnmapped) return false;
 
-                const matchSite = isSiteMatch(row['Site'], activeFilters.selectedSites, activeFilters.sites);
-                const matchGroup = activeFilters.selectedGroups.includes(row['Group'] || '') || (!row['Group'] && activeFilters.selectedGroups.length === activeFilters.groups.length);
-                const matchMonth = activeFilters.selectedMonths.includes(row['Month'] || '') || (!row['Month'] && activeFilters.selectedMonths.length === activeFilters.months.length);
+                if (!isSiteMatch(row['Site'], activeFilters.selectedSites, activeFilters.sites)) return false;
+
+                const rowGroup = row['Group'] || '';
+                if (!(groupSet.has(rowGroup) || (!rowGroup && isAllGroupsSelected))) return false;
+
+                const rowMonth = row['Month'] || '';
+                if (!(monthSet.has(rowMonth) || (!rowMonth && isAllMonthsSelected))) return false;
+
                 const division = getDivision(row['Group']);
-                const matchDivision = activeFilters.selectedDivisions.includes(division);
+                if (!divisionSet.has(division)) return false;
                 
-                const shift = getShift(row);
-                const isNamsan = (row['Site'] || '').includes('남산') || (row['Site'] || '').includes('1840') || !!row.LineName;
-                const isAllShiftsSelected = activeFilters.selectedShifts.length === activeFilters.shifts.length;
-                const matchShift = !isNamsan || isAllShiftsSelected || activeFilters.selectedShifts.includes(shift);
-
-                const rowModel = row['Model'] || row['UnmappedModel'] || '';
-                const matchModel = activeFilters.selectedModels.includes(rowModel) || (!rowModel && activeFilters.selectedModels.length === activeFilters.models.length);
-
-                // 검색 대상 컬럼 통합 (미매칭 데이터는 필드명이 다름)
-                const model = (row['Model'] || row['UnmappedModel'] || '').toLowerCase();
-                const product = (row['Product'] || row['ProductName'] || '').toLowerCase();
-                const code = (row['Code'] || row['ModelCode'] || '').toLowerCase();
-
-                let hasComponentSearchMatch = false;
-                const hasAnyComponent = (sapData['component_1842'] && sapData['component_1842'].length > 0) || (sapData['component_1840'] && sapData['component_1840'].length > 0);
-                if (searchVal && hasAnyComponent && !row.isUnmapped) {
-                    let comps = [];
-                    if (row.Serial && row.Serial !== '-') comps = compBySerial[row.Serial] || [];
-                    if (comps.length === 0 && row.SalesDoc && row.SalesDoc !== '-') comps = compBySalesDoc[row.SalesDoc] || [];
-                    
-                    hasComponentSearchMatch = comps.some(c => 
-                        (c.Component && c.Component.toLowerCase().includes(searchVal)) ||
-                        (c.CompDesc && c.CompDesc.toLowerCase().includes(searchVal))
-                    );
+                const siteStr = row['Site'] || '';
+                const isNamsan = siteStr.includes('남산') || siteStr.includes('1840') || !!row.LineName;
+                if (isNamsan && !isAllShiftsSelected) {
+                    const shift = getShift(row);
+                    if (!shiftSet.has(shift)) return false;
                 }
 
-                const matchSearch = !searchVal || 
-                                   model.includes(searchVal) ||
-                                   product.includes(searchVal) ||
-                                   code.includes(searchVal) ||
-                                   hasComponentSearchMatch;
-                
-                return matchSite && matchGroup && matchMonth && matchDivision && matchShift && matchModel && matchSearch;
+                const rowModel = row['Model'] || row['UnmappedModel'] || '';
+                if (!(modelSet.has(rowModel) || (!rowModel && isAllModelsSelected))) return false;
+
+                if (!searchVal) return true;
+
+                // 검색 대상 컬럼 통합 (캐싱된 소문자 필드 우선 사용)
+                if (row._modelLower === undefined) row._modelLower = rowModel.toLowerCase();
+                if (row._productLower === undefined) row._productLower = (row['Product'] || row['ProductName'] || '').toLowerCase();
+                if (row._codeLower === undefined) row._codeLower = (row['Code'] || row['ModelCode'] || '').toLowerCase();
+
+                if (row._modelLower.includes(searchVal) || row._productLower.includes(searchVal) || row._codeLower.includes(searchVal)) {
+                    return true;
+                }
+
+                if (hasAnyComponent && !row.isUnmapped) {
+                    let blob = '';
+                    if (row.Serial && row.Serial !== '-') blob = compSearchBlobBySerial[row.Serial] || '';
+                    if (!blob && row.SalesDoc && row.SalesDoc !== '-') blob = compSearchBlobBySalesDoc[row.SalesDoc] || '';
+                    if (blob && blob.includes(searchVal)) return true;
+                }
+
+                return false;
             });
 
             // 정렬 적용
@@ -3848,8 +3877,8 @@ DST: 22. 지티테크`;
                     }
                     
                     return currentSortDirection === 'asc' 
-                        ? valA.localeCompare(valB, 'ko', { numeric: true }) 
-                        : valB.localeCompare(valA, 'ko', { numeric: true });
+                        ? koNumericCollator.compare(valA, valB) 
+                        : koNumericCollator.compare(valB, valA);
                 });
             }
 
@@ -5672,6 +5701,76 @@ DST: 22. 지티테크`;
 
         let compUnitACountBySerial = {};
         let compUnitACountBySalesDoc = {};
+        let compSearchBlobBySerial = {};
+        let compSearchBlobBySalesDoc = {};
+        let isLoadingSapFiles = false;
+        const loadedSapMtimes = {};
+
+        function unpackCompactSapRows(format, rows) {
+            if (!Array.isArray(rows)) return [];
+            if (format === 'compact_comp_v1') {
+                const len = rows.length;
+                const out = new Array(len);
+                for (let i = 0; i < len; i++) {
+                    const r = rows[i];
+                    const comp = r[4] || '';
+                    const desc = r[5] || '';
+                    const parentMat = r[7] || '';
+                    const sortStr = r[9] || '';
+                    out[i] = {
+                        Month: r[0] || '',
+                        SalesDoc: r[1] || '',
+                        Serial: r[2] || '',
+                        Order: r[3] || '',
+                        Component: comp,
+                        CompDesc: desc,
+                        Qty: r[6] || 0,
+                        ParentMat: parentMat,
+                        ReqDate: r[8] || '',
+                        SortString: sortStr,
+                        WareCtrl: r[10] || '',
+                        WareCtrlDesc: r[11] || '',
+                        IsUnitA: !!r[12],
+                        Plant: r[13] || '',
+                        ProcType: r[14] || '',
+                        SpecProc: r[15] || '',
+                        IsInhouse: !!r[16],
+                        _compLower: comp.toLowerCase(),
+                        _descLower: desc.toLowerCase(),
+                        _parentLower: parentMat.toLowerCase(),
+                        _isSq: !!(sortStr && (sortStr === 'SQ' || sortStr.includes('SQ')))
+                    };
+                }
+                return out;
+            }
+            if (format === 'compact_plan_v1') {
+                const len = rows.length;
+                const out = new Array(len);
+                for (let i = 0; i < len; i++) {
+                    const r = rows[i];
+                    const modelRaw = r[1] || '';
+                    const mat = r[2] || '';
+                    const ver = r[8] || '';
+                    out[i] = {
+                        Month: r[0] || '',
+                        ModelRaw: modelRaw,
+                        ModelKey: getMatchKey(modelRaw),
+                        Material: mat,
+                        Customer: r[3] || '',
+                        Serial: r[4] || '',
+                        Order: r[5] || '',
+                        SalesDoc: r[6] || '',
+                        StartDate: r[7] || '',
+                        Ver: ver,
+                        Used: false,
+                        _matUpper: mat.trim().toUpperCase(),
+                        _verUpper: ver.trim().toUpperCase()
+                    };
+                }
+                return out;
+            }
+            return [];
+        }
 
         function rebuildComponentIndex() {
             compBySerial = {};
@@ -5679,81 +5778,149 @@ DST: 22. 지티테크`;
             compMinMonthOrder = {};
             compUnitACountBySerial = {};
             compUnitACountBySalesDoc = {};
-            const components = [...(sapData['component_1842'] || []), ...(sapData['component_1840'] || [])];
-            components.forEach(c => {
-                // Precalculate lowercase strings for fast searches
-                if (!c._compLower) c._compLower = (c.Component || '').toLowerCase();
-                if (!c._descLower) c._descLower = (c.CompDesc || '').toLowerCase();
-                if (!c._parentLower) c._parentLower = (c.ParentMat || '').toLowerCase();
+            compSearchBlobBySerial = {};
+            compSearchBlobBySalesDoc = {};
+            const serialChunks = {};
+            const salesDocChunks = {};
 
-                if (c.Serial && c.Serial !== '-') {
-                    if (!compBySerial[c.Serial]) compBySerial[c.Serial] = [];
-                    compBySerial[c.Serial].push(c);
-                    if (c.IsUnitA) {
-                        compUnitACountBySerial[c.Serial] = (compUnitACountBySerial[c.Serial] || 0) + 1;
-                    }
-                }
-                if (c.SalesDoc && c.SalesDoc !== '-') {
-                    if (!compBySalesDoc[c.SalesDoc]) compBySalesDoc[c.SalesDoc] = [];
-                    compBySalesDoc[c.SalesDoc].push(c);
-                    if (c.IsUnitA) {
-                        compUnitACountBySalesDoc[c.SalesDoc] = (compUnitACountBySalesDoc[c.SalesDoc] || 0) + 1;
-                    }
-                }
-                if (c.Component) {
-                    const mOrder = getMonthOrder(c.Month);
-                    if (compMinMonthOrder[c.Component] === undefined || mOrder < compMinMonthOrder[c.Component]) {
-                        compMinMonthOrder[c.Component] = mOrder;
-                    }
-                }
-            });
-        }
+            const c1842 = sapData['component_1842'] || [];
+            const c1840 = sapData['component_1840'] || [];
+            const allLists = [c1842, c1840];
 
-        async function loadSavedSapFiles() {
-            loadCompUserPreferences();
-            try {
-                for (const type of ['1842', '1840', 'component_1842', 'component_1840']) {
-                    const res = await fetch(`/api/load-sap/${type}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.exists && data.content) {
-                            const parsed = parseSapMhtml(data.content, false, type);
-                            sapData[type] = parsed;
-                            
-                            const btn = document.getElementById(`btn-${type}`);
-                            if (btn) {
-                                let label = type;
-                                if (type === 'component_1842') label = '가공품(1842)';
-                                else if (type === 'component_1840') label = '가공품(1840)';
-                                btn.textContent = `✅ 서버 저장됨 (${label})`;
-                                btn.style.background = 'var(--success)';
-                                btn.style.color = 'white';
-                            }
-                            const cancelBtn = document.getElementById(`btn-cancel-${type}`);
-                            if (cancelBtn) {
-                                cancelBtn.style.display = 'inline-block';
-                            }
+            for (let l = 0; l < allLists.length; l++) {
+                const list = allLists[l];
+                for (let i = 0, len = list.length; i < len; i++) {
+                    const c = list[i];
+                    if (c._compLower === undefined) c._compLower = (c.Component || '').toLowerCase();
+                    if (c._descLower === undefined) c._descLower = (c.CompDesc || '').toLowerCase();
+                    if (c._parentLower === undefined) c._parentLower = (c.ParentMat || '').toLowerCase();
+                    if (c._isSq === undefined) c._isSq = !!(c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ')));
+                    if (c._monthOrder === undefined) c._monthOrder = getMonthOrder(c.Month);
 
-                            if (data.mtime) {
-                                const d = new Date(data.mtime);
-                                const timeStr = `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                                const timeEl = document.getElementById('sap-last-sync-time');
-                                if (timeEl) timeEl.textContent = `(최근 동기화: ${timeStr})`;
-                            }
+                    const token = c._compLower + ' ' + c._descLower;
+
+                    if (c.Serial && c.Serial !== '-') {
+                        const s = c.Serial;
+                        if (!compBySerial[s]) {
+                            compBySerial[s] = [];
+                            serialChunks[s] = [];
+                        }
+                        compBySerial[s].push(c);
+                        serialChunks[s].push(token);
+                        if (c.IsUnitA) {
+                            compUnitACountBySerial[s] = (compUnitACountBySerial[s] || 0) + 1;
+                        }
+                    }
+                    if (c.SalesDoc && c.SalesDoc !== '-') {
+                        const sd = c.SalesDoc;
+                        if (!compBySalesDoc[sd]) {
+                            compBySalesDoc[sd] = [];
+                            salesDocChunks[sd] = [];
+                        }
+                        compBySalesDoc[sd].push(c);
+                        salesDocChunks[sd].push(token);
+                        if (c.IsUnitA) {
+                            compUnitACountBySalesDoc[sd] = (compUnitACountBySalesDoc[sd] || 0) + 1;
+                        }
+                    }
+                    if (c.Component) {
+                        const mOrder = c._monthOrder;
+                        if (compMinMonthOrder[c.Component] === undefined || mOrder < compMinMonthOrder[c.Component]) {
+                            compMinMonthOrder[c.Component] = mOrder;
                         }
                     }
                 }
-                rebuildComponentIndex();
-                checkJoinReady();
+            }
 
-                // 만약 이미 화면에 분석된 MPS 데이터가 있다면, 새로 수집된 최신 SAP 데이터로 즉시 자동 결합 및 화면 갱신
-                if (originalRawData && originalRawData.length > 0) {
-                    console.log('[SAP Sync] Automatically updating active table with latest SAP details...');
-                    joinSapDetails(true);
+            // Precompute _isNoHistory and search blobs once
+            for (let l = 0; l < allLists.length; l++) {
+                const list = allLists[l];
+                for (let i = 0, len = list.length; i < len; i++) {
+                    const c = list[i];
+                    const minOrder = compMinMonthOrder[c.Component];
+                    c._isNoHistory = (minOrder !== undefined && c._monthOrder === minOrder);
+                }
+            }
+
+            for (const s in serialChunks) {
+                compSearchBlobBySerial[s] = serialChunks[s].join('\n');
+            }
+            for (const sd in salesDocChunks) {
+                compSearchBlobBySalesDoc[sd] = salesDocChunks[sd].join('\n');
+            }
+        }
+
+        async function loadSavedSapFiles() {
+            if (isLoadingSapFiles) return;
+            isLoadingSapFiles = true;
+            loadCompUserPreferences();
+            try {
+                const types = ['1842', '1840', 'component_1842', 'component_1840'];
+                let anyChanged = false;
+                let latestMtime = null;
+
+                await Promise.all(types.map(async (type) => {
+                    const knownMtime = loadedSapMtimes[type] || 0;
+                    const res = await fetch(`/api/load-sap/${type}?mtimeMs=${knownMtime}`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data.exists) return;
+
+                    if (data.mtime) {
+                        const d = new Date(data.mtime);
+                        if (!latestMtime || d > latestMtime) latestMtime = d;
+                    }
+
+                    const btn = document.getElementById(`btn-${type}`);
+                    if (btn) {
+                        let label = type;
+                        if (type === 'component_1842') label = '가공품(1842)';
+                        else if (type === 'component_1840') label = '가공품(1840)';
+                        btn.textContent = `✅ 서버 저장됨 (${label})`;
+                        btn.style.background = 'var(--success)';
+                        btn.style.color = 'white';
+                    }
+                    const cancelBtn = document.getElementById(`btn-cancel-${type}`);
+                    if (cancelBtn) {
+                        cancelBtn.style.display = 'inline-block';
+                    }
+
+                    if (data.notModified && sapData[type] && sapData[type].length > 0) {
+                        return;
+                    }
+
+                    if (data.format && Array.isArray(data.rows)) {
+                        sapData[type] = unpackCompactSapRows(data.format, data.rows);
+                        if (data.mtimeMs) loadedSapMtimes[type] = data.mtimeMs;
+                        anyChanged = true;
+                    } else if (data.content) {
+                        sapData[type] = parseSapMhtml(data.content, false, type);
+                        if (data.mtimeMs) loadedSapMtimes[type] = data.mtimeMs;
+                        anyChanged = true;
+                    }
+                }));
+
+                if (latestMtime) {
+                    const timeStr = `${latestMtime.getMonth()+1}월 ${latestMtime.getDate()}일 ${String(latestMtime.getHours()).padStart(2,'0')}:${String(latestMtime.getMinutes()).padStart(2,'0')}`;
+                    const timeEl = document.getElementById('sap-last-sync-time');
+                    if (timeEl) timeEl.textContent = `(최근 동기화: ${timeStr})`;
+                }
+
+                if (anyChanged) {
+                    rebuildComponentIndex();
                     checkJoinReady();
+
+                    // 만약 이미 화면에 분석된 MPS 데이터가 있다면, 새로 수집된 최신 SAP 데이터로 즉시 자동 결합 및 화면 갱신
+                    if (originalRawData && originalRawData.length > 0) {
+                        console.log('[SAP Sync] Automatically updating active table with latest SAP details...');
+                        joinSapDetails(true);
+                        checkJoinReady();
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load saved SAP files from server:', err);
+            } finally {
+                isLoadingSapFiles = false;
             }
         }
 
@@ -5783,6 +5950,7 @@ DST: 22. 지티테크`;
 
         async function cancelSapFile(type) {
             sapData[type] = [];
+            delete loadedSapMtimes[type];
             if (type && type.startsWith('component')) {
                 rebuildComponentIndex();
                 rebuildComponentMaterialDropdown();
@@ -6157,10 +6325,38 @@ DST: 22. 지티테크`;
                 parseSiteMaster();
             }
 
-            // Create a copy of the SAP records to track which have been matched for this specific join run
+            const preparePlantList = (list) => {
+                const cloned = (list || []).map(s => {
+                    const custLower = (s.Customer || '').toLowerCase();
+                    const isDummy = custLower.includes('dummy') || custLower.includes('pre-order') || custLower.includes('preorder');
+                    return {
+                        ...s,
+                        Used: false,
+                        _isDummy: isDummy,
+                        _matUpper: s._matUpper !== undefined ? s._matUpper : (s.Material || '').trim().toUpperCase(),
+                        _verUpper: s._verUpper !== undefined ? s._verUpper : (s.Ver || '').trim().toUpperCase()
+                    };
+                });
+                // Pre-sort once: real customers before dummy/pre-order
+                cloned.sort((a, b) => (a._isDummy === b._isDummy ? 0 : (a._isDummy ? 1 : -1)));
+                // Index by Month for O(1) bucket lookup
+                const byMonth = {};
+                for (let i = 0, len = cloned.length; i < len; i++) {
+                    const item = cloned[i];
+                    const m = item.Month || '';
+                    if (!byMonth[m]) byMonth[m] = [];
+                    byMonth[m].push(item);
+                }
+                return { all: cloned, byMonth };
+            };
+
+            const sapPrepared = {
+                '1842': preparePlantList(sapDataForJoin['1842']),
+                '1840': preparePlantList(sapDataForJoin['1840'])
+            };
             const sapDataCopy = {
-                '1842': (sapDataForJoin['1842'] || []).map(s => ({ ...s, Used: false })),
-                '1840': (sapDataForJoin['1840'] || []).map(s => ({ ...s, Used: false }))
+                '1842': sapPrepared['1842'].all,
+                '1840': sapPrepared['1840'].all
             };
 
             const isSuffixCompatible = (mpsProd, sapMat) => {
@@ -6215,55 +6411,46 @@ DST: 22. 지티테크`;
                 }
             });
 
-            const getSapCandidates = (row, sapCopy) => {
-                const isSeongju = row.Site === '성주' || row.Site.includes('성주') || row.Site === '1842' || row.Site === 1842;
-                const sourceSap = isSeongju ? sapCopy['1842'] : sapCopy['1840'];
+            const getSapCandidates = (row) => {
+                const isSeongju = row.Site === '성주' || (row.Site && row.Site.includes('성주')) || row.Site === '1842' || row.Site === 1842;
+                const plantBucket = isSeongju ? sapPrepared['1842'].byMonth : sapPrepared['1840'].byMonth;
+                const monthList = plantBucket[row.Month || ''] || [];
+                if (monthList.length === 0) return monthList;
+
                 const rowCodeUpper = (row.Code || row.ModelCode || '').toString().trim().toUpperCase();
-                
-                const filtered = sourceSap.filter(s => {
-                    if (s.Month !== row.Month) return false;
-                    const isPlCode = rowCodeUpper.startsWith('I');
-                    if (isSeongju || isPlCode) return true;
-                    return (!s.Ver || !rowCodeUpper) || (s.Ver.trim().toUpperCase() === rowCodeUpper);
-                });
+                const isPlCode = rowCodeUpper.startsWith('I');
+                if (isSeongju || isPlCode || !rowCodeUpper) return monthList;
 
-                // Prioritize real customer orders over dummy/pre-orders
-                filtered.sort((a, b) => {
-                    const aDummy = (a.Customer || '').toLowerCase().includes('dummy') || (a.Customer || '').toLowerCase().includes('pre-order') || (a.Customer || '').toLowerCase().includes('preorder');
-                    const bDummy = (b.Customer || '').toLowerCase().includes('dummy') || (b.Customer || '').toLowerCase().includes('pre-order') || (b.Customer || '').toLowerCase().includes('preorder');
-                    if (aDummy && !bDummy) return 1;
-                    if (!aDummy && bDummy) return -1;
-                    return 0;
-                });
-
-                return filtered;
+                const out = [];
+                for (let i = 0, len = monthList.length; i < len; i++) {
+                    const s = monthList[i];
+                    if (!s._verUpper || s._verUpper === rowCodeUpper) {
+                        out.push(s);
+                    }
+                }
+                return out;
             };
 
             // --- PASS 1: Exact matches for Matched Data ---
             expandedRaw.forEach(item => {
                 const row = item.originalRow;
                 const mpsProduct = (row.Product || '').trim();
+                if (!mpsProduct) return;
+                const mpsProductUpper = mpsProduct.toUpperCase();
                 const mpsModelKey = getMatchKey(row.Model);
                 const rowModel = row.Model;
-                
-                if (!mpsProduct) return;
 
-                const candidates = getSapCandidates(row, sapDataCopy);
-                const sapMatch = candidates.find(s => {
-                    if (s.Used) return false;
-                    if (!s.Material) return false;
-                    
-                    // Exact check
-                    if (s.Material.trim().toUpperCase() !== mpsProduct.toUpperCase()) return false;
-                    
-                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
-                    return isModelMatch;
-                });
-
-                if (sapMatch) {
-                    sapMatch.Used = true;
-                    item.matchedSap = sapMatch;
-                    item.sapMatchMethod = 'exact';
+                const candidates = getSapCandidates(row);
+                for (let i = 0, len = candidates.length; i < len; i++) {
+                    const s = candidates[i];
+                    if (s.Used || !s._matUpper) continue;
+                    if (s._matUpper !== mpsProductUpper) continue;
+                    if (s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel))) {
+                        s.Used = true;
+                        item.matchedSap = s;
+                        item.sapMatchMethod = 'exact';
+                        break;
+                    }
                 }
             });
 
@@ -6271,27 +6458,22 @@ DST: 22. 지티테크`;
             expandedUnused.forEach(item => {
                 const row = item.originalRow;
                 const mpsProduct = (row.ProductName || '').trim();
+                if (!mpsProduct) return;
+                const mpsProductUpper = mpsProduct.toUpperCase();
                 const mpsModelKey = getMatchKey(row.UnmappedModel);
                 const rowUnmappedModel = row.UnmappedModel;
-                
-                if (!mpsProduct) return;
 
-                const candidates = getSapCandidates(row, sapDataCopy);
-                const sapMatch = candidates.find(s => {
-                    if (s.Used) return false;
-                    if (!s.Material) return false;
-                    
-                    // Exact check
-                    if (s.Material.trim().toUpperCase() !== mpsProduct.toUpperCase()) return false;
-                    
-                    const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
-                    return isModelMatch;
-                });
-
-                if (sapMatch) {
-                    sapMatch.Used = true;
-                    item.matchedSap = sapMatch;
-                    item.sapMatchMethod = 'exact';
+                const candidates = getSapCandidates(row);
+                for (let i = 0, len = candidates.length; i < len; i++) {
+                    const s = candidates[i];
+                    if (s.Used || !s._matUpper) continue;
+                    if (s._matUpper !== mpsProductUpper) continue;
+                    if (s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)))) {
+                        s.Used = true;
+                        item.matchedSap = s;
+                        item.sapMatchMethod = 'exact';
+                        break;
+                    }
                 }
             });
 
@@ -6304,22 +6486,17 @@ DST: 22. 지티테크`;
                 const mpsModelKey = getMatchKey(row.Model);
                 const rowModel = row.Model;
 
-                const candidates = getSapCandidates(row, sapDataCopy);
-                const sapMatch = candidates.find(s => {
-                    if (s.Used) return false;
-                    
+                const candidates = getSapCandidates(row);
+                for (let i = 0, len = candidates.length; i < len; i++) {
+                    const s = candidates[i];
+                    if (s.Used) continue;
                     const isMaterialMatch = isSuffixCompatible(mpsProduct, s.Material);
                     const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && s.ModelRaw.includes(rowModel));
-                    return isMaterialMatch || isModelMatch;
-                });
-
-                if (sapMatch) {
-                    sapMatch.Used = true;
-                    item.matchedSap = sapMatch;
-                    if (isSuffixCompatible(mpsProduct, sapMatch.Material)) {
-                        item.sapMatchMethod = 'suffix';
-                    } else {
-                        item.sapMatchMethod = 'estimate';
+                    if (isMaterialMatch || isModelMatch) {
+                        s.Used = true;
+                        item.matchedSap = s;
+                        item.sapMatchMethod = isMaterialMatch ? 'suffix' : 'estimate';
+                        break;
                     }
                 }
             });
@@ -6333,22 +6510,17 @@ DST: 22. 지티테크`;
                 const mpsModelKey = getMatchKey(row.UnmappedModel);
                 const rowUnmappedModel = row.UnmappedModel;
 
-                const candidates = getSapCandidates(row, sapDataCopy);
-                const sapMatch = candidates.find(s => {
-                    if (s.Used) return false;
-                    
+                const candidates = getSapCandidates(row);
+                for (let i = 0, len = candidates.length; i < len; i++) {
+                    const s = candidates[i];
+                    if (s.Used) continue;
                     const isMaterialMatch = isSuffixCompatible(mpsProduct, s.Material);
                     const isModelMatch = s.ModelKey === mpsModelKey || (s.ModelRaw && (s.ModelRaw.includes(rowUnmappedModel) || rowUnmappedModel.includes(s.ModelRaw)));
-                    return isMaterialMatch || isModelMatch;
-                });
-
-                if (sapMatch) {
-                    sapMatch.Used = true;
-                    item.matchedSap = sapMatch;
-                    if (isSuffixCompatible(mpsProduct, sapMatch.Material)) {
-                        item.sapMatchMethod = 'suffix';
-                    } else {
-                        item.sapMatchMethod = 'estimate';
+                    if (isMaterialMatch || isModelMatch) {
+                        s.Used = true;
+                        item.matchedSap = s;
+                        item.sapMatchMethod = isMaterialMatch ? 'suffix' : 'estimate';
+                        break;
                     }
                 }
             });
@@ -8092,37 +8264,38 @@ DST: 22. 지티테크`;
                     matched = compBySalesDoc[r.SalesDoc] || [];
                 }
                 
-                matched.forEach(c => {
-                    const model = r.Model || '';
-                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
-                    const isNoHistory = isInitialComponent(c.Component, c.Month);
+                const model = r.Model || '';
+                const modelLower = searchVal ? (r._modelLower !== undefined ? r._modelLower : (r._modelLower = model.toLowerCase())) : '';
+                for (let i = 0, len = matched.length; i < len; i++) {
+                    const c = matched[i];
+                    const isSq = c._isSq !== undefined ? c._isSq : !!(c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ')));
+                    const isNoHistory = c._isNoHistory !== undefined ? c._isNoHistory : isInitialComponent(c.Component, c.Month);
                     
                     // Apply other local filters (except selectedCompMaterials)
-                    if (showSqOnly && !isSq) return;
-                    if (showNoHistoryOnly && !isNoHistory) return;
+                    if (showSqOnly && !isSq) continue;
+                    if (showNoHistoryOnly && !isNoHistory) continue;
                     if (showUnitAOnly) {
-                        if (!c.IsUnitA) return;
+                        if (!c.IsUnitA) continue;
                     } else if (!showAllPurchased) {
-                        if (!c.IsInhouse) return;
+                        if (!c.IsInhouse) continue;
                     }
                     
                     if (searchVal) {
-                        const modelLower = model.toLowerCase();
-                        const compLower = c._compLower || (c.Component || '').toLowerCase();
-                        const descLower = c._descLower || (c.CompDesc || '').toLowerCase();
-                        const parentLower = c._parentLower || (c.ParentMat || '').toLowerCase();
+                        const compLower = c._compLower || '';
+                        const descLower = c._descLower || '';
+                        const parentLower = c._parentLower || '';
                         
                         const matchSearch = modelLower.includes(searchVal) ||
                                            compLower.includes(searchVal) ||
                                            descLower.includes(searchVal) ||
                                            parentLower.includes(searchVal);
-                        if (!matchSearch) return;
+                        if (!matchSearch) continue;
                     }
                     
-                    if (c.Component) {
+                    if (c.Component && !uniqueMap.has(c.Component)) {
                         uniqueMap.set(c.Component, c.CompDesc || '');
                     }
-                });
+                }
             });
             
             // Filter selectedCompMaterials to only keep ones that are still in uniqueMap
@@ -8201,42 +8374,59 @@ DST: 22. 지티테크`;
                     matched = compBySalesDoc[r.SalesDoc] || [];
                 }
                 
-                matched.forEach(c => {
-                    const model = r.Model || '';
-                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
-                    const isNoHistory = isInitialComponent(c.Component, c.Month);
+                const model = r.Model || '';
+                const modelLower = searchVal ? (r._modelLower !== undefined ? r._modelLower : (r._modelLower = model.toLowerCase())) : '';
+                for (let i = 0, len = matched.length; i < len; i++) {
+                    const c = matched[i];
+                    const isSq = c._isSq !== undefined ? c._isSq : !!(c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ')));
+                    const isNoHistory = c._isNoHistory !== undefined ? c._isNoHistory : isInitialComponent(c.Component, c.Month);
                     
                     // Apply local filters
-                    if (showSqOnly && !isSq) return;
-                    if (showNoHistoryOnly && !isNoHistory) return;
+                    if (showSqOnly && !isSq) continue;
+                    if (showNoHistoryOnly && !isNoHistory) continue;
                     if (showUnitAOnly) {
-                        if (!c.IsUnitA) return;
+                        if (!c.IsUnitA) continue;
                     } else if (!showAllPurchased) {
-                        if (!c.IsInhouse) return;
+                        if (!c.IsInhouse) continue;
                     }
-                    if (selectedCompSet.size > 0 && !selectedCompSet.has(c.Component)) return;
+                    if (selectedCompSet.size > 0 && !selectedCompSet.has(c.Component)) continue;
                     
                     if (searchVal) {
-                        const modelLower = model.toLowerCase();
-                        const compLower = c._compLower || (c.Component || '').toLowerCase();
-                        const descLower = c._descLower || (c.CompDesc || '').toLowerCase();
-                        const parentLower = c._parentLower || (c.ParentMat || '').toLowerCase();
+                        const compLower = c._compLower || '';
+                        const descLower = c._descLower || '';
+                        const parentLower = c._parentLower || '';
                         
                         const matchSearch = modelLower.includes(searchVal) ||
                                            compLower.includes(searchVal) ||
                                            descLower.includes(searchVal) ||
                                            parentLower.includes(searchVal);
-                        if (!matchSearch) return;
+                        if (!matchSearch) continue;
                     }
                     
                     filteredComps.push({
-                        ...c,
+                        Month: c.Month,
+                        SalesDoc: c.SalesDoc,
+                        Serial: c.Serial,
+                        Order: c.Order,
+                        Component: c.Component,
+                        CompDesc: c.CompDesc,
+                        Qty: c.Qty,
+                        ParentMat: c.ParentMat,
+                        ReqDate: c.ReqDate,
+                        SortString: c.SortString,
+                        WareCtrl: c.WareCtrl,
+                        WareCtrlDesc: c.WareCtrlDesc,
+                        IsUnitA: c.IsUnitA,
+                        Plant: c.Plant,
+                        ProcType: c.ProcType,
+                        SpecProc: c.SpecProc,
+                        IsInhouse: c.IsInhouse,
                         Model: model,
                         IsSq: isSq,
                         IsNoHistory: isNoHistory,
                         ParentRow: r
                     });
-                });
+                }
             });
             return filteredComps;
         }

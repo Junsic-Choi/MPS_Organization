@@ -188,6 +188,27 @@ function archiveCurrentSapSnapshot() {
         };
         fs.writeFileSync(path.join(snapshotDir, 'metadata.json'), JSON.stringify(meta, null, 2), 'utf8');
         console.log(`[Snapshot] Archived current SAP files to sap_history/${tsId}`);
+
+        // Auto-prune old snapshots (keep latest 5) to prevent disk bloat
+        try {
+            const dirs = fs.readdirSync(historyDir)
+                .filter(d => {
+                    try { return fs.statSync(path.join(historyDir, d)).isDirectory(); } catch (e) { return false; }
+                })
+                .sort()
+                .reverse();
+            const MAX_SNAPSHOTS = 5;
+            if (dirs.length > MAX_SNAPSHOTS) {
+                for (let i = MAX_SNAPSHOTS; i < dirs.length; i++) {
+                    const oldDir = path.join(historyDir, dirs[i]);
+                    fs.rmSync(oldDir, { recursive: true, force: true });
+                    console.log(`[Snapshot] Pruned old snapshot sap_history/${dirs[i]}`);
+                }
+            }
+        } catch (pruneErr) {
+            console.warn('[Snapshot] Failed to prune old snapshots:', pruneErr.message);
+        }
+
         return tsId;
     } catch (e) {
         console.error('[Snapshot] Archive error:', e.message);

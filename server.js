@@ -4,6 +4,7 @@ const cors = require('cors');
 const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const zlib = require('zlib');
 const crypto = require('crypto');
 const multer = require('multer');
 const XLSX = require('xlsx');
@@ -234,7 +235,337 @@ app.post('/api/extract-live', requireAdmin, upload.single('file'), async (req, r
     }
 });
 
-// [Saved] 서버에 저장된 파일 직접 추출 API
+// ==========================================
+// [고속 인메모리 + 디스크 캐시 & Gzip 압축 전송 엔진]
+// ==========================================
+const SAP_CACHE_DIR = path.join(process.pkg ? path.dirname(process.execPath) : __dirname, '.sap_cache');
+if (!fs.existsSync(SAP_CACHE_DIR)) {
+    try { fs.mkdirSync(SAP_CACHE_DIR, { recursive: true }); } catch (e) {}
+}
+
+const mpsExtractMemoryCache = new Map();
+const sapParsedMemoryCache = {};
+const sapDiffMemoryCache = new Map();
+
+function sendCompressedJson(req, res, jsonBuf, gzipBuf) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (gzipBuf && acceptEncoding.includes('gzip')) {
+        res.setHeader('Content-Encoding', 'gzip');
+        return res.send(gzipBuf);
+    }
+    return res.send(jsonBuf);
+}
+
+function extractMhtmlRowCells(trHtml) {
+    const cells = [];
+    let p = 0;
+    while (true) {
+        let tdStart = trHtml.indexOf('<td', p);
+        let thStart = trHtml.indexOf('<th', p);
+        if (thStart !== -1 && (tdStart === -1 || thStart < tdStart)) tdStart = thStart;
+        if (tdStart === -1) break;
+        const gt = trHtml.indexOf('>', tdStart);
+        if (gt === -1) break;
+        let tdEnd = trHtml.indexOf('</td', gt);
+        let thEnd = trHtml.indexOf('</th', gt);
+        if (thEnd !== -1 && (tdEnd === -1 || thEnd < tdEnd)) tdEnd = thEnd;
+        if (tdEnd === -1) break;
+        let raw = trHtml.slice(gt + 1, tdEnd);
+        if (raw.indexOf('<') !== -1) raw = raw.replace(/<[^>]+>/g, '');
+        if (raw.indexOf('&') !== -1) {
+            raw = raw
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&nbsp;/g, ' ');
+        }
+        cells.push(raw.trim());
+        p = tdEnd + 5;
+    }
+    return cells;
+}
+
+function forEachMhtmlRow(rawContent, rowCallback) {
+    if (!rawContent) return;
+    // Check if header declares quoted-printable in first 2KB
+    const headChunk = rawContent.slice(0, 2048);
+    let content = rawContent;
+    if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(headChunk)) {
+        content = rawContent
+            .replace(/=\r?\n/g, '')
+            .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    }
+    let pos = 0;
+    let rowIdx = 0;
+    while (true) {
+        const trStart = content.indexOf('<tr', pos);
+        if (trStart === -1) break;
+        const trOpenEnd = content.indexOf('>', trStart);
+        if (trOpenEnd === -1) break;
+        const trEnd = content.indexOf('</tr>', trOpenEnd);
+        if (trEnd === -1) break;
+        const trInner = content.slice(trOpenEnd + 1, trEnd);
+        pos = trEnd + 5;
+        const cells = extractMhtmlRowCells(trInner);
+        if (cells.length > 0) {
+            rowCallback(cells, rowIdx);
+            rowIdx++;
+        }
+    }
+}
+
+function parseSapMhtmlServerSide(filePath, type) {
+    const rawContent = fs.readFileSync(filePath, 'utf8');
+    const isComponent = type.startsWith('component');
+    const rows = [];
+    const previewSampleRows = [];
+    let previewHeaders = [];
+    let headerCells = null;
+    let mapping = null;
+    let totalRawRows = 0;
+
+    forEachMhtmlRow(rawContent, (cells, rowIdx) => {
+        if (rowIdx === 0) {
+            previewHeaders = cells.filter(c => c.length > 0).slice(0, 15);
+        } else if (previewSampleRows.length < 10) {
+            previewSampleRows.push(cells.slice(0, 15));
+        }
+
+        if (!mapping) {
+            const upper = cells.map(c => c.toUpperCase());
+            const isHeader = isComponent
+                ? upper.some(c => c.includes('COMPONENT') || c.includes('COMP.DESC'))
+                : upper.some(c => c.includes('MATERIAL') || c.includes('PROD'));
+
+            if (isHeader && rowIdx < 10) {
+                headerCells = upper;
+                if (isComponent) {
+                    const findIdx = (keywords) => {
+                        let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                        if (idx !== -1) return idx;
+                        return headerCells.findIndex(cell => keywords.some(k => cell.includes(k)));
+                    };
+                    mapping = {
+                        mon: findIdx(['PROD.MONTH', 'PROD.MON', '생산월', 'MONTH']),
+                        salesDoc: findIdx(['S/O ORDER', 'SALES DOC', '판매문서', 'SALESDOC']),
+                        serial: findIdx(['SERIAL NO', 'SERIALNO', '시리얼']),
+                        order: findIdx(['ORDER', '오더']),
+                        component: findIdx(['COMPONENT', '하위자재', '부품']),
+                        compDesc: findIdx(['COMP.DESC.', 'COMP.DESC', '자재명', '부품명']),
+                        qty: findIdx(['REQUIREMENT QUANTITY', 'REQUIREMENT QTY', '소요량', '소요']),
+                        parentMat: findIdx(['MATERIAL NUMBER', 'MATERIAL', 'PARENT MAT.', '모자재']),
+                        reqDate: findIdx(['REQUIREMENT DATE', '소요예정일']),
+                        sortString: findIdx(['SORT STRING', '정렬 문자열', '정렬']),
+                        deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제']),
+                        wareCtrl: findIdx(['WAREHOUSE CONTROLLER', '창고관리자', '창고 관리자']),
+                        plant: findIdx(['PLANT', '플랜트']),
+                        procType: findIdx(['PROCUREMENT TYPE', 'PROCUREMENT', '조달유형', '조달']),
+                        specProc: findIdx(['SPECIAL PROCUREMENT', '특별조달'])
+                    };
+                } else {
+                    const findIdx = (keywords) => {
+                        let idx = headerCells.findIndex(cell => keywords.some(k => cell === k));
+                        if (idx !== -1) return idx;
+                        return headerCells.findIndex(cell => keywords.some(k => {
+                            if (k === 'MATERIAL' && cell.includes('DESCRIPTION')) return false;
+                            return cell.includes(k);
+                        }));
+                    };
+                    mapping = {
+                        mon: findIdx(['PROD.MON', 'MONTH', '생산월']),
+                        model: findIdx(['MATERIAL DESCRIPTION', 'MODEL', '기종']),
+                        material: findIdx(['MATERIAL', '품명', '자재코드']),
+                        customer: findIdx(['CUSTOMER NAME', 'CUSTOMER', '고객']),
+                        serial: findIdx(['SERIAL NO', 'S/O SERIAL', '시리얼']),
+                        order: findIdx(['ORDER', '오더', '주문']),
+                        salesDoc: findIdx(['SALES DOC', 'SALESDOC', '판매문서']),
+                        startDate: findIdx(['START DATE', '시작일', 'STARTDATE']),
+                        ver: findIdx(['VER.', 'VERSION', '버전']),
+                        deletedItem: findIdx(['DELETED ITEM', 'DELETED', 'DELETE ITEM', '삭제'])
+                    };
+                }
+                return;
+            }
+        }
+
+        if (!mapping) return;
+        totalRawRows++;
+        if (cells.length < 5) return;
+
+        // 삭제 품목 (Deleted Item = X) 자동 제외
+        if (mapping.deletedItem !== -1 && (cells[mapping.deletedItem] || '').trim().toUpperCase() === 'X') {
+            return;
+        }
+
+        const monVal = cells[mapping.mon] || '';
+        const dateDigits = monVal.replace(/[^0-9]/g, '');
+        let mNum = null;
+        if (dateDigits.length >= 6) mNum = parseInt(dateDigits.substring(4, 6), 10);
+        else if (dateDigits.length >= 1) mNum = parseInt(dateDigits, 10);
+        if (!mNum || mNum > 12) return;
+
+        if (isComponent) {
+            let wCtrl = '';
+            let wDesc = '';
+            if (mapping.wareCtrl !== -1) {
+                wCtrl = (cells[mapping.wareCtrl] || '').trim();
+                if (cells.length > mapping.wareCtrl + 1) {
+                    wDesc = (cells[mapping.wareCtrl + 1] || '').trim();
+                }
+            }
+            const sortStr = cells[mapping.sortString] || '';
+            const isUnitA = (wCtrl === 'PS' || wCtrl === 'PZ' || wDesc.includes('A급') || sortStr.includes('A급'));
+            const plant = mapping.plant !== -1 ? (cells[mapping.plant] || '').trim() : '';
+            const procType = mapping.procType !== -1 ? (cells[mapping.procType] || '').trim().toUpperCase() : '';
+            const specProc = mapping.specProc !== -1 ? (cells[mapping.specProc] || '').trim().toUpperCase() : '';
+            const isInhouse = procType ? (procType === 'E' || (plant === '1842' && !isUnitA)) : (!isUnitA);
+
+            rows.push([
+                mNum + '월',
+                cells[mapping.salesDoc] || '',
+                cells[mapping.serial] || '',
+                cells[mapping.order] || '',
+                cells[mapping.component] || '',
+                cells[mapping.compDesc] || '',
+                parseFloat(cells[mapping.qty]) || 0,
+                cells[mapping.parentMat] || '',
+                cells[mapping.reqDate] || '',
+                sortStr,
+                wCtrl,
+                wDesc,
+                isUnitA ? 1 : 0,
+                plant,
+                procType,
+                specProc,
+                isInhouse ? 1 : 0
+            ]);
+        } else {
+            rows.push([
+                mNum + '월',
+                cells[mapping.model] || '',
+                cells[mapping.material] || '',
+                cells[mapping.customer] || '',
+                cells[mapping.serial] || '',
+                cells[mapping.order] || '',
+                cells[mapping.salesDoc] || '',
+                cells[mapping.startDate] || '',
+                cells[mapping.ver] || ''
+            ]);
+        }
+    });
+
+    return {
+        format: isComponent ? 'compact_comp_v1' : 'compact_plan_v1',
+        totalRows: totalRawRows,
+        previewHeaders,
+        previewSampleRows,
+        rows
+    };
+}
+
+function getOrBuildSapCache(type) {
+    const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+    const filePath = path.join(uploadDir, `sap_${type}.mhtml`);
+    if (!fs.existsSync(filePath)) {
+        delete sapParsedMemoryCache[type];
+        return null;
+    }
+
+    const stat = fs.statSync(filePath);
+    const mem = sapParsedMemoryCache[type];
+    if (mem && mem.mtimeMs === stat.mtimeMs && mem.size === stat.size) {
+        return mem;
+    }
+
+    const diskCachePath = path.join(SAP_CACHE_DIR, `sap_${type}.cache.json`);
+    if (fs.existsSync(diskCachePath)) {
+        try {
+            const diskData = JSON.parse(fs.readFileSync(diskCachePath, 'utf8'));
+            if (diskData && diskData.mtimeMs === stat.mtimeMs && diskData.size === stat.size && Array.isArray(diskData.rows)) {
+                const apiPayload = {
+                    success: true,
+                    exists: true,
+                    mtime: stat.mtime,
+                    mtimeMs: stat.mtimeMs,
+                    format: diskData.format,
+                    rows: diskData.rows
+                };
+                const jsonBuf = Buffer.from(JSON.stringify(apiPayload), 'utf8');
+                const gzipBuf = zlib.gzipSync(jsonBuf);
+                const entry = {
+                    mtimeMs: stat.mtimeMs,
+                    mtime: stat.mtime,
+                    size: stat.size,
+                    sizeStr: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+                    totalRows: diskData.totalRows || diskData.rows.length,
+                    previewHeaders: diskData.previewHeaders || [],
+                    previewSampleRows: diskData.previewSampleRows || [],
+                    format: diskData.format,
+                    rows: diskData.rows,
+                    jsonBuffer: jsonBuf,
+                    gzipBuffer: gzipBuf
+                };
+                sapParsedMemoryCache[type] = entry;
+                console.log(`[SAP Cache] Loaded pre-compiled cache from disk for sap_${type}.mhtml (${entry.rows.length} rows, gzip: ${(gzipBuf.length / 1024).toFixed(0)} KB)`);
+                return entry;
+            }
+        } catch (e) {
+            console.warn(`[SAP Cache] Disk cache read failed for ${type}, rebuilding:`, e.message);
+        }
+    }
+
+    const t0 = Date.now();
+    console.log(`[SAP Cache] Compiling sap_${type}.mhtml (${(stat.size / 1024 / 1024).toFixed(2)} MB)...`);
+    const parsed = parseSapMhtmlServerSide(filePath, type);
+
+    const diskPayload = {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        format: parsed.format,
+        totalRows: parsed.totalRows,
+        previewHeaders: parsed.previewHeaders,
+        previewSampleRows: parsed.previewSampleRows,
+        rows: parsed.rows
+    };
+    try {
+        fs.writeFileSync(diskCachePath, JSON.stringify(diskPayload), 'utf8');
+    } catch (e) {
+        console.warn(`[SAP Cache] Failed to write disk cache for ${type}:`, e.message);
+    }
+
+    const apiPayload = {
+        success: true,
+        exists: true,
+        mtime: stat.mtime,
+        mtimeMs: stat.mtimeMs,
+        format: parsed.format,
+        rows: parsed.rows
+    };
+    const jsonBuf = Buffer.from(JSON.stringify(apiPayload), 'utf8');
+    const gzipBuf = zlib.gzipSync(jsonBuf);
+
+    const entry = {
+        mtimeMs: stat.mtimeMs,
+        mtime: stat.mtime,
+        size: stat.size,
+        sizeStr: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
+        totalRows: parsed.totalRows,
+        previewHeaders: parsed.previewHeaders,
+        previewSampleRows: parsed.previewSampleRows,
+        format: parsed.format,
+        rows: parsed.rows,
+        jsonBuffer: jsonBuf,
+        gzipBuffer: gzipBuf
+    };
+    sapParsedMemoryCache[type] = entry;
+    console.log(`[SAP Cache] Compiled sap_${type}.mhtml in ${Date.now() - t0}ms (${parsed.rows.length} active rows, gzip: ${(gzipBuf.length / 1024).toFixed(0)} KB)`);
+    return entry;
+}
+
+// [Saved] 서버에 저장된 파일 직접 추출 API (인메모리 + Gzip 캐시 적용)
 app.post('/api/extract-saved', async (req, res) => {
     try {
         const { filename, rules: rulesStr } = req.body;
@@ -256,13 +587,32 @@ app.post('/api/extract-saved', async (req, res) => {
                 console.error('[api] Failed to parse rules:', e.message);
             }
         }
+
+        const stat = fs.statSync(filePath);
+        const rulesKey = crypto.createHash('md5').update(JSON.stringify(rules || {})).digest('hex');
+        const cacheKey = `${filename}:${stat.mtimeMs}:${stat.size}:${rulesKey}`;
+
+        if (mpsExtractMemoryCache.has(cacheKey)) {
+            const cached = mpsExtractMemoryCache.get(cacheKey);
+            return sendCompressedJson(req, res, cached.jsonBuffer, cached.gzipBuffer);
+        }
         
         console.log(`[api] Saved file extract started: ${filename}`);
         const fileBuffer = fs.readFileSync(filePath);
         const result = await processMpsFile(fileBuffer, rules);
         
-        console.log(`[api] Saved file extract success: ${result.finalResults.length} rows`);
-        res.json({ success: true, ...result });
+        const responseObj = { success: true, ...result };
+        const jsonBuffer = Buffer.from(JSON.stringify(responseObj), 'utf8');
+        const gzipBuffer = zlib.gzipSync(jsonBuffer);
+
+        if (mpsExtractMemoryCache.size > 15) {
+            const firstKey = mpsExtractMemoryCache.keys().next().value;
+            mpsExtractMemoryCache.delete(firstKey);
+        }
+        mpsExtractMemoryCache.set(cacheKey, { jsonBuffer, gzipBuffer });
+
+        console.log(`[api] Saved file extract success: ${result.finalResults.length} rows (cached)`);
+        return sendCompressedJson(req, res, jsonBuffer, gzipBuffer);
     } catch (err) {
         console.error(`[api] Saved file extract failed:`, err);
         res.status(500).json({ success: false, error: err.message });
@@ -312,6 +662,9 @@ app.post('/api/upload-sap', requireAdmin, upload.single('file'), (req, res) => {
         const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
         const savePath = path.join(uploadDir, `sap_${type}.mhtml`);
         fs.writeFileSync(savePath, req.file.buffer);
+        delete sapParsedMemoryCache[type];
+        sapDiffMemoryCache.clear();
+        setTimeout(() => { try { getOrBuildSapCache(type); } catch (e) {} }, 50);
         console.log(`[sap-upload] Saved sap_${type}.mhtml to server`);
         res.json({ success: true });
     } catch (err) {
@@ -333,6 +686,12 @@ app.post('/api/clear-sap', requireAdmin, (req, res) => {
             fs.unlinkSync(savePath);
             console.log(`[sap-clear] Deleted sap_${type}.mhtml`);
         }
+        delete sapParsedMemoryCache[type];
+        sapDiffMemoryCache.clear();
+        const diskCachePath = path.join(SAP_CACHE_DIR, `sap_${type}.cache.json`);
+        if (fs.existsSync(diskCachePath)) {
+            try { fs.unlinkSync(diskCachePath); } catch (e) {}
+        }
         res.json({ success: true });
     } catch (err) {
         console.error('[sap-clear] Failed to clear SAP file:', err);
@@ -340,22 +699,31 @@ app.post('/api/clear-sap', requireAdmin, (req, res) => {
     }
 });
 
-// SAP 파일 로드 API
+// SAP 파일 로드 API (초고속 사전 파싱 + Gzip 압축 캐시 전송)
 app.get('/api/load-sap/:type', (req, res) => {
     try {
         const { type } = req.params;
         if (!['1842', '1840', 'component_1842', 'component_1840'].includes(type)) {
             return res.status(400).json({ success: false, error: '올바른 타입(1842, 1840, component_1842 또는 component_1840)을 지정해주세요.' });
         }
-        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
-        const filePath = path.join(uploadDir, `sap_${type}.mhtml`);
-        if (fs.existsSync(filePath)) {
-            const content = fs.readFileSync(filePath, 'utf8');
-            const stats = fs.statSync(filePath);
-            res.json({ success: true, exists: true, content, mtime: stats.mtime });
-        } else {
-            res.json({ success: true, exists: false });
+        const cached = getOrBuildSapCache(type);
+        if (!cached) {
+            return res.json({ success: true, exists: false });
         }
+
+        // 클라이언트가 이미 동일한 mtimeMs 데이터를 보유 중이면 전송 생략
+        const clientMtime = Number(req.query.mtimeMs || 0);
+        if (clientMtime && Math.abs(clientMtime - cached.mtimeMs) < 1) {
+            return res.json({
+                success: true,
+                exists: true,
+                unchanged: true,
+                mtime: cached.mtime,
+                mtimeMs: cached.mtimeMs
+            });
+        }
+
+        return sendCompressedJson(req, res, cached.jsonBuffer, cached.gzipBuffer);
     } catch (err) {
         console.error('[sap-load] Failed to load SAP file:', err);
         res.status(500).json({ success: false, error: err.message });
@@ -383,7 +751,12 @@ app.post('/api/sync-sap', requireAdmin, async (req, res) => {
             return res.json({ success: true, message: '이미 SAP 동기화가 진행 중입니다.', status });
         }
         // Run in background so request doesn't timeout
-        runSapSync({ startMonth, endMonth }).catch(e => {
+        runSapSync({ startMonth, endMonth }).then(() => {
+            sapDiffMemoryCache.clear();
+            ['1842', '1840', 'component_1842', 'component_1840'].forEach(t => {
+                try { getOrBuildSapCache(t); } catch (e) {}
+            });
+        }).catch(e => {
             console.error('[SAP Sync Error in background]:', e.message);
         });
         res.json({ success: true, message: 'SAP 동기화가 시작되었습니다.' });
@@ -392,30 +765,34 @@ app.post('/api/sync-sap', requireAdmin, async (req, res) => {
     }
 });
 
-const sapFileCache = {};
+const fnToTypeMap = {
+    'sap_1840.mhtml': '1840',
+    'sap_1842.mhtml': '1842',
+    'sap_component_1840.mhtml': 'component_1840',
+    'sap_component_1842.mhtml': 'component_1842'
+};
 
 function getSapFileStats(fn, fp) {
     if (!fs.existsSync(fp)) return null;
-    const stat = fs.statSync(fp);
-    const cached = sapFileCache[fn];
-    if (cached && cached.mtimeMs === stat.mtimeMs) {
-        return cached;
+    const type = fnToTypeMap[fn];
+    if (type) {
+        const cached = getOrBuildSapCache(type);
+        if (cached) {
+            return {
+                size: cached.sizeStr,
+                mtime: cached.mtime,
+                mtimeMs: cached.mtimeMs,
+                rows: cached.totalRows
+            };
+        }
     }
-    let rowCount = 0;
-    try {
-        const content = fs.readFileSync(fp, 'utf8');
-        const trs = content.match(/<tr[^>]*>/gi);
-        if (trs && trs.length > 1) rowCount = trs.length - 1;
-    } catch (e) {}
-
-    const result = {
+    const stat = fs.statSync(fp);
+    return {
         size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
         mtime: stat.mtime,
         mtimeMs: stat.mtimeMs,
-        rows: rowCount
+        rows: 0
     };
-    sapFileCache[fn] = result;
-    return result;
 }
 
 app.get('/api/sync-sap/status', (req, res) => {
@@ -444,42 +821,27 @@ app.get('/api/download-sap/:filename', (req, res) => {
 app.get('/api/sap-preview', (req, res) => {
     try {
         const targetFiles = {
-            '1840': { name: '1840 남산+ 생산계획', file: 'sap_1840.mhtml' },
-            'comp_1840': { name: '1840 남산+ 부품소요량', file: 'sap_component_1840.mhtml' },
-            '1842': { name: '1842 성주 생산계획', file: 'sap_1842.mhtml' },
-            'comp_1842': { name: '1842 성주 부품소요량', file: 'sap_component_1842.mhtml' }
+            '1840': { name: '1840 남산+ 생산계획', file: 'sap_1840.mhtml', type: '1840' },
+            'comp_1840': { name: '1840 남산+ 부품소요량', file: 'sap_component_1840.mhtml', type: 'component_1840' },
+            '1842': { name: '1842 성주 생산계획', file: 'sap_1842.mhtml', type: '1842' },
+            'comp_1842': { name: '1842 성주 부품소요량', file: 'sap_component_1842.mhtml', type: 'component_1842' }
         };
         const result = {};
         for (const [key, info] of Object.entries(targetFiles)) {
-            const fp = path.join(__dirname, info.file);
-            if (!fs.existsSync(fp)) {
+            const cached = getOrBuildSapCache(info.type);
+            if (!cached) {
                 result[key] = { exists: false, name: info.name, file: info.file };
                 continue;
-            }
-            const stat = fs.statSync(fp);
-            const content = fs.readFileSync(fp, 'utf8');
-            const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-            let headers = [];
-            let rows = [];
-            if (trs.length > 0) {
-                headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
-                    .map(c => c.replace(/<[^>]+>/g, '').trim())
-                    .filter(c => c.length > 0);
-                for (let i = 1; i < Math.min(trs.length, 11); i++) {
-                    const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
-                        .map(c => c.replace(/<[^>]+>/g, '').trim());
-                    if (cells.length > 0) rows.push(cells);
-                }
             }
             result[key] = {
                 exists: true,
                 name: info.name,
                 file: info.file,
-                size: (stat.size / 1024 / 1024).toFixed(2) + ' MB',
-                mtime: stat.mtime,
-                totalRows: Math.max(0, trs.length - 1),
-                headers: headers.slice(0, 15),
-                sampleRows: rows.map(r => r.slice(0, 15))
+                size: cached.sizeStr,
+                mtime: cached.mtime,
+                totalRows: cached.totalRows,
+                headers: cached.previewHeaders || [],
+                sampleRows: cached.previewSampleRows || []
             };
         }
         res.json({ success: true, data: result });
@@ -501,34 +863,35 @@ function parsePlanMhtml(filePath) {
 
     try {
         const content = fs.readFileSync(filePath, 'utf8');
-        const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-        if (trs.length < 2) return { orderToSerial, soToSerial, orderToMonth, orderToMatDesc };
+        let idxSerial = -1, idxSO = -1, idxOrder = -1, idxMonth = -1, idxMatDesc = -1;
+        let hasHeaders = false;
 
-        const headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
-            .map(c => c.replace(/<[^>]+>/g, '').trim().toUpperCase());
+        forEachMhtmlRow(content, (cells, rowIdx) => {
+            if (!hasHeaders && rowIdx < 5) {
+                const headers = cells.map(c => c.toUpperCase());
+                if (headers.some(h => h.includes('MATERIAL') || h.includes('ORDER') || h.includes('SERIAL'))) {
+                    idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
+                    idxSO = headers.findIndex(h => h.includes('SALES DOC') || h.includes('S/O') || h.includes('SALES'));
+                    idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
+                    idxMonth = headers.findIndex(h => h.includes('PROD.MON') || h.includes('PROD.MONTH') || h.includes('생산월'));
+                    idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
+                    hasHeaders = true;
+                    return;
+                }
+            }
+            if (!hasHeaders) return;
 
-        const idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
-        const idxSO = headers.findIndex(h => h.includes('SALES DOC') || h.includes('S/O') || h.includes('SALES'));
-        const idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
-        const idxMonth = headers.findIndex(h => h.includes('PROD.MON') || h.includes('PROD.MONTH') || h.includes('생산월'));
-        const idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
-
-        for (let i = 1; i < trs.length; i++) {
-            const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
-                .map(c => c.replace(/<[^>]+>/g, '').trim());
-            if (cells.length === 0) continue;
-
-            const order = idxOrder !== -1 ? cells[idxOrder] : '';
-            const so = idxSO !== -1 ? cells[idxSO] : '';
-            const serial = idxSerial !== -1 ? cells[idxSerial] : '';
-            const month = idxMonth !== -1 ? cells[idxMonth] : '';
-            const matDesc = idxMatDesc !== -1 ? cells[idxMatDesc] : '';
+            const order = idxOrder !== -1 ? (cells[idxOrder] || '') : '';
+            const so = idxSO !== -1 ? (cells[idxSO] || '') : '';
+            const serial = idxSerial !== -1 ? (cells[idxSerial] || '') : '';
+            const month = idxMonth !== -1 ? (cells[idxMonth] || '') : '';
+            const matDesc = idxMatDesc !== -1 ? (cells[idxMatDesc] || '') : '';
 
             if (order && serial) orderToSerial.set(order, serial);
             if (so && serial) soToSerial.set(so, serial);
             if (order && month) orderToMonth.set(order, month);
             if (order && matDesc) orderToMatDesc.set(order, matDesc);
-        }
+        });
     } catch (e) {
         console.error('[SAP Diff] parsePlanMhtml error:', e.message);
     }
@@ -538,64 +901,45 @@ function parsePlanMhtml(filePath) {
 function parseComponentMhtml(filePath, planData = null) {
     if (!fs.existsSync(filePath)) return [];
     const content = fs.readFileSync(filePath, 'utf8');
-    const trs = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    if (trs.length < 2) return [];
 
-    const headers = (trs[0].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
-        .map(c => c.replace(/<[^>]+>/g, '').trim().toUpperCase());
-
-    const idxPlant = headers.findIndex(h => h.includes('PLANT') || h.includes('플랜트'));
-    const idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
-    const idxSO = headers.findIndex(h => h.includes('S/O') || h.includes('SALES'));
-    const idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
-    const idxMonth = headers.findIndex(h => h.includes('PROD.MONTH') || h.includes('PROD.MON') || h.includes('생산월'));
-    const idxMat = headers.findIndex(h => h.includes('MATERIAL NUMBER') || (h.includes('MATERIAL') && !h.includes('DESCRIPTION')) || h.includes('자재'));
-    const idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
-    const idxComp = headers.findIndex(h => h === 'COMPONENT' || h.includes('구성부품'));
-    const idxCompDesc = headers.findIndex(h => h.includes('COMP.DESC') || h.includes('구성부품내역'));
-    const idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('REQUIREMENT QTY') || h.includes('소요량'));
-    const idxUnit = headers.findIndex(h => h.includes('BASE UNIT') || h.includes('단위'));
-    const idxDel = headers.findIndex(h => h.includes('DELETED ITEM') || h.includes('DELETED') || h.includes('삭제'));
-    const idxWareCtrl = headers.findIndex(h => h.includes('WAREHOUSE CONTROLLER') || h.includes('창고관리자') || h.includes('창고 관리자'));
-    const idxSortStr = headers.findIndex(h => h.includes('SORT STRING') || h.includes('정렬 문자열') || h.includes('정렬'));
-
+    let idxPlant = -1, idxSerial = -1, idxSO = -1, idxOrder = -1, idxMonth = -1;
+    let idxMat = -1, idxMatDesc = -1, idxComp = -1, idxCompDesc = -1, idxQty = -1;
+    let idxUnit = -1, idxDel = -1, idxWareCtrl = -1, idxSortStr = -1;
+    let hasHeaders = false;
     const records = [];
-    for (let i = 1; i < trs.length; i++) {
-        const cells = (trs[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [])
-            .map(c => c.replace(/<[^>]+>/g, '').trim());
-        if (cells.length === 0) continue;
+
+    forEachMhtmlRow(content, (cells, rowIdx) => {
+        if (!hasHeaders && rowIdx < 10) {
+            const headers = cells.map(c => c.toUpperCase());
+            if (headers.some(h => h.includes('COMPONENT') || h.includes('COMP.DESC'))) {
+                idxPlant = headers.findIndex(h => h.includes('PLANT') || h.includes('플랜트'));
+                idxSerial = headers.findIndex(h => h.includes('SERIAL') || h.includes('호기'));
+                idxSO = headers.findIndex(h => h.includes('S/O') || h.includes('SALES'));
+                idxOrder = headers.findIndex(h => h === 'ORDER' || (h.includes('ORDER') && !h.includes('TYPE') && !h.includes('S/O')));
+                idxMonth = headers.findIndex(h => h.includes('PROD.MONTH') || h.includes('PROD.MON') || h.includes('생산월'));
+                idxMat = headers.findIndex(h => h.includes('MATERIAL NUMBER') || (h.includes('MATERIAL') && !h.includes('DESCRIPTION')) || h.includes('자재'));
+                idxMatDesc = headers.findIndex(h => h.includes('MATERIAL DESCRIPTION') || h.includes('자재내역'));
+                idxComp = headers.findIndex(h => h === 'COMPONENT' || h.includes('구성부품'));
+                idxCompDesc = headers.findIndex(h => h.includes('COMP.DESC') || h.includes('구성부품내역'));
+                idxQty = headers.findIndex(h => h.includes('REQUIREMENT QUANTITY') || h.includes('REQUIREMENT QTY') || h.includes('소요량'));
+                idxUnit = headers.findIndex(h => h.includes('BASE UNIT') || h.includes('단위'));
+                idxDel = headers.findIndex(h => h.includes('DELETED ITEM') || h.includes('DELETED') || h.includes('삭제'));
+                idxWareCtrl = headers.findIndex(h => h.includes('WAREHOUSE CONTROLLER') || h.includes('창고관리자') || h.includes('창고 관리자'));
+                idxSortStr = headers.findIndex(h => h.includes('SORT STRING') || h.includes('정렬 문자열') || h.includes('정렬'));
+                hasHeaders = true;
+                return;
+            }
+        }
+        if (!hasHeaders) return;
 
         const comp = cells[idxComp] || '';
-        if (!comp) continue;
+        if (!comp) return;
 
-        // SAP 삭제 품목 (Deleted Item = 'X') 필터링 - 설변 삭제 및 오더 취소 품목 제외
+        // SAP 삭제 품목 (Deleted Item = 'X') 필터링
         if (idxDel !== -1) {
             const delVal = (cells[idxDel] || '').toUpperCase();
-            if (delVal === 'X' || delVal === 'TRUE') continue;
+            if (delVal === 'X' || delVal === 'TRUE') return;
         }
-
-        const plant = cells[idxPlant] || '';
-        const soOrder = cells[idxSO] || '';
-        const order = cells[idxOrder] || '';
-        let serial = cells[idxSerial] || '';
-        let prodMonth = cells[idxMonth] || '';
-        let matDesc = cells[idxMatDesc] || '';
-
-        // 계획오더 등으로 시리얼/생산월이 비어있을 경우 생산계획(ZPPM6680) 데이터로 자동 보강
-        if (planData) {
-            if (!serial || serial === '-') {
-                serial = planData.orderToSerial?.get(order) || planData.soToSerial?.get(soOrder) || '';
-            }
-            if (!prodMonth && planData.orderToMonth) {
-                prodMonth = planData.orderToMonth.get(order) || '';
-            }
-            if (!matDesc && planData.orderToMatDesc) {
-                matDesc = planData.orderToMatDesc.get(order) || '';
-            }
-        }
-
-        const qty = parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0;
-        if (qty <= 0) continue;
 
         let wareCtrl = '';
         let wareCtrlDesc = '';
@@ -608,8 +952,30 @@ function parseComponentMhtml(filePath, planData = null) {
         const sortStr = idxSortStr !== -1 ? (cells[idxSortStr] || '').trim() : '';
         const isUnitA = (wareCtrl === 'PS' || wareCtrl === 'PZ' || wareCtrlDesc.includes('A급') || sortStr.includes('A급'));
 
-        // A급 유니트(PS, PZ, A급)는 하위 소요량(가공품) 변동 분석 대상에서 제외 (불필요 및 속도 저하 방지)
-        if (isUnitA || wareCtrl === 'PS' || wareCtrl === 'PZ') continue;
+        // A급 유니트(PS, PZ, A급)는 하위 소요량(가공품) 변동 분석 대상에서 조기 제외 (성능 극대화)
+        if (isUnitA || wareCtrl === 'PS' || wareCtrl === 'PZ') return;
+
+        const qty = parseFloat((cells[idxQty] || '0').replace(/,/g, '')) || 0;
+        if (qty <= 0) return;
+
+        const plant = cells[idxPlant] || '';
+        const soOrder = cells[idxSO] || '';
+        const order = cells[idxOrder] || '';
+        let serial = cells[idxSerial] || '';
+        let prodMonth = cells[idxMonth] || '';
+        let matDesc = cells[idxMatDesc] || '';
+
+        if (planData) {
+            if (!serial || serial === '-') {
+                serial = planData.orderToSerial?.get(order) || planData.soToSerial?.get(soOrder) || '';
+            }
+            if (!prodMonth && planData.orderToMonth) {
+                prodMonth = planData.orderToMonth.get(order) || '';
+            }
+            if (!matDesc && planData.orderToMatDesc) {
+                matDesc = planData.orderToMatDesc.get(order) || '';
+            }
+        }
 
         records.push({
             plant,
@@ -628,7 +994,7 @@ function parseComponentMhtml(filePath, planData = null) {
             sortStr,
             isUnitA
         });
-    }
+    });
     return records;
 }
 
@@ -644,12 +1010,38 @@ function loadComponentDataset(snapshotId) {
     const plan1840 = path.join(dir, 'sap_1840.mhtml');
     const plan1842 = path.join(dir, 'sap_1842.mhtml');
 
+    const mtimeSig = [f1840, f1842, plan1840, plan1842].map(p => {
+        try { return fs.existsSync(p) ? fs.statSync(p).mtimeMs : 0; } catch (e) { return 0; }
+    }).join('_');
+
+    const memKey = `${snapshotId}:${mtimeSig}`;
+    if (sapDiffMemoryCache.has(memKey)) {
+        return sapDiffMemoryCache.get(memKey);
+    }
+
+    const safeSnapId = String(snapshotId || 'current').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const diskDiffCachePath = path.join(SAP_CACHE_DIR, `diff_${safeSnapId}.cache.json`);
+    if (fs.existsSync(diskDiffCachePath)) {
+        try {
+            const cachedDisk = JSON.parse(fs.readFileSync(diskDiffCachePath, 'utf8'));
+            if (cachedDisk && cachedDisk.mtimeSig === mtimeSig && Array.isArray(cachedDisk.records)) {
+                sapDiffMemoryCache.set(memKey, cachedDisk.records);
+                return cachedDisk.records;
+            }
+        } catch (e) {}
+    }
+
     const pData1840 = parsePlanMhtml(plan1840);
     const pData1842 = parsePlanMhtml(plan1842);
 
     const records = [];
     if (fs.existsSync(f1840)) records.push(...parseComponentMhtml(f1840, pData1840));
     if (fs.existsSync(f1842)) records.push(...parseComponentMhtml(f1842, pData1842));
+
+    try {
+        fs.writeFileSync(diskDiffCachePath, JSON.stringify({ mtimeSig, records }), 'utf8');
+    } catch (e) {}
+    sapDiffMemoryCache.set(memKey, records);
     return records;
 }
 
@@ -929,6 +1321,14 @@ function broadcastLog(msg) {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`MPS Server LIVE on Port ${PORT}`);
+    // Pre-warm SAP cache asynchronously right after server starts
+    setTimeout(() => {
+        try {
+            ['1842', '1840', 'component_1842', 'component_1840'].forEach(t => {
+                try { getOrBuildSapCache(t); } catch (e) {}
+            });
+        } catch (e) {}
+    }, 100);
 });
 
 server.on('error', (err) => {
