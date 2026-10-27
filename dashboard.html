@@ -3749,7 +3749,9 @@ DST: 22. 지티테크`;
             else if (tabId === 'component') tabName = '가공품 소요 현황';
 
             runWithLoading(() => {
-                populateFilters();
+                if (!activeFilters.sites || activeFilters.sites.length === 0) {
+                    populateFilters();
+                }
                 applyFilters();
             }, `${tabName} 데이터 조회 중...`);
         }
@@ -4100,10 +4102,14 @@ DST: 22. 지티테크`;
                 return a.site.localeCompare(b.site, 'ko');
             });
 
-            // Keep custom sorting if row keys are the same
+            // Keep custom sorting if row keys are the same, while always applying fresh monthlyQty
             const currentKeys = rowList.map(item => `${item.division}||${item.group}||${item.model}||${item.site}`).join('##');
             if (window.lastSummaryKeys === currentKeys && window.currentSummaryRows) {
-                rowList = window.currentSummaryRows;
+                rowList = window.currentSummaryRows.map(oldRow => {
+                    const k = `${oldRow.division}||${oldRow.group}||${oldRow.model}||${oldRow.site}`;
+                    return pivotData[k] || oldRow;
+                });
+                window.currentSummaryRows = rowList;
             } else {
                 window.currentSummaryRows = rowList;
                 window.lastSummaryKeys = currentKeys;
@@ -4794,10 +4800,14 @@ DST: 22. 지티테크`;
                 return a.site.localeCompare(b.site, 'ko');
             });
 
-            // Keep custom sorting if comparison row keys are the same
+            // Keep custom sorting if comparison row keys are the same, while always applying fresh monthlyQtyA/B
             const currentKeys = displayRowList.map(item => `${item.division}||${item.group}||${item.model}||${item.site}`).join('##');
             if (window.lastComparisonKeys === currentKeys && window.currentComparisonRows) {
-                displayRowList = window.currentComparisonRows;
+                displayRowList = window.currentComparisonRows.map(oldRow => {
+                    const k = `${oldRow.division}||${oldRow.group}||${oldRow.model}||${oldRow.site}`;
+                    return pivotData[k] || oldRow;
+                });
+                window.currentComparisonRows = displayRowList;
             } else {
                 window.currentComparisonRows = displayRowList;
                 window.lastComparisonKeys = currentKeys;
@@ -7947,13 +7957,17 @@ DST: 22. 지티테크`;
                 return 0;
             });
 
-            // Keep custom sorting if pivot row keys are the same
+            // Keep custom sorting if pivot row keys are the same, while always applying fresh monthlyData
             const currentKeys = pivotRows.map(rowItem => {
                 return activeRowDims.map(d => rowItem.dims[d.key]).join('||');
             }).join('##');
 
             if (window.lastPivotKeys === currentKeys && window.currentPivotRows) {
-                pivotRows = window.currentPivotRows;
+                pivotRows = window.currentPivotRows.map(oldRow => {
+                    const k = activeRowDims.map(d => oldRow.dims[d.key]).join('||') || '전체';
+                    return pivotCache[k] || oldRow;
+                });
+                window.currentPivotRows = pivotRows;
             } else {
                 window.currentPivotRows = pivotRows;
                 window.lastPivotKeys = currentKeys;
