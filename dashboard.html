@@ -4440,6 +4440,8 @@ DST: 22. 지티테크`;
                     window.compareRawB = rawB;
                 }
                 window.compareMode = true;
+                window.lastComparisonKeys = null;
+                window.currentComparisonRows = null;
 
                 populateFilters();
                 document.getElementById('compare-exit-btn').style.display = 'inline-block';
@@ -4455,6 +4457,8 @@ DST: 22. 지티테크`;
 
         function exitComparison() {
             window.compareMode = false;
+            window.lastComparisonKeys = null;
+            window.currentComparisonRows = null;
             populateFilters();
             document.getElementById('compare-exit-btn').style.display = 'none';
             document.getElementById('compare-summary-cards').style.display = 'none';
