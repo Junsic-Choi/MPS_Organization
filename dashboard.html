@@ -1790,17 +1790,30 @@
             return '기타';
         }
 
+        function isNamsanSite(siteStr, lineName = '') {
+            const s = (siteStr || '').toString().trim();
+            const l = (lineName || '').toString().trim();
+            if (s.includes('OEM') || s.includes('외주') || l.includes('OEM') || l.includes('외주')) return false;
+            if (s === '남산' || s.includes('남산') || s === '1840' || s === '1841' ||
+                s.startsWith('MC') || s.startsWith('TC') || s.startsWith('0AM') || s.startsWith('0AT')) return true;
+            if (l && (l.includes('남산') || l.startsWith('MC') || l.startsWith('TC') || l.startsWith('0AM') || l.startsWith('0AT'))) return true;
+            return false;
+        }
+
         function isSiteMatch(rowSite, selectedSites, allSites) {
             if (!rowSite) return selectedSites.length === allSites.length;
             if (selectedSites.includes(rowSite)) return true;
             const normRow = (rowSite || '').toString().trim();
+            const isOemOrOutsource = normRow.includes('OEM') || normRow.includes('외주');
             return selectedSites.some(sel => {
                 const normSel = (sel || '').toString().trim();
                 if (normSel === normRow) return true;
+                // OEM 또는 외주 생산처(예: 쎈텍_OEM_1840, 세양_공정외주_1840 등)는 '남산'/'성주' 선택 시 절대 섞이지 않도록 분리
+                if (isOemOrOutsource) return false;
                 if ((normSel.includes('남산') || normSel === '남산') && 
-                    (normRow.includes('남산') || normRow.includes('1840') || normRow.startsWith('MC') || normRow.startsWith('TC') || normRow.startsWith('0AM') || normRow.startsWith('0AT'))) return true;
+                    (normRow.includes('남산') || normRow === '1840' || normRow === '1841' || normRow.startsWith('MC') || normRow.startsWith('TC') || normRow.startsWith('0AM') || normRow.startsWith('0AT'))) return true;
                 if ((normSel.includes('성주') || normSel === '성주') && 
-                    (normRow.includes('성주') || normRow.includes('1842'))) return true;
+                    (normRow.includes('성주') || normRow === '1842')) return true;
                 return false;
             });
         }
@@ -1876,15 +1889,46 @@
         };
         let userVisibleHeaders = [...allHeaders];
 
-        // 개인화 열 설정 로드
+        // 개인화 열 설정 및 서버 공유 사이트 마스터 로드
         async function loadUserPreferences(retryCount = 0) {
             try {
                 const response = await fetch('/api/preferences');
                 if (!response.ok) throw new Error('API 오류');
                 const data = await response.json();
-                if (data.success && data.preferences && Array.isArray(data.preferences.visibleHeaders)) {
-                    userVisibleHeaders = data.preferences.visibleHeaders.filter(h => allHeaders.includes(h));
-                    renderTable();
+                if (data.success && data.preferences) {
+                    if (Array.isArray(data.preferences.visibleHeaders)) {
+                        userVisibleHeaders = data.preferences.visibleHeaders.filter(h => allHeaders.includes(h));
+                        renderTable();
+                    }
+                    // 서버에 저장된 공통 사이트 마스터가 있으면 모든 팀원 PC에 동일하게 동기화 적용
+                    if (typeof data.preferences.siteMasterText === 'string' && data.preferences.siteMasterText.trim()) {
+                        const prevSite = localStorage.getItem('mps_site_master');
+                        const serverSite = data.preferences.siteMasterText;
+                        const serverRule = data.preferences.ruleMasterText || DEFAULT_RULES;
+                        localStorage.setItem('mps_site_master', serverSite);
+                        localStorage.setItem('mps_rule_master', serverRule);
+                        if (siteMasterText) siteMasterText.value = serverSite;
+                        if (ruleMasterText) ruleMasterText.value = serverRule;
+                        parseSiteMaster();
+                        // 만약 기존 로컬 사이트 마스터와 달랐고 이미 데이터가 로드된 상태라면 재추출
+                        if (prevSite !== serverSite && (selectedSavedFile || selectedXlsxFile) && originalRawData.length > 0) {
+                            startExtraction();
+                        }
+                    } else {
+                        // 서버에 아직 사이트 마스터가 없고 관리자 브라우저에 커스텀 마스터가 있다면 서버로 자동 백업/공유
+                        const localCustomSite = localStorage.getItem('mps_site_master');
+                        const localCustomRule = localStorage.getItem('mps_rule_master');
+                        if (localCustomSite && currentAuth && currentAuth.isAdmin) {
+                            fetch('/api/preferences', {
+                                method: 'POST',
+                                headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                                body: JSON.stringify({
+                                    siteMasterText: localCustomSite,
+                                    ruleMasterText: localCustomRule || DEFAULT_RULES
+                                })
+                            }).catch(() => {});
+                        }
+                    }
                 }
             } catch (err) {
                 console.warn(`Failed to load user preferences (Attempt ${retryCount + 1}):`, err.message);
@@ -2084,18 +2128,44 @@ DST: 22. 지티테크`;
         // 페이지 로드 즉시 기본 사이트 마스터 파싱 수행
         parseSiteMaster();
 
-        function saveSiteMaster() {
+        async function saveSiteMaster() {
             localStorage.setItem('mps_site_master', siteMasterText.value);
             localStorage.setItem('mps_rule_master', ruleMasterText.value);
             parseSiteMaster();
-            alert('사이트 마스터 및 매핑 규칙이 저장되었습니다. 페이지를 새로고침하여 데이터에 반영합니다.');
+            if (currentAuth && currentAuth.isAdmin) {
+                try {
+                    await fetch('/api/preferences', {
+                        method: 'POST',
+                        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({
+                            siteMasterText: siteMasterText.value,
+                            ruleMasterText: ruleMasterText.value
+                        })
+                    });
+                } catch (e) {
+                    console.warn('서버 사이트 마스터 동기화 저장 실패:', e);
+                }
+            }
+            alert('사이트 마스터 및 매핑 규칙이 서버에 저장되어 모든 사용자에게 동일하게 반영됩니다.');
             location.reload();
         }
 
-        function resetSiteMaster() {
-            if (confirm('⚠️ 모든 수동 매핑 규칙(사이트 마스터)을 초기화하시겠습니까?\n브라우저에 저장된 이전의 커스텀 명칭들이 모두 삭제되고 원본 엑셀 기준(Sheet 0)으로 복구됩니다.')) {
+        async function resetSiteMaster() {
+            if (confirm('⚠️ 모든 수동 매핑 규칙(사이트 마스터)을 초기화하시겠습니까?\n저장된 커스텀 명칭들이 모두 삭제되고 기본 사이트 마스터로 복구됩니다.')) {
                 localStorage.removeItem('mps_site_master');
                 localStorage.removeItem('mps_rule_master');
+                if (currentAuth && currentAuth.isAdmin) {
+                    try {
+                        await fetch('/api/preferences', {
+                            method: 'POST',
+                            headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                            body: JSON.stringify({
+                                siteMasterText: DEFAULT_SITE_MASTER,
+                                ruleMasterText: DEFAULT_RULES
+                            })
+                        });
+                    } catch (e) {}
+                }
                 alert('모든 규칙이 초기화되었습니다. 페이지를 새로고침합니다.');
                 location.reload();
             }
@@ -3829,8 +3899,7 @@ DST: 22. 지티테크`;
                 const division = getDivision(row['Group']);
                 if (!divisionSet.has(division)) return false;
                 
-                const siteStr = row['Site'] || '';
-                const isNamsan = siteStr.includes('남산') || siteStr.includes('1840') || !!row.LineName;
+                const isNamsan = isNamsanSite(row['Site'], row.LineName);
                 if (isNamsan && !isAllShiftsSelected) {
                     const shift = getShift(row);
                     if (!shiftSet.has(shift)) return false;
@@ -4331,7 +4400,7 @@ DST: 22. 지티테크`;
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
                 const shift = getShift(row);
-                const isNamsan = (row['Site'] || '').includes('남산') || (row['Site'] || '').includes('1840') || !!row.LineName;
+                const isNamsan = isNamsanSite(row['Site'], row.LineName);
                 const isAllShiftsSelected = activeFilters.selectedShifts.length === activeFilters.shifts.length;
                 const matchShift = !isNamsan || isAllShiftsSelected || activeFilters.selectedShifts.includes(shift);
 
@@ -7164,9 +7233,7 @@ DST: 22. 지티테크`;
 
             extractBtn.disabled = true;
             updateThemeButton(localStorage.getItem('mps_theme') || 'dark');
-            checkAuthStatus();
             loadSiteMaster();
-            loadUserPreferences();
             initCellSelection();
             fetchSapSyncStatus();
             
@@ -7179,19 +7246,20 @@ DST: 22. 지티테크`;
             const tabPivot = document.getElementById('tab-pivot');
             if (tabPivot) tabPivot.classList.toggle('active', currentTab === 'pivot');
             
-            // 서버 저장 파일 목록 가져와 최근 분석 파일 자동 선택 및 자동 실행
-            fetchSavedMpsFiles().then(() => {
-                const lastSavedFile = localStorage.getItem('lastMpsFilename');
-                if (lastSavedFile && savedMpsFiles.some(f => f.filename === lastSavedFile)) {
-                    selectSavedFile(lastSavedFile);
-                    // 자동 분석 실행
-                    startExtraction();
-                } else if (savedMpsFiles && savedMpsFiles.length > 0) {
-                    // 사내망 접속자 등 최초 방문 시 서버 최신 파일 자동 선택 및 분석 실행
-                    selectSavedFile(savedMpsFiles[0].filename);
-                    startExtraction();
-                }
-            });
+            // 초기 인증 상태 및 서버 공유 사이트 마스터를 먼저 확인한 뒤 파일 추출 진행
+            checkAuthStatus().catch(() => {})
+                .then(() => loadUserPreferences().catch(() => {}))
+                .then(() => fetchSavedMpsFiles())
+                .then(() => {
+                    const lastSavedFile = localStorage.getItem('lastMpsFilename');
+                    if (lastSavedFile && savedMpsFiles.some(f => f.filename === lastSavedFile)) {
+                        selectSavedFile(lastSavedFile);
+                        startExtraction();
+                    } else if (savedMpsFiles && savedMpsFiles.length > 0) {
+                        selectSavedFile(savedMpsFiles[0].filename);
+                        startExtraction();
+                    }
+                });
         });
 
         function shutdownServer() {
@@ -7847,7 +7915,7 @@ DST: 22. 지티테크`;
                 const matchDivision = activeFilters.selectedDivisions.includes(division);
                 
                 const shift = getShift(row);
-                const isNamsan = (row['Site'] || '').includes('남산') || (row['Site'] || '').includes('1840') || !!row.LineName;
+                const isNamsan = isNamsanSite(row['Site'], row.LineName);
                 const isAllShiftsSelected = activeFilters.selectedShifts.length === activeFilters.shifts.length;
                 const matchShift = !isNamsan || isAllShiftsSelected || activeFilters.selectedShifts.includes(shift);
 

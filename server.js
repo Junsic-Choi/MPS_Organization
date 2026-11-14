@@ -636,13 +636,23 @@ app.get('/api/preferences', (req, res) => {
     }
 });
 
-// 개인화 설정 저장 API (관리자 전용)
+// 개인화 설정 저장 API (관리자 전용 - 기존 설정과 병합 저장)
 app.post('/api/preferences', requireAdmin, (req, res) => {
     try {
         const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
         const prefPath = path.join(uploadDir, 'preferences.json');
-        fs.writeFileSync(prefPath, JSON.stringify(req.body, null, 2), 'utf8');
-        res.json({ success: true });
+        let existing = {};
+        if (fs.existsSync(prefPath)) {
+            try {
+                existing = JSON.parse(fs.readFileSync(prefPath, 'utf8')) || {};
+            } catch (e) {}
+        }
+        const updated = { ...existing, ...(req.body || {}) };
+        fs.writeFileSync(prefPath, JSON.stringify(updated, null, 2), 'utf8');
+        if (req.body && (req.body.siteMasterText !== undefined || req.body.ruleMasterText !== undefined)) {
+            mpsExtractMemoryCache.clear();
+        }
+        res.json({ success: true, preferences: updated });
     } catch (err) {
         console.error('[api] Save preferences failed:', err.message);
         res.status(500).json({ success: false, error: err.message });
