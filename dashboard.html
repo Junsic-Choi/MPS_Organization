@@ -1241,7 +1241,6 @@
         <div class="tab-system" id="tab-system" style="display: none;">
             <button class="tab-btn active" id="tab-main">📊 생산 실적 매칭 결과</button>
             <button class="tab-btn" id="tab-summary" style="margin-left: auto;">📈 요약 대시보드</button>
-            <button class="tab-btn" id="tab-pivot" style="margin-left: 0.5rem;">🧩 나만의 피벗테이블</button>
             <button class="tab-btn" id="tab-component" style="margin-left: 0.5rem; display: none;">🔩 가공품 소요 현황</button>
             <button class="tab-btn" id="tab-master" style="margin-left: 0.5rem;">⚙️ 사이트 마스터</button>
         </div>
@@ -1398,25 +1397,32 @@
                 </div>
             </div>
 
-            <!-- Summary View / Grouping Controls -->
+            <!-- Summary & Pivot View Controls -->
             <div id="summary-view-controls" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1.2rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1rem; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;">
                     <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                        🧩 요약 보기 설정:
+                        🧩 피벗 · 요약 기준:
                     </div>
                     <button type="button" id="btn-summary-group-total" onclick="toggleSummaryModelMerge()" style="background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.45rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="기종을 모두 통합하여 기종분류별 전체 소요량을 한눈에 확인합니다.">
                         📊 기종 통합 (기종분류 전체 소요량)
                     </button>
                     <div style="height: 18px; width: 1px; background: var(--border-color);"></div>
-                    <div style="display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;">
-                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="summary-show-model" checked onchange="onSummaryViewOptionChange()"> 기종 (Model) 표시
+                    <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-div" checked onchange="onSummaryViewOptionChange()"> 구분 (TC/MC)
                         </label>
-                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="summary-show-site" checked onchange="onSummaryViewOptionChange()"> 생산처 (Site) 표시
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-group" checked onchange="onSummaryViewOptionChange()"> 기종분류 (Group)
                         </label>
-                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;" title="기종 그룹 관리에 등록된 커스텀 기종 묶음을 요약 대시보드에도 적용합니다.">
-                            <input type="checkbox" id="summary-use-custom-groups" checked onchange="onSummaryViewOptionChange()"> 커스텀 기종 그룹 적용
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-model" checked onchange="onSummaryViewOptionChange()"> 기종/그룹 (Model)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-site" checked onchange="onSummaryViewOptionChange()"> 생산처 (Site)
+                        </label>
+                        <div style="height: 16px; width: 1px; background: var(--border-color);"></div>
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-month" checked onchange="onSummaryViewOptionChange()"> 월별 개별 분류 (Month)
                         </label>
                     </div>
                 </div>
@@ -3822,11 +3828,10 @@ DST: 22. 지티테크`;
         });
 
         function switchTab(tabId) {
+            if (tabId === 'pivot') tabId = 'summary';
             currentTab = tabId;
             tabMain.classList.toggle('active', tabId === 'main');
             if (tabSummary) tabSummary.classList.toggle('active', tabId === 'summary');
-            const tabPivot = document.getElementById('tab-pivot');
-            if (tabPivot) tabPivot.classList.toggle('active', tabId === 'pivot');
             const tabComp = document.getElementById('tab-component');
             if (tabComp) tabComp.classList.toggle('active', tabId === 'component');
             
@@ -3843,8 +3848,7 @@ DST: 22. 지티테크`;
             document.body.style.overflow = 'auto';
 
             let tabName = '생산계획';
-            if (tabId === 'summary') tabName = '월별 집계';
-            else if (tabId === 'pivot') tabName = '피벗 분석';
+            if (tabId === 'summary') tabName = '요약 대시보드';
             else if (tabId === 'component') tabName = '가공품 소요 현황';
 
             runWithLoading(() => {
@@ -3857,8 +3861,6 @@ DST: 22. 지티테크`;
 
         tabMain.addEventListener('click', () => switchTab('main'));
         if (tabSummary) tabSummary.addEventListener('click', () => switchTab('summary'));
-        const tabPivot = document.getElementById('tab-pivot');
-        if (tabPivot) tabPivot.addEventListener('click', () => switchTab('pivot'));
         const tabComp = document.getElementById('tab-component');
         if (tabComp) tabComp.addEventListener('click', () => switchTab('component'));
 
@@ -4082,13 +4084,18 @@ DST: 22. 지티테크`;
         }
 
         function getSummaryViewOptions() {
+            const showDivEl = document.getElementById('summary-show-div');
+            const showGroupEl = document.getElementById('summary-show-group');
             const showModelEl = document.getElementById('summary-show-model');
             const showSiteEl = document.getElementById('summary-show-site');
-            const useCustomGroupsEl = document.getElementById('summary-use-custom-groups');
+            const showMonthEl = document.getElementById('summary-show-month');
+            const showDiv = showDivEl ? showDivEl.checked : true;
+            const showGroup = showGroupEl ? showGroupEl.checked : true;
             const showModel = showModelEl ? showModelEl.checked : true;
             const showSite = showSiteEl ? showSiteEl.checked : true;
-            const useCustomGroups = useCustomGroupsEl ? useCustomGroupsEl.checked : true;
-            return { showModel, showSite, useCustomGroups };
+            const showMonth = showMonthEl ? showMonthEl.checked : true;
+            const useCustomGroups = true;
+            return { showDiv, showGroup, showModel, showSite, showMonth, useCustomGroups };
         }
 
         function updateSummaryMergeButtonUI() {
@@ -4153,7 +4160,8 @@ DST: 22. 지티테크`;
             dualContainer.style.display = 'none';
             
             updateSummaryMergeButtonUI();
-            const { showModel, showSite, useCustomGroups } = getSummaryViewOptions();
+            const { showDiv, showGroup, showModel, showSite, showMonth, useCustomGroups } = getSummaryViewOptions();
+            const activeDimCount = (showDiv ? 1 : 0) + (showGroup ? 1 : 0) + (showModel ? 1 : 0) + (showSite ? 1 : 0);
 
             const summaryHead = document.getElementById('summary-head');
             const summaryBody = document.getElementById('summary-body');
@@ -4181,42 +4189,56 @@ DST: 22. 지티테크`;
             thMove.style.width = '60px';
             trHead.appendChild(thMove);
             
-            const thDiv = document.createElement('th');
-            thDiv.textContent = '구분';
-            thDiv.style.textAlign = 'center';
-            thDiv.style.width = '8%';
-            trHead.appendChild(thDiv);
-            
-            const thGroup = document.createElement('th');
-            thGroup.textContent = '기종분류';
-            thGroup.style.textAlign = 'center';
-            thGroup.style.width = showModel ? '16%' : '24%';
-            trHead.appendChild(thGroup);
-            
-            if (showModel) {
-                const thModel = document.createElement('th');
-                thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
-                thModel.style.textAlign = 'center';
-                thModel.style.width = '16%';
-                trHead.appendChild(thModel);
-            }
-            
-            if (showSite) {
-                const thSite = document.createElement('th');
-                thSite.textContent = '생산처';
-                thSite.style.textAlign = 'center';
-                thSite.style.width = '11%';
-                trHead.appendChild(thSite);
+            if (activeDimCount === 0) {
+                const thAll = document.createElement('th');
+                thAll.textContent = '구분';
+                thAll.style.textAlign = 'center';
+                thAll.style.width = '20%';
+                trHead.appendChild(thAll);
+            } else {
+                if (showDiv) {
+                    const thDiv = document.createElement('th');
+                    thDiv.textContent = '구분';
+                    thDiv.style.textAlign = 'center';
+                    thDiv.style.width = '8%';
+                    trHead.appendChild(thDiv);
+                }
+                
+                if (showGroup) {
+                    const thGroup = document.createElement('th');
+                    thGroup.textContent = '기종분류';
+                    thGroup.style.textAlign = 'center';
+                    thGroup.style.width = showModel ? '16%' : '24%';
+                    trHead.appendChild(thGroup);
+                }
+                
+                if (showModel) {
+                    const thModel = document.createElement('th');
+                    thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
+                    thModel.style.textAlign = 'center';
+                    thModel.style.width = '16%';
+                    trHead.appendChild(thModel);
+                }
+                
+                if (showSite) {
+                    const thSite = document.createElement('th');
+                    thSite.textContent = '생산처';
+                    thSite.style.textAlign = 'center';
+                    thSite.style.width = '11%';
+                    trHead.appendChild(thSite);
+                }
             }
             
             // Dynamic month headers
-            sortedMonths.forEach(month => {
-                const thMonth = document.createElement('th');
-                thMonth.textContent = month;
-                thMonth.style.textAlign = 'right';
-                thMonth.classList.add('month-cell');
-                trHead.appendChild(thMonth);
-            });
+            if (showMonth) {
+                sortedMonths.forEach(month => {
+                    const thMonth = document.createElement('th');
+                    thMonth.textContent = month;
+                    thMonth.style.textAlign = 'right';
+                    thMonth.classList.add('month-cell');
+                    trHead.appendChild(thMonth);
+                });
+            }
             
             const thTotal = document.createElement('th');
             thTotal.textContent = '합계';
@@ -4237,8 +4259,8 @@ DST: 22. 지티테크`;
             // 3. Group data by (division, group, model, site) and month
             const pivotData = {};
             filteredData.forEach(row => {
-                const division = getDivision(row.Group) || '기타';
-                const group = row.Group || '-';
+                const division = showDiv ? (getDivision(row.Group) || '기타') : '전체';
+                const group = showGroup ? (row.Group || '-') : '전체';
                 const rawModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
                 const model = showModel ? resolveSummaryModelName(rawModel, useCustomGroups) : '전체';
                 const site = showSite ? (row.Site || '-') : '전체';
@@ -4393,87 +4415,98 @@ DST: 22. 지티테크`;
                 }
                 tr.appendChild(tdSort);
                 
-                // Division Cell (with rowspan if applicable)
-                if (item.divSpan > 0) {
-                    const tdDiv = document.createElement('td');
-                    tdDiv.textContent = item.division;
-                    tdDiv.rowSpan = item.divSpan;
-                    tdDiv.style.textAlign = 'center';
-                    tdDiv.style.fontWeight = 'bold';
-                    tdDiv.style.background = 'var(--surface-hover)';
-                    tdDiv.style.borderRight = '1px solid var(--border-color)';
-                    tdDiv.classList.add('border-bottom-thick');
-                    tr.appendChild(tdDiv);
-                }
-                
-                // Group Cell (with rowspan if applicable)
-                if (item.grpSpan > 0) {
-                    const tdGroup = document.createElement('td');
-                    tdGroup.textContent = item.group;
-                    tdGroup.rowSpan = item.grpSpan;
-                    tdGroup.style.fontWeight = showModel ? '500' : '600';
-                    tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
-                    tdGroup.style.borderRight = '1px solid var(--border-color)';
-                    tdGroup.classList.add('border-bottom-thick');
-                    tr.appendChild(tdGroup);
-                }
-                
-                // Model Cell (with rowspan if applicable)
-                if (showModel && item.modelSpan > 0) {
-                    const tdModel = document.createElement('td');
-                    tdModel.textContent = item.model;
-                    tdModel.rowSpan = item.modelSpan;
-                    tdModel.style.fontWeight = '500';
-                    tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
-                    tdModel.style.borderRight = '1px solid var(--border-color)';
-                    
-                    const endIdx = idx + item.modelSpan - 1;
-                    const endItemNext = (endIdx === rowList.length - 1) ? null : rowList[endIdx + 1];
-                    const isModelEndGroupLast = (endIdx === rowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
-                    
-                    if (isModelEndGroupLast) {
-                        tdModel.classList.add('border-bottom-thick');
-                    } else {
-                        tdModel.classList.add('border-bottom-medium');
+                if (activeDimCount === 0) {
+                    const tdAll = document.createElement('td');
+                    tdAll.textContent = '전체 합계';
+                    tdAll.style.textAlign = 'center';
+                    tdAll.style.fontWeight = 'bold';
+                    tdAll.classList.add('border-bottom-thick');
+                    tr.appendChild(tdAll);
+                } else {
+                    // Division Cell (with rowspan if applicable)
+                    if (showDiv && item.divSpan > 0) {
+                        const tdDiv = document.createElement('td');
+                        tdDiv.textContent = item.division;
+                        tdDiv.rowSpan = item.divSpan;
+                        tdDiv.style.textAlign = 'center';
+                        tdDiv.style.fontWeight = 'bold';
+                        tdDiv.style.background = 'var(--surface-hover)';
+                        tdDiv.style.borderRight = '1px solid var(--border-color)';
+                        tdDiv.classList.add('border-bottom-thick');
+                        tr.appendChild(tdDiv);
                     }
-                    tr.appendChild(tdModel);
-                }
-                
-                // Site Cell
-                if (showSite) {
-                    const tdSite = document.createElement('td');
-                    tdSite.textContent = item.site;
-                    tdSite.style.textAlign = 'center';
-                    if (isGroupLast) {
-                        tdSite.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdSite.classList.add('border-bottom-medium');
+                    
+                    // Group Cell (with rowspan if applicable)
+                    if (showGroup && item.grpSpan > 0) {
+                        const tdGroup = document.createElement('td');
+                        tdGroup.textContent = item.group;
+                        tdGroup.rowSpan = item.grpSpan;
+                        tdGroup.style.fontWeight = showModel ? '500' : '600';
+                        tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
+                        tdGroup.style.borderRight = '1px solid var(--border-color)';
+                        tdGroup.classList.add('border-bottom-thick');
+                        tr.appendChild(tdGroup);
                     }
-                    tr.appendChild(tdSite);
+                    
+                    // Model Cell (with rowspan if applicable)
+                    if (showModel && item.modelSpan > 0) {
+                        const tdModel = document.createElement('td');
+                        tdModel.textContent = item.model;
+                        tdModel.rowSpan = item.modelSpan;
+                        tdModel.style.fontWeight = '500';
+                        tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
+                        tdModel.style.borderRight = '1px solid var(--border-color)';
+                        
+                        const endIdx = idx + item.modelSpan - 1;
+                        const endItemNext = (endIdx === rowList.length - 1) ? null : rowList[endIdx + 1];
+                        const isModelEndGroupLast = (endIdx === rowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
+                        
+                        if (isModelEndGroupLast) {
+                            tdModel.classList.add('border-bottom-thick');
+                        } else {
+                            tdModel.classList.add('border-bottom-medium');
+                        }
+                        tr.appendChild(tdModel);
+                    }
+                    
+                    // Site Cell
+                    if (showSite) {
+                        const tdSite = document.createElement('td');
+                        tdSite.textContent = item.site;
+                        tdSite.style.textAlign = 'center';
+                        if (isGroupLast) {
+                            tdSite.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdSite.classList.add('border-bottom-medium');
+                        }
+                        tr.appendChild(tdSite);
+                    }
                 }
                 
                 // Monthly Qty Cells
                 let rowSum = 0;
                 sortedMonths.forEach(month => {
-                    const tdMonthVal = document.createElement('td');
                     const qty = item.monthlyQty[month] || 0;
-                    tdMonthVal.textContent = qty > 0 ? qty.toLocaleString() : '-';
-                    tdMonthVal.style.textAlign = 'right';
-                    tdMonthVal.classList.add('month-cell');
-                    if (isGroupLast) {
-                        tdMonthVal.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdMonthVal.classList.add('border-bottom-medium');
-                    }
-                    if (qty > 0) {
-                        tdMonthVal.style.fontWeight = '500';
-                    } else {
-                        tdMonthVal.style.color = 'var(--text-secondary)';
-                        tdMonthVal.style.opacity = '0.5';
-                    }
-                    tr.appendChild(tdMonthVal);
                     rowSum += qty;
                     monthTotals[month] += qty;
+                    if (showMonth) {
+                        const tdMonthVal = document.createElement('td');
+                        tdMonthVal.textContent = qty > 0 ? qty.toLocaleString() : '-';
+                        tdMonthVal.style.textAlign = 'right';
+                        tdMonthVal.classList.add('month-cell');
+                        if (isGroupLast) {
+                            tdMonthVal.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdMonthVal.classList.add('border-bottom-medium');
+                        }
+                        if (qty > 0) {
+                            tdMonthVal.style.fontWeight = '500';
+                        } else {
+                            tdMonthVal.style.color = 'var(--text-secondary)';
+                            tdMonthVal.style.opacity = '0.5';
+                        }
+                        tr.appendChild(tdMonthVal);
+                    }
                 });
                 grandTotal += rowSum;
                 
@@ -4521,19 +4554,21 @@ DST: 22. 지티테크`;
 
                 const tdLabel = document.createElement('td');
                 tdLabel.textContent = '합계';
-                tdLabel.colSpan = 3 + (showModel ? 1 : 0) + (showSite ? 1 : 0);
+                tdLabel.colSpan = 1 + (activeDimCount || 1);
                 tdLabel.style.textAlign = 'center';
                 tdLabel.style.background = 'var(--surface-hover)';
                 trTotal.appendChild(tdLabel);
 
-                sortedMonths.forEach(month => {
-                    const tdM = document.createElement('td');
-                    const mVal = monthTotals[month] || 0;
-                    tdM.textContent = mVal > 0 ? mVal.toLocaleString() : '-';
-                    tdM.style.textAlign = 'right';
-                    tdM.classList.add('month-cell');
-                    trTotal.appendChild(tdM);
-                });
+                if (showMonth) {
+                    sortedMonths.forEach(month => {
+                        const tdM = document.createElement('td');
+                        const mVal = monthTotals[month] || 0;
+                        tdM.textContent = mVal > 0 ? mVal.toLocaleString() : '-';
+                        tdM.style.textAlign = 'right';
+                        tdM.classList.add('month-cell');
+                        trTotal.appendChild(tdM);
+                    });
+                }
 
                 const tdGrandTotal = document.createElement('td');
                 tdGrandTotal.textContent = grandTotal > 0 ? grandTotal.toLocaleString() : '-';
@@ -4727,7 +4762,8 @@ DST: 22. 지티테크`;
             dualContainer.style.display = 'none';
 
             updateSummaryMergeButtonUI();
-            const { showModel, showSite, useCustomGroups } = getSummaryViewOptions();
+            const { showDiv, showGroup, showModel, showSite, showMonth, useCustomGroups } = getSummaryViewOptions();
+            const activeDimCount = (showDiv ? 1 : 0) + (showGroup ? 1 : 0) + (showModel ? 1 : 0) + (showSite ? 1 : 0);
             
             const summaryHead = document.getElementById('summary-head');
             const summaryBody = document.getElementById('summary-body');
@@ -4780,53 +4816,68 @@ DST: 22. 지티테크`;
             thSort.style.width = '60px';
             tr1.appendChild(thSort);
             
-            const thDiv = document.createElement('th');
-            thDiv.textContent = '구분';
-            thDiv.rowSpan = 2;
-            thDiv.style.textAlign = 'center';
-            thDiv.style.width = '7%';
-            tr1.appendChild(thDiv);
-
-            const thGroup = document.createElement('th');
-            thGroup.textContent = '기종분류';
-            thGroup.rowSpan = 2;
-            thGroup.style.textAlign = 'center';
-            thGroup.style.width = showModel ? '13%' : '20%';
-            tr1.appendChild(thGroup);
-
-            if (showModel) {
-                const thModel = document.createElement('th');
-                thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
-                thModel.rowSpan = 2;
-                thModel.style.textAlign = 'center';
-                thModel.style.width = '12%';
-                tr1.appendChild(thModel);
-            }
-
-            if (showSite) {
-                const thSite = document.createElement('th');
-                thSite.textContent = '생산처';
-                thSite.rowSpan = 2;
-                thSite.style.textAlign = 'center';
-                thSite.style.width = '9%';
-                tr1.appendChild(thSite);
-            }
-
-            targetMonths.forEach(month => {
-                const thMonth = document.createElement('th');
-                thMonth.textContent = month;
-                thMonth.colSpan = 3;
-                thMonth.style.textAlign = 'center';
-                thMonth.classList.add('month-start-cell');
-                
-                const hasA = monthsA.has(month);
-                const hasB = monthsB.has(month);
-                if (!hasA || !hasB) {
-                    thMonth.style.background = 'rgba(255, 255, 255, 0.03)';
-                    thMonth.style.color = 'var(--text-secondary)';
+            if (activeDimCount === 0) {
+                const thAll = document.createElement('th');
+                thAll.textContent = '구분';
+                thAll.rowSpan = 2;
+                thAll.style.textAlign = 'center';
+                thAll.style.width = '18%';
+                tr1.appendChild(thAll);
+            } else {
+                if (showDiv) {
+                    const thDiv = document.createElement('th');
+                    thDiv.textContent = '구분';
+                    thDiv.rowSpan = 2;
+                    thDiv.style.textAlign = 'center';
+                    thDiv.style.width = '7%';
+                    tr1.appendChild(thDiv);
                 }
-                tr1.appendChild(thMonth);
-            });
+
+                if (showGroup) {
+                    const thGroup = document.createElement('th');
+                    thGroup.textContent = '기종분류';
+                    thGroup.rowSpan = 2;
+                    thGroup.style.textAlign = 'center';
+                    thGroup.style.width = showModel ? '13%' : '20%';
+                    tr1.appendChild(thGroup);
+                }
+
+                if (showModel) {
+                    const thModel = document.createElement('th');
+                    thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
+                    thModel.rowSpan = 2;
+                    thModel.style.textAlign = 'center';
+                    thModel.style.width = '12%';
+                    tr1.appendChild(thModel);
+                }
+
+                if (showSite) {
+                    const thSite = document.createElement('th');
+                    thSite.textContent = '생산처';
+                    thSite.rowSpan = 2;
+                    thSite.style.textAlign = 'center';
+                    thSite.style.width = '9%';
+                    tr1.appendChild(thSite);
+                }
+            }
+
+            if (showMonth) {
+                targetMonths.forEach(month => {
+                    const thMonth = document.createElement('th');
+                    thMonth.textContent = month;
+                    thMonth.colSpan = 3;
+                    thMonth.style.textAlign = 'center';
+                    thMonth.classList.add('month-start-cell');
+                    
+                    const hasA = monthsA.has(month);
+                    const hasB = monthsB.has(month);
+                    if (!hasA || !hasB) {
+                        thMonth.style.background = 'rgba(255, 255, 255, 0.03)';
+                        thMonth.style.color = 'var(--text-secondary)';
+                    }
+                    tr1.appendChild(thMonth);
+                });
+            }
 
             const thTotal = document.createElement('th');
             thTotal.textContent = '합계';
@@ -4845,42 +4896,44 @@ DST: 22. 지티테크`;
             summaryHead.appendChild(tr1);
 
             const tr2 = document.createElement('tr');
-            targetMonths.forEach(month => {
-                const hasA = monthsA.has(month);
-                const hasB = monthsB.has(month);
+            if (showMonth) {
+                targetMonths.forEach(month => {
+                    const hasA = monthsA.has(month);
+                    const hasB = monthsB.has(month);
 
-                const thA = document.createElement('th');
-                thA.textContent = 'A';
-                thA.style.textAlign = 'right';
-                thA.style.fontSize = '0.75rem';
-                thA.classList.add('month-start-cell');
-                if (!hasA) {
-                    thA.style.background = 'rgba(0, 0, 0, 0.2)';
-                    thA.style.opacity = '0.4';
-                }
-                tr2.appendChild(thA);
+                    const thA = document.createElement('th');
+                    thA.textContent = 'A';
+                    thA.style.textAlign = 'right';
+                    thA.style.fontSize = '0.75rem';
+                    thA.classList.add('month-start-cell');
+                    if (!hasA) {
+                        thA.style.background = 'rgba(0, 0, 0, 0.2)';
+                        thA.style.opacity = '0.4';
+                    }
+                    tr2.appendChild(thA);
 
-                const thB = document.createElement('th');
-                thB.textContent = 'B';
-                thB.style.textAlign = 'right';
-                thB.style.fontSize = '0.75rem';
-                if (!hasB) {
-                    thB.style.background = 'rgba(0, 0, 0, 0.2)';
-                    thB.style.opacity = '0.4';
-                }
-                tr2.appendChild(thB);
+                    const thB = document.createElement('th');
+                    thB.textContent = 'B';
+                    thB.style.textAlign = 'right';
+                    thB.style.fontSize = '0.75rem';
+                    if (!hasB) {
+                        thB.style.background = 'rgba(0, 0, 0, 0.2)';
+                        thB.style.opacity = '0.4';
+                    }
+                    tr2.appendChild(thB);
 
-                const thDiff = document.createElement('th');
-                thDiff.textContent = 'Δ';
-                thDiff.style.textAlign = 'right';
-                thDiff.style.fontSize = '0.75rem';
-                thDiff.style.background = 'rgba(255, 255, 255, 0.03)';
-                if (!hasA || !hasB) {
-                    thDiff.style.background = 'rgba(0, 0, 0, 0.2)';
-                    thDiff.style.opacity = '0.4';
-                }
-                tr2.appendChild(thDiff);
-            });
+                    const thDiff = document.createElement('th');
+                    thDiff.textContent = 'Δ';
+                    thDiff.style.textAlign = 'right';
+                    thDiff.style.fontSize = '0.75rem';
+                    thDiff.style.background = 'rgba(255, 255, 255, 0.03)';
+                    if (!hasA || !hasB) {
+                        thDiff.style.background = 'rgba(0, 0, 0, 0.2)';
+                        thDiff.style.opacity = '0.4';
+                    }
+                    tr2.appendChild(thDiff);
+                });
+            }
 
             const thTotA = document.createElement('th');
             thTotA.textContent = 'A합';
@@ -4926,8 +4979,8 @@ DST: 22. 지티테크`;
 
             const pivotData = {};
             const addData = (row, fileLabel) => {
-                const division = getDivision(row.Group) || '기타';
-                const group = row.Group || '-';
+                const division = showDiv ? (getDivision(row.Group) || '기타') : '전체';
+                const group = showGroup ? (row.Group || '-') : '전체';
                 const rawModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
                 const model = showModel ? resolveSummaryModelName(rawModel, useCustomGroups) : '전체';
                 const site = showSite ? (row.Site || '-') : '전체';
@@ -5203,109 +5256,118 @@ DST: 22. 지티테크`;
                 }
                 tr.appendChild(tdSort);
 
-                if (item.divSpan > 0) {
-                    const tdDiv = document.createElement('td');
-                    tdDiv.textContent = item.division;
-                    tdDiv.rowSpan = item.divSpan;
-                    tdDiv.style.textAlign = 'center';
-                    tdDiv.style.fontWeight = 'bold';
-                    tdDiv.style.background = 'var(--surface-hover)';
-                    tdDiv.style.borderRight = '1px solid var(--border-color)';
-                    tdDiv.classList.add('border-bottom-thick');
-                    tr.appendChild(tdDiv);
-                }
-
-                if (item.grpSpan > 0) {
-                    const tdGroup = document.createElement('td');
-                    tdGroup.textContent = item.group;
-                    tdGroup.rowSpan = item.grpSpan;
-                    tdGroup.style.fontWeight = showModel ? '500' : '600';
-                    tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
-                    tdGroup.style.borderRight = '1px solid var(--border-color)';
-                    tdGroup.classList.add('border-bottom-thick');
-
-                    if (!showModel && groupChanges[item.group]) {
-                        const dot = document.createElement('span');
-                        dot.innerHTML = '● ';
-                        dot.style.color = '#f59e0b';
-                        dot.style.marginRight = '6px';
-
-                        const serialsSet = groupChangedSerials[item.group];
-                        const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
-                        const titleText = serialsList
-                            ? `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
-                            : `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기`;
-
-                        dot.title = titleText;
-                        tdGroup.prepend(dot);
-                        tdGroup.style.cursor = 'pointer';
-                        tdGroup.title = titleText;
-                        tdGroup.addEventListener('click', () => {
-                            showCompareDetail(item.group, null, 'group');
-                        });
-                        tdGroup.addEventListener('dblclick', () => {
-                            showCompareDetail(item.group, null, 'group');
-                        });
+                if (activeDimCount === 0) {
+                    const tdAll = document.createElement('td');
+                    tdAll.textContent = '전체 합계';
+                    tdAll.style.textAlign = 'center';
+                    tdAll.style.fontWeight = 'bold';
+                    tdAll.classList.add('border-bottom-thick');
+                    tr.appendChild(tdAll);
+                } else {
+                    if (showDiv && item.divSpan > 0) {
+                        const tdDiv = document.createElement('td');
+                        tdDiv.textContent = item.division;
+                        tdDiv.rowSpan = item.divSpan;
+                        tdDiv.style.textAlign = 'center';
+                        tdDiv.style.fontWeight = 'bold';
+                        tdDiv.style.background = 'var(--surface-hover)';
+                        tdDiv.style.borderRight = '1px solid var(--border-color)';
+                        tdDiv.classList.add('border-bottom-thick');
+                        tr.appendChild(tdDiv);
                     }
 
-                    tr.appendChild(tdGroup);
-                }
+                    if (showGroup && item.grpSpan > 0) {
+                        const tdGroup = document.createElement('td');
+                        tdGroup.textContent = item.group;
+                        tdGroup.rowSpan = item.grpSpan;
+                        tdGroup.style.fontWeight = showModel ? '500' : '600';
+                        tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
+                        tdGroup.style.borderRight = '1px solid var(--border-color)';
+                        tdGroup.classList.add('border-bottom-thick');
 
-                if (showModel && item.modelSpan > 0) {
-                    const tdModel = document.createElement('td');
-                    tdModel.textContent = item.model;
-                    tdModel.rowSpan = item.modelSpan;
-                    tdModel.style.fontWeight = '500';
-                    tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
-                    tdModel.style.borderRight = '1px solid var(--border-color)';
-                    
-                    const endIdx = idx + item.modelSpan - 1;
-                    const endItemNext = (endIdx === displayRowList.length - 1) ? null : displayRowList[endIdx + 1];
-                    const isModelEndGroupLast = (endIdx === displayRowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
-                    
-                    if (isModelEndGroupLast) {
-                        tdModel.classList.add('border-bottom-thick');
-                    } else {
-                        tdModel.classList.add('border-bottom-medium');
+                        if (!showModel && groupChanges[item.group]) {
+                            const dot = document.createElement('span');
+                            dot.innerHTML = '● ';
+                            dot.style.color = '#f59e0b';
+                            dot.style.marginRight = '6px';
+
+                            const serialsSet = groupChangedSerials[item.group];
+                            const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
+                            const titleText = serialsList
+                                ? `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
+                                : `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기`;
+
+                            dot.title = titleText;
+                            tdGroup.prepend(dot);
+                            tdGroup.style.cursor = 'pointer';
+                            tdGroup.title = titleText;
+                            tdGroup.addEventListener('click', () => {
+                                showCompareDetail(item.group, null, 'group');
+                            });
+                            tdGroup.addEventListener('dblclick', () => {
+                                showCompareDetail(item.group, null, 'group');
+                            });
+                        }
+
+                        tr.appendChild(tdGroup);
                     }
-                    
-                    if (modelChanges[item.model]) {
-                        const dot = document.createElement('span');
-                        dot.innerHTML = '● ';
-                        dot.style.color = '#f59e0b';
-                        dot.style.marginRight = '6px';
+
+                    if (showModel && item.modelSpan > 0) {
+                        const tdModel = document.createElement('td');
+                        tdModel.textContent = item.model;
+                        tdModel.rowSpan = item.modelSpan;
+                        tdModel.style.fontWeight = '500';
+                        tdModel.style.background = 'rgba(255, 255, 255, 0.01)';
+                        tdModel.style.borderRight = '1px solid var(--border-color)';
                         
-                        const serialsSet = modelChangedSerials[item.model];
-                        const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
-                        const titleText = serialsList 
-                            ? `클릭/더블클릭하여 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
-                            : '클릭/더블클릭하여 전체 변동 상세 내역 보기';
+                        const endIdx = idx + item.modelSpan - 1;
+                        const endItemNext = (endIdx === displayRowList.length - 1) ? null : displayRowList[endIdx + 1];
+                        const isModelEndGroupLast = (endIdx === displayRowList.length - 1) || (endItemNext && endItemNext.grpSpan > 0);
                         
-                        dot.title = titleText;
-                        tdModel.prepend(dot);
+                        if (isModelEndGroupLast) {
+                            tdModel.classList.add('border-bottom-thick');
+                        } else {
+                            tdModel.classList.add('border-bottom-medium');
+                        }
                         
-                        tdModel.style.cursor = 'pointer';
-                        tdModel.title = titleText;
-                        tdModel.addEventListener('click', () => {
-                            showCompareDetail(item.model, null, 'model');
-                        });
-                        tdModel.addEventListener('dblclick', () => {
-                            showCompareDetail(item.model, null, 'model');
-                        });
+                        if (modelChanges[item.model]) {
+                            const dot = document.createElement('span');
+                            dot.innerHTML = '● ';
+                            dot.style.color = '#f59e0b';
+                            dot.style.marginRight = '6px';
+                            
+                            const serialsSet = modelChangedSerials[item.model];
+                            const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
+                            const titleText = serialsList 
+                                ? `클릭/더블클릭하여 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
+                                : '클릭/더블클릭하여 전체 변동 상세 내역 보기';
+                            
+                            dot.title = titleText;
+                            tdModel.prepend(dot);
+                            
+                            tdModel.style.cursor = 'pointer';
+                            tdModel.title = titleText;
+                            tdModel.addEventListener('click', () => {
+                                showCompareDetail(item.model, null, 'model');
+                            });
+                            tdModel.addEventListener('dblclick', () => {
+                                showCompareDetail(item.model, null, 'model');
+                            });
+                        }
+                        tr.appendChild(tdModel);
                     }
-                    tr.appendChild(tdModel);
-                }
 
-                if (showSite) {
-                    const tdSite = document.createElement('td');
-                    tdSite.textContent = item.site;
-                    tdSite.style.textAlign = 'center';
-                    if (isGroupLast) {
-                        tdSite.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdSite.classList.add('border-bottom-medium');
+                    if (showSite) {
+                        const tdSite = document.createElement('td');
+                        tdSite.textContent = item.site;
+                        tdSite.style.textAlign = 'center';
+                        if (isGroupLast) {
+                            tdSite.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdSite.classList.add('border-bottom-medium');
+                        }
+                        tr.appendChild(tdSite);
                     }
-                    tr.appendChild(tdSite);
                 }
 
                 let rowSumA = 0;
@@ -5324,95 +5386,97 @@ DST: 22. 지티테크`;
                     rowSumA += qtyA;
                     rowSumB += qtyB;
 
-                    const tdA = document.createElement('td');
-                    tdA.style.textAlign = 'right';
-                    tdA.classList.add('month-start-cell');
-                    tdA.classList.add('month-cell');
-                    if (isGroupLast) {
-                        tdA.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdA.classList.add('border-bottom-medium');
-                    }
-                    if (!hasA) {
-                        tdA.textContent = '-';
-                        tdA.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdA.style.opacity = '0.3';
-                        tdA.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
-                    } else {
-                        tdA.textContent = qtyA > 0 ? qtyA.toLocaleString() : '-';
-                        if (qtyA === 0) tdA.style.opacity = '0.5';
-                    }
-                    tr.appendChild(tdA);
-
-                    const tdB = document.createElement('td');
-                    tdB.style.textAlign = 'right';
-                    tdB.classList.add('month-cell');
-                    if (isGroupLast) {
-                        tdB.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdB.classList.add('border-bottom-medium');
-                    }
-                    if (!hasB) {
-                        tdB.textContent = '-';
-                        tdB.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdB.style.opacity = '0.3';
-                        tdB.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
-                    } else {
-                        tdB.textContent = qtyB > 0 ? qtyB.toLocaleString() : '-';
-                        if (qtyB === 0) tdB.style.opacity = '0.5';
-                    }
-                    tr.appendChild(tdB);
-
-                    const tdDiff = document.createElement('td');
-                    tdDiff.style.textAlign = 'right';
-                    tdDiff.style.fontWeight = 'bold';
-                    tdDiff.classList.add('month-cell');
-                    if (isGroupLast) {
-                        tdDiff.classList.add('border-bottom-thick');
-                    } else if (isModelLast) {
-                        tdDiff.classList.add('border-bottom-medium');
-                    }
-                    if (!hasA || !hasB) {
-                        tdDiff.textContent = '-';
-                        tdDiff.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdDiff.style.opacity = '0.3';
-                        tdDiff.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
-                    } else {
-                        if (diff > 0) {
-                            tdDiff.textContent = `+${diff.toLocaleString()}`;
-                            tdDiff.style.color = '#10b981';
-                            tdDiff.style.background = 'rgba(16, 185, 129, 0.15)';
-                            tdDiff.classList.add('clickable-diff-cell');
-                            tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (+${diff.toLocaleString()}대)`;
-                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                        } else if (diff < 0) {
-                            tdDiff.textContent = diff.toLocaleString();
-                            tdDiff.style.color = '#ef4444';
-                            tdDiff.style.background = 'rgba(239, 68, 68, 0.12)';
-                            tdDiff.classList.add('clickable-diff-cell');
-                            tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (${diff.toLocaleString()}대)`;
-                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                        } else {
-                            tdDiff.textContent = '-';
-                            tdDiff.style.color = 'var(--text-secondary)';
-                            tdDiff.style.opacity = '0.3';
-                            tdDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                    if (showMonth) {
+                        const tdA = document.createElement('td');
+                        tdA.style.textAlign = 'right';
+                        tdA.classList.add('month-start-cell');
+                        tdA.classList.add('month-cell');
+                        if (isGroupLast) {
+                            tdA.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdA.classList.add('border-bottom-medium');
                         }
-                    }
+                        if (!hasA) {
+                            tdA.textContent = '-';
+                            tdA.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdA.style.opacity = '0.3';
+                            tdA.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                        } else {
+                            tdA.textContent = qtyA > 0 ? qtyA.toLocaleString() : '-';
+                            if (qtyA === 0) tdA.style.opacity = '0.5';
+                        }
+                        tr.appendChild(tdA);
 
-                    if (diff !== 0) {
-                        tdA.classList.add('clickable-diff-cell');
-                        tdA.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
-                        tdA.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                        
-                        tdB.classList.add('clickable-diff-cell');
-                        tdB.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
-                        tdB.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
-                    }
+                        const tdB = document.createElement('td');
+                        tdB.style.textAlign = 'right';
+                        tdB.classList.add('month-cell');
+                        if (isGroupLast) {
+                            tdB.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdB.classList.add('border-bottom-medium');
+                        }
+                        if (!hasB) {
+                            tdB.textContent = '-';
+                            tdB.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdB.style.opacity = '0.3';
+                            tdB.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                        } else {
+                            tdB.textContent = qtyB > 0 ? qtyB.toLocaleString() : '-';
+                            if (qtyB === 0) tdB.style.opacity = '0.5';
+                        }
+                        tr.appendChild(tdB);
 
-                    tr.appendChild(tdDiff);
+                        const tdDiff = document.createElement('td');
+                        tdDiff.style.textAlign = 'right';
+                        tdDiff.style.fontWeight = 'bold';
+                        tdDiff.classList.add('month-cell');
+                        if (isGroupLast) {
+                            tdDiff.classList.add('border-bottom-thick');
+                        } else if (isModelLast) {
+                            tdDiff.classList.add('border-bottom-medium');
+                        }
+                        if (!hasA || !hasB) {
+                            tdDiff.textContent = '-';
+                            tdDiff.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdDiff.style.opacity = '0.3';
+                            tdDiff.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 4px, transparent 4px, transparent 8px)';
+                        } else {
+                            if (diff > 0) {
+                                tdDiff.textContent = `+${diff.toLocaleString()}`;
+                                tdDiff.style.color = '#10b981';
+                                tdDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                                tdDiff.classList.add('clickable-diff-cell');
+                                tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (+${diff.toLocaleString()}대)`;
+                                tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                                tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                            } else if (diff < 0) {
+                                tdDiff.textContent = diff.toLocaleString();
+                                tdDiff.style.color = '#ef4444';
+                                tdDiff.style.background = 'rgba(239, 68, 68, 0.12)';
+                                tdDiff.classList.add('clickable-diff-cell');
+                                tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (${diff.toLocaleString()}대)`;
+                                tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                                tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                            } else {
+                                tdDiff.textContent = '-';
+                                tdDiff.style.color = 'var(--text-secondary)';
+                                tdDiff.style.opacity = '0.3';
+                                tdDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                            }
+                        }
+
+                        if (diff !== 0) {
+                            tdA.classList.add('clickable-diff-cell');
+                            tdA.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
+                            tdA.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                            
+                            tdB.classList.add('clickable-diff-cell');
+                            tdB.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
+                            tdB.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                        }
+
+                        tr.appendChild(tdDiff);
+                    }
                 });
 
                 const tdTotValA = document.createElement('td');
@@ -5538,7 +5602,7 @@ DST: 22. 지티테크`;
                 
                 const tdLabel = document.createElement('td');
                 tdLabel.textContent = '합계';
-                tdLabel.colSpan = 3 + (showModel ? 1 : 0) + (showSite ? 1 : 0);
+                tdLabel.colSpan = 1 + (activeDimCount || 1);
                 tdLabel.style.textAlign = 'center';
                 tdLabel.style.background = 'var(--surface-hover)';
                 trTotal.appendChild(tdLabel);
@@ -5561,58 +5625,60 @@ DST: 22. 지티테크`;
                     grandSumA += monthlyTotalA;
                     grandSumB += monthlyTotalB;
 
-                    const diff = monthlyTotalB - monthlyTotalA;
+                    if (showMonth) {
+                        const diff = monthlyTotalB - monthlyTotalA;
 
-                    const tdTotalA = document.createElement('td');
-                    tdTotalA.style.textAlign = 'right';
-                    tdTotalA.classList.add('month-start-cell');
-                    tdTotalA.classList.add('month-cell');
-                    if (!hasA) {
-                        tdTotalA.textContent = '-';
-                        tdTotalA.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdTotalA.style.opacity = '0.3';
-                    } else {
-                        tdTotalA.textContent = monthlyTotalA > 0 ? monthlyTotalA.toLocaleString() : '-';
-                    }
-                    trTotal.appendChild(tdTotalA);
-
-                    const tdTotalB = document.createElement('td');
-                    tdTotalB.style.textAlign = 'right';
-                    tdTotalB.classList.add('month-cell');
-                    if (!hasB) {
-                        tdTotalB.textContent = '-';
-                        tdTotalB.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdTotalB.style.opacity = '0.3';
-                    } else {
-                        tdTotalB.textContent = monthlyTotalB > 0 ? monthlyTotalB.toLocaleString() : '-';
-                    }
-                    trTotal.appendChild(tdTotalB);
-
-                    const tdTotalDiff = document.createElement('td');
-                    tdTotalDiff.style.textAlign = 'right';
-                    tdTotalDiff.style.fontWeight = 'bold';
-                    tdTotalDiff.classList.add('month-cell');
-                    if (!hasA || !hasB) {
-                        tdTotalDiff.textContent = '-';
-                        tdTotalDiff.style.background = 'rgba(0, 0, 0, 0.1)';
-                        tdTotalDiff.style.opacity = '0.3';
-                    } else {
-                        if (diff > 0) {
-                            tdTotalDiff.textContent = `+${diff.toLocaleString()}`;
-                            tdTotalDiff.style.color = '#10b981';
-                            tdTotalDiff.style.background = 'rgba(16, 185, 129, 0.15)';
-                        } else if (diff < 0) {
-                            tdTotalDiff.textContent = diff.toLocaleString();
-                            tdTotalDiff.style.color = '#ef4444';
-                            tdTotalDiff.style.background = 'rgba(239, 68, 68, 0.12)';
+                        const tdTotalA = document.createElement('td');
+                        tdTotalA.style.textAlign = 'right';
+                        tdTotalA.classList.add('month-start-cell');
+                        tdTotalA.classList.add('month-cell');
+                        if (!hasA) {
+                            tdTotalA.textContent = '-';
+                            tdTotalA.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdTotalA.style.opacity = '0.3';
                         } else {
-                            tdTotalDiff.textContent = '-';
-                            tdTotalDiff.style.color = 'var(--text-secondary)';
-                            tdTotalDiff.style.opacity = '0.3';
-                            tdTotalDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                            tdTotalA.textContent = monthlyTotalA > 0 ? monthlyTotalA.toLocaleString() : '-';
                         }
+                        trTotal.appendChild(tdTotalA);
+
+                        const tdTotalB = document.createElement('td');
+                        tdTotalB.style.textAlign = 'right';
+                        tdTotalB.classList.add('month-cell');
+                        if (!hasB) {
+                            tdTotalB.textContent = '-';
+                            tdTotalB.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdTotalB.style.opacity = '0.3';
+                        } else {
+                            tdTotalB.textContent = monthlyTotalB > 0 ? monthlyTotalB.toLocaleString() : '-';
+                        }
+                        trTotal.appendChild(tdTotalB);
+
+                        const tdTotalDiff = document.createElement('td');
+                        tdTotalDiff.style.textAlign = 'right';
+                        tdTotalDiff.style.fontWeight = 'bold';
+                        tdTotalDiff.classList.add('month-cell');
+                        if (!hasA || !hasB) {
+                            tdTotalDiff.textContent = '-';
+                            tdTotalDiff.style.background = 'rgba(0, 0, 0, 0.1)';
+                            tdTotalDiff.style.opacity = '0.3';
+                        } else {
+                            if (diff > 0) {
+                                tdTotalDiff.textContent = `+${diff.toLocaleString()}`;
+                                tdTotalDiff.style.color = '#10b981';
+                                tdTotalDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                            } else if (diff < 0) {
+                                tdTotalDiff.textContent = diff.toLocaleString();
+                                tdTotalDiff.style.color = '#ef4444';
+                                tdTotalDiff.style.background = 'rgba(239, 68, 68, 0.12)';
+                            } else {
+                                tdTotalDiff.textContent = '-';
+                                tdTotalDiff.style.color = 'var(--text-secondary)';
+                                tdTotalDiff.style.opacity = '0.3';
+                                tdTotalDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                            }
+                        }
+                        trTotal.appendChild(tdTotalDiff);
                     }
-                    trTotal.appendChild(tdTotalDiff);
                 });
 
                 const tdGrandA = document.createElement('td');
@@ -7599,25 +7665,31 @@ DST: 22. 지티테크`;
             try {
                 const savedSummaryOpts = JSON.parse(localStorage.getItem('mps_summary_view_opts') || 'null');
                 if (savedSummaryOpts) {
+                    const showDivEl = document.getElementById('summary-show-div');
+                    const showGroupEl = document.getElementById('summary-show-group');
                     const showModelEl = document.getElementById('summary-show-model');
                     const showSiteEl = document.getElementById('summary-show-site');
-                    const useCustomGroupsEl = document.getElementById('summary-use-custom-groups');
+                    const showMonthEl = document.getElementById('summary-show-month');
+                    if (showDivEl && typeof savedSummaryOpts.showDiv === 'boolean') showDivEl.checked = savedSummaryOpts.showDiv;
+                    if (showGroupEl && typeof savedSummaryOpts.showGroup === 'boolean') showGroupEl.checked = savedSummaryOpts.showGroup;
                     if (showModelEl && typeof savedSummaryOpts.showModel === 'boolean') showModelEl.checked = savedSummaryOpts.showModel;
                     if (showSiteEl && typeof savedSummaryOpts.showSite === 'boolean') showSiteEl.checked = savedSummaryOpts.showSite;
-                    if (useCustomGroupsEl && typeof savedSummaryOpts.useCustomGroups === 'boolean') useCustomGroupsEl.checked = savedSummaryOpts.useCustomGroups;
+                    if (showMonthEl && typeof savedSummaryOpts.showMonth === 'boolean') showMonthEl.checked = savedSummaryOpts.showMonth;
                 }
             } catch (e) {}
             updateSummaryMergeButtonUI();
             renderPivotGroupList();
             
             // Restore active tab from localStorage
-            const savedTab = localStorage.getItem('mps_active_tab') || 'main';
+            let savedTab = localStorage.getItem('mps_active_tab') || 'main';
+            if (savedTab === 'pivot') {
+                savedTab = 'summary';
+                localStorage.setItem('mps_active_tab', 'summary');
+            }
             currentTab = savedTab;
             
             if (tabMain) tabMain.classList.toggle('active', currentTab === 'main');
             if (tabSummary) tabSummary.classList.toggle('active', currentTab === 'summary');
-            const tabPivot = document.getElementById('tab-pivot');
-            if (tabPivot) tabPivot.classList.toggle('active', currentTab === 'pivot');
             
             // 초기 인증 상태 및 서버 공유 사이트 마스터를 먼저 확인한 뒤 파일 추출 진행
             checkAuthStatus().catch(() => {})
