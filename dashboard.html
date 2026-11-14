@@ -1397,6 +1397,35 @@
                     <div id="compare-stat-changed-models" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">0개 기종</div>
                 </div>
             </div>
+
+            <!-- Summary View / Grouping Controls -->
+            <div id="summary-view-controls" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1.2rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                        🧩 요약 보기 설정:
+                    </div>
+                    <button type="button" id="btn-summary-group-total" onclick="toggleSummaryModelMerge()" style="background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.45rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="기종을 모두 통합하여 기종분류별 전체 소요량을 한눈에 확인합니다.">
+                        📊 기종 통합 (기종분류 전체 소요량)
+                    </button>
+                    <div style="height: 18px; width: 1px; background: var(--border-color);"></div>
+                    <div style="display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-model" checked onchange="onSummaryViewOptionChange()"> 기종 (Model) 표시
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="summary-show-site" checked onchange="onSummaryViewOptionChange()"> 생산처 (Site) 표시
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; user-select: none;" title="기종 그룹 관리에 등록된 커스텀 기종 묶음을 요약 대시보드에도 적용합니다.">
+                            <input type="checkbox" id="summary-use-custom-groups" checked onchange="onSummaryViewOptionChange()"> 커스텀 기종 그룹 적용
+                        </label>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">📦 기종 그룹 관리:</span>
+                    <div id="summary-group-list" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;"></div>
+                    <button type="button" onclick="openCreateGroupModal()" style="background: var(--accent-color); color: white; border: none; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.78rem; cursor: pointer; font-weight: 600;">+ 그룹 추가</button>
+                </div>
+            </div>
             
             <div class="table-container" id="summary-table-wrapper" style="display: block;">
                 <table id="summary-table" style="width: 100%; min-width: unset;">
@@ -4052,6 +4081,68 @@ DST: 22. 지티테크`;
             }
         }
 
+        function getSummaryViewOptions() {
+            const showModelEl = document.getElementById('summary-show-model');
+            const showSiteEl = document.getElementById('summary-show-site');
+            const useCustomGroupsEl = document.getElementById('summary-use-custom-groups');
+            const showModel = showModelEl ? showModelEl.checked : true;
+            const showSite = showSiteEl ? showSiteEl.checked : true;
+            const useCustomGroups = useCustomGroupsEl ? useCustomGroupsEl.checked : true;
+            return { showModel, showSite, useCustomGroups };
+        }
+
+        function updateSummaryMergeButtonUI() {
+            const btn = document.getElementById('btn-summary-group-total');
+            const showModelEl = document.getElementById('summary-show-model');
+            if (!btn || !showModelEl) return;
+            const isMerged = !showModelEl.checked;
+            if (isMerged) {
+                btn.style.background = 'rgba(16, 185, 129, 0.18)';
+                btn.style.color = '#10b981';
+                btn.style.borderColor = '#10b981';
+                btn.innerHTML = '✅ 기종 통합 적용 중 (기종분류 전체 보기)';
+            } else {
+                btn.style.background = 'var(--surface-hover)';
+                btn.style.color = 'var(--text-primary)';
+                btn.style.borderColor = 'var(--border-color)';
+                btn.innerHTML = '📊 기종 통합 (기종분류 전체 소요량)';
+            }
+        }
+
+        function toggleSummaryModelMerge() {
+            const showModelEl = document.getElementById('summary-show-model');
+            if (!showModelEl) return;
+            showModelEl.checked = !showModelEl.checked;
+            onSummaryViewOptionChange();
+        }
+
+        function onSummaryViewOptionChange() {
+            updateSummaryMergeButtonUI();
+            const opts = getSummaryViewOptions();
+            localStorage.setItem('mps_summary_view_opts', JSON.stringify(opts));
+            window.lastSummaryKeys = null;
+            window.currentSummaryRows = null;
+            window.lastComparisonKeys = null;
+            window.currentComparisonRows = null;
+            if (window.compareMode) {
+                applyComparisonFilters();
+            } else {
+                renderSummaryTable();
+            }
+        }
+
+        function resolveSummaryModelName(rawModel, useCustomGroups) {
+            if (!useCustomGroups || !window.pivotCustomGroups || window.pivotCustomGroups.length === 0) {
+                return rawModel;
+            }
+            for (const g of window.pivotCustomGroups) {
+                if (g.models && g.models.includes(rawModel)) {
+                    return g.name;
+                }
+            }
+            return rawModel;
+        }
+
         function renderSummaryTable() {
             const tableContainer = document.getElementById('table-container');
             const summaryContainer = document.getElementById('summary-container');
@@ -4061,6 +4152,9 @@ DST: 22. 지티테크`;
             summaryContainer.style.display = 'block';
             dualContainer.style.display = 'none';
             
+            updateSummaryMergeButtonUI();
+            const { showModel, showSite, useCustomGroups } = getSummaryViewOptions();
+
             const summaryHead = document.getElementById('summary-head');
             const summaryBody = document.getElementById('summary-body');
             
@@ -4075,6 +4169,7 @@ DST: 22. 지티테크`;
                 }
             });
             const sortedMonths = sortMonthsChronologically(Array.from(monthsSet));
+            const monthCount = sortedMonths.length;
             
             // 2. Build header row
             const trHead = document.createElement('tr');
@@ -4089,26 +4184,30 @@ DST: 22. 지티테크`;
             const thDiv = document.createElement('th');
             thDiv.textContent = '구분';
             thDiv.style.textAlign = 'center';
-            thDiv.style.width = '10%';
+            thDiv.style.width = '8%';
             trHead.appendChild(thDiv);
             
             const thGroup = document.createElement('th');
             thGroup.textContent = '기종분류';
             thGroup.style.textAlign = 'center';
-            thGroup.style.width = '18%';
+            thGroup.style.width = showModel ? '16%' : '24%';
             trHead.appendChild(thGroup);
             
-            const thModel = document.createElement('th');
-            thModel.textContent = '기종';
-            thModel.style.textAlign = 'center';
-            thModel.style.width = '17%';
-            trHead.appendChild(thModel);
+            if (showModel) {
+                const thModel = document.createElement('th');
+                thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
+                thModel.style.textAlign = 'center';
+                thModel.style.width = '16%';
+                trHead.appendChild(thModel);
+            }
             
-            const thSite = document.createElement('th');
-            thSite.textContent = '생산처';
-            thSite.style.textAlign = 'center';
-            thSite.style.width = '12%';
-            trHead.appendChild(thSite);
+            if (showSite) {
+                const thSite = document.createElement('th');
+                thSite.textContent = '생산처';
+                thSite.style.textAlign = 'center';
+                thSite.style.width = '11%';
+                trHead.appendChild(thSite);
+            }
             
             // Dynamic month headers
             sortedMonths.forEach(month => {
@@ -4122,9 +4221,16 @@ DST: 22. 지티테크`;
             const thTotal = document.createElement('th');
             thTotal.textContent = '합계';
             thTotal.style.textAlign = 'right';
-            thTotal.style.width = '8%';
+            thTotal.style.width = '7%';
             thTotal.classList.add('total-cell');
             trHead.appendChild(thTotal);
+
+            const thAvg = document.createElement('th');
+            thAvg.textContent = '월평균';
+            thAvg.style.textAlign = 'right';
+            thAvg.style.width = '7%';
+            thAvg.classList.add('total-cell');
+            trHead.appendChild(thAvg);
             
             summaryHead.appendChild(trHead);
             
@@ -4133,8 +4239,9 @@ DST: 22. 지티테크`;
             filteredData.forEach(row => {
                 const division = getDivision(row.Group) || '기타';
                 const group = row.Group || '-';
-                const model = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
-                const site = row.Site || '-';
+                const rawModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
+                const model = showModel ? resolveSummaryModelName(rawModel, useCustomGroups) : '전체';
+                const site = showSite ? (row.Site || '-') : '전체';
                 const month = row.Month || '-';
                 const qty = parseInt(row.Qty) || 0;
                 
@@ -4234,6 +4341,10 @@ DST: 22. 지티테크`;
             }
             
             // 6. Render rows
+            const monthTotals = {};
+            sortedMonths.forEach(m => { monthTotals[m] = 0; });
+            let grandTotal = 0;
+
             const summaryFrag = document.createDocumentFragment();
             rowList.forEach((item, idx) => {
                 const tr = document.createElement('tr');
@@ -4300,7 +4411,7 @@ DST: 22. 지티테크`;
                     const tdGroup = document.createElement('td');
                     tdGroup.textContent = item.group;
                     tdGroup.rowSpan = item.grpSpan;
-                    tdGroup.style.fontWeight = '500';
+                    tdGroup.style.fontWeight = showModel ? '500' : '600';
                     tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
                     tdGroup.style.borderRight = '1px solid var(--border-color)';
                     tdGroup.classList.add('border-bottom-thick');
@@ -4308,7 +4419,7 @@ DST: 22. 지티테크`;
                 }
                 
                 // Model Cell (with rowspan if applicable)
-                if (item.modelSpan > 0) {
+                if (showModel && item.modelSpan > 0) {
                     const tdModel = document.createElement('td');
                     tdModel.textContent = item.model;
                     tdModel.rowSpan = item.modelSpan;
@@ -4329,15 +4440,17 @@ DST: 22. 지티테크`;
                 }
                 
                 // Site Cell
-                const tdSite = document.createElement('td');
-                tdSite.textContent = item.site;
-                tdSite.style.textAlign = 'center';
-                if (isGroupLast) {
-                    tdSite.classList.add('border-bottom-thick');
-                } else if (isModelLast) {
-                    tdSite.classList.add('border-bottom-medium');
+                if (showSite) {
+                    const tdSite = document.createElement('td');
+                    tdSite.textContent = item.site;
+                    tdSite.style.textAlign = 'center';
+                    if (isGroupLast) {
+                        tdSite.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdSite.classList.add('border-bottom-medium');
+                    }
+                    tr.appendChild(tdSite);
                 }
-                tr.appendChild(tdSite);
                 
                 // Monthly Qty Cells
                 let rowSum = 0;
@@ -4360,7 +4473,9 @@ DST: 22. 지티테크`;
                     }
                     tr.appendChild(tdMonthVal);
                     rowSum += qty;
+                    monthTotals[month] += qty;
                 });
+                grandTotal += rowSum;
                 
                 // Row Total Cell
                 const tdTotalVal = document.createElement('td');
@@ -4376,9 +4491,68 @@ DST: 22. 지티테크`;
                     tdTotalVal.classList.add('border-bottom-medium');
                 }
                 tr.appendChild(tdTotalVal);
+
+                // Row Monthly Average Cell (소수점 첫째자리)
+                const tdAvgVal = document.createElement('td');
+                const rowAvg = monthCount > 0 ? (rowSum / monthCount) : 0;
+                tdAvgVal.textContent = (rowSum > 0 && monthCount > 0) ? rowAvg.toFixed(1) : '-';
+                tdAvgVal.style.textAlign = 'right';
+                tdAvgVal.style.fontWeight = 'bold';
+                tdAvgVal.style.color = 'var(--accent-color)';
+                tdAvgVal.style.background = 'rgba(59, 130, 246, 0.05)';
+                tdAvgVal.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdAvgVal.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdAvgVal.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdAvgVal);
                 
                 summaryFrag.appendChild(tr);
             });
+
+            // 7. Bottom Grand Total Row
+            if (rowList.length > 0) {
+                const trTotal = document.createElement('tr');
+                trTotal.style.fontWeight = 'bold';
+                trTotal.style.background = 'rgba(59, 130, 246, 0.08)';
+                trTotal.style.borderTop = '2px double var(--border-color)';
+                trTotal.style.borderBottom = '2px double var(--border-color)';
+
+                const tdLabel = document.createElement('td');
+                tdLabel.textContent = '합계';
+                tdLabel.colSpan = 3 + (showModel ? 1 : 0) + (showSite ? 1 : 0);
+                tdLabel.style.textAlign = 'center';
+                tdLabel.style.background = 'var(--surface-hover)';
+                trTotal.appendChild(tdLabel);
+
+                sortedMonths.forEach(month => {
+                    const tdM = document.createElement('td');
+                    const mVal = monthTotals[month] || 0;
+                    tdM.textContent = mVal > 0 ? mVal.toLocaleString() : '-';
+                    tdM.style.textAlign = 'right';
+                    tdM.classList.add('month-cell');
+                    trTotal.appendChild(tdM);
+                });
+
+                const tdGrandTotal = document.createElement('td');
+                tdGrandTotal.textContent = grandTotal > 0 ? grandTotal.toLocaleString() : '-';
+                tdGrandTotal.style.textAlign = 'right';
+                tdGrandTotal.style.color = 'var(--success)';
+                tdGrandTotal.classList.add('total-cell');
+                trTotal.appendChild(tdGrandTotal);
+
+                const tdGrandAvg = document.createElement('td');
+                const grandAvg = monthCount > 0 ? (grandTotal / monthCount) : 0;
+                tdGrandAvg.textContent = (grandTotal > 0 && monthCount > 0) ? grandAvg.toFixed(1) : '-';
+                tdGrandAvg.style.textAlign = 'right';
+                tdGrandAvg.style.color = 'var(--accent-color)';
+                tdGrandAvg.classList.add('total-cell');
+                trTotal.appendChild(tdGrandAvg);
+
+                summaryFrag.appendChild(trTotal);
+            }
+
             summaryBody.appendChild(summaryFrag);
         }
 
@@ -4551,6 +4725,9 @@ DST: 22. 지티테크`;
             tableContainer.style.display = 'none';
             summaryContainer.style.display = 'block';
             dualContainer.style.display = 'none';
+
+            updateSummaryMergeButtonUI();
+            const { showModel, showSite, useCustomGroups } = getSummaryViewOptions();
             
             const summaryHead = document.getElementById('summary-head');
             const summaryBody = document.getElementById('summary-body');
@@ -4590,6 +4767,9 @@ DST: 22. 지티테크`;
                 }
             }
 
+            const countMonthsA = targetMonths.filter(m => monthsA.has(m)).length || targetMonths.length;
+            const countMonthsB = targetMonths.filter(m => monthsB.has(m)).length || targetMonths.length;
+
             const tr1 = document.createElement('tr');
 
             // Move header cell
@@ -4604,29 +4784,33 @@ DST: 22. 지티테크`;
             thDiv.textContent = '구분';
             thDiv.rowSpan = 2;
             thDiv.style.textAlign = 'center';
-            thDiv.style.width = '8%';
+            thDiv.style.width = '7%';
             tr1.appendChild(thDiv);
 
             const thGroup = document.createElement('th');
             thGroup.textContent = '기종분류';
             thGroup.rowSpan = 2;
             thGroup.style.textAlign = 'center';
-            thGroup.style.width = '14%';
+            thGroup.style.width = showModel ? '13%' : '20%';
             tr1.appendChild(thGroup);
 
-            const thModel = document.createElement('th');
-            thModel.textContent = '기종';
-            thModel.rowSpan = 2;
-            thModel.style.textAlign = 'center';
-            thModel.style.width = '13%';
-            tr1.appendChild(thModel);
+            if (showModel) {
+                const thModel = document.createElement('th');
+                thModel.textContent = useCustomGroups && window.pivotCustomGroups && window.pivotCustomGroups.length > 0 ? '기종/그룹' : '기종';
+                thModel.rowSpan = 2;
+                thModel.style.textAlign = 'center';
+                thModel.style.width = '12%';
+                tr1.appendChild(thModel);
+            }
 
-            const thSite = document.createElement('th');
-            thSite.textContent = '생산처';
-            thSite.rowSpan = 2;
-            thSite.style.textAlign = 'center';
-            thSite.style.width = '10%';
-            tr1.appendChild(thSite);
+            if (showSite) {
+                const thSite = document.createElement('th');
+                thSite.textContent = '생산처';
+                thSite.rowSpan = 2;
+                thSite.style.textAlign = 'center';
+                thSite.style.width = '9%';
+                tr1.appendChild(thSite);
+            }
 
             targetMonths.forEach(month => {
                 const thMonth = document.createElement('th');
@@ -4650,6 +4834,13 @@ DST: 22. 지티테크`;
             thTotal.style.textAlign = 'center';
             thTotal.classList.add('month-start-cell');
             tr1.appendChild(thTotal);
+
+            const thAvg = document.createElement('th');
+            thAvg.textContent = '월평균';
+            thAvg.colSpan = 3;
+            thAvg.style.textAlign = 'center';
+            thAvg.classList.add('month-start-cell');
+            tr1.appendChild(thAvg);
 
             summaryHead.appendChild(tr1);
 
@@ -4711,14 +4902,35 @@ DST: 22. 지티테크`;
             thTotDiff.style.background = 'rgba(255, 255, 255, 0.03)';
             tr2.appendChild(thTotDiff);
 
+            const thAvgA = document.createElement('th');
+            thAvgA.textContent = 'A평균';
+            thAvgA.style.textAlign = 'right';
+            thAvgA.style.fontSize = '0.75rem';
+            thAvgA.classList.add('month-start-cell');
+            tr2.appendChild(thAvgA);
+
+            const thAvgB = document.createElement('th');
+            thAvgB.textContent = 'B평균';
+            thAvgB.style.textAlign = 'right';
+            thAvgB.style.fontSize = '0.75rem';
+            tr2.appendChild(thAvgB);
+
+            const thAvgDiff = document.createElement('th');
+            thAvgDiff.textContent = 'Δ';
+            thAvgDiff.style.textAlign = 'right';
+            thAvgDiff.style.fontSize = '0.75rem';
+            thAvgDiff.style.background = 'rgba(255, 255, 255, 0.03)';
+            tr2.appendChild(thAvgDiff);
+
             summaryHead.appendChild(tr2);
 
             const pivotData = {};
             const addData = (row, fileLabel) => {
                 const division = getDivision(row.Group) || '기타';
                 const group = row.Group || '-';
-                const model = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
-                const site = row.Site || '-';
+                const rawModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '-') : (row.Model || '-');
+                const model = showModel ? resolveSummaryModelName(rawModel, useCustomGroups) : '전체';
+                const site = showSite ? (row.Site || '-') : '전체';
                 const month = row.Month || '-';
                 const qty = parseInt(row.Qty) || 0;
 
@@ -4746,27 +4958,38 @@ DST: 22. 지티테크`;
 
             const rowList = Object.values(pivotData);
 
-            // Pre-calculate statistics for top highlight cards and model modifications
+            // Pre-calculate statistics for top highlight cards and model/group modifications
             let totalQtyA = 0;
             let totalQtyB = 0;
             let changedModelsCount = 0;
+            const rawModelChanges = {};
             const modelChanges = {};
-            const modelChangedSerials = {}; // model -> Set of changed serials
+            const modelChangedSerials = {}; // displayed model -> Set of changed serials
+            const groupChanges = {};
+            const groupChangedSerials = {}; // group -> Set of changed serials
 
-            // Get all unique model names in rowList
-            const allModels = new Set();
-            rowList.forEach(item => {
-                if (item.model) allModels.add(item.model);
+            // Get all unique raw models across filteredA and filteredB
+            const allRawModels = new Set();
+            const modelToGroupMap = {};
+            [...filteredA, ...filteredB].forEach(row => {
+                const rm = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
+                if (rm) {
+                    allRawModels.add(rm);
+                    modelToGroupMap[rm] = row.Group || '-';
+                }
             });
 
-            allModels.forEach(modelName => {
+            allRawModels.forEach(rawModelName => {
+                const dispModelName = showModel ? resolveSummaryModelName(rawModelName, useCustomGroups) : '전체';
+                const grpName = modelToGroupMap[rawModelName] || '-';
+
                 const modelA = filteredA.filter(row => {
                     const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
-                    return rowModel === modelName;
+                    return rowModel === rawModelName;
                 });
                 const modelB = filteredB.filter(row => {
                     const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
-                    return rowModel === modelName;
+                    return rowModel === rawModelName;
                 });
 
                 targetMonths.forEach(month => {
@@ -4794,14 +5017,20 @@ DST: 22. 지티테크`;
                         const cntA = countsA[key] || 0;
                         const cntB = countsB[key] || 0;
                         if (cntA !== cntB) {
-                            modelChanges[modelName] = true;
+                            rawModelChanges[rawModelName] = true;
+                            modelChanges[dispModelName] = true;
+                            groupChanges[grpName] = true;
                             const parts = key.split('||');
                             const serial = parts[1];
                             if (serial) {
-                                if (!modelChangedSerials[modelName]) {
-                                    modelChangedSerials[modelName] = new Set();
+                                if (!modelChangedSerials[dispModelName]) {
+                                    modelChangedSerials[dispModelName] = new Set();
                                 }
-                                modelChangedSerials[modelName].add(serial);
+                                modelChangedSerials[dispModelName].add(serial);
+                                if (!groupChangedSerials[grpName]) {
+                                    groupChangedSerials[grpName] = new Set();
+                                }
+                                groupChangedSerials[grpName].add(serial);
                             }
                         }
                     });
@@ -4820,14 +5049,8 @@ DST: 22. 지티테크`;
                 totalQtyB += rowSumB;
             });
 
-            // Count unique changed models
-            const uniqueModelsWithDiff = new Set();
-            rowList.forEach(item => {
-                if (modelChanges[item.model]) {
-                    uniqueModelsWithDiff.add(item.model);
-                }
-            });
-            changedModelsCount = uniqueModelsWithDiff.size;
+            // Count unique changed raw models
+            changedModelsCount = Object.keys(rawModelChanges).length;
 
             // Save filtered lists globally for dblclick popup use
             window.lastFilteredA = filteredA;
@@ -4837,7 +5060,7 @@ DST: 22. 지티테크`;
             const showChangesOnly = document.getElementById('compare-changes-only') && document.getElementById('compare-changes-only').checked;
             let displayRowList = [...rowList];
             if (showChangesOnly) {
-                displayRowList = displayRowList.filter(item => modelChanges[item.model]);
+                displayRowList = displayRowList.filter(item => showModel ? modelChanges[item.model] : groupChanges[item.group]);
             }
 
             // Render stats cards
@@ -4996,14 +5219,39 @@ DST: 22. 지티테크`;
                     const tdGroup = document.createElement('td');
                     tdGroup.textContent = item.group;
                     tdGroup.rowSpan = item.grpSpan;
-                    tdGroup.style.fontWeight = '500';
+                    tdGroup.style.fontWeight = showModel ? '500' : '600';
                     tdGroup.style.background = 'rgba(255, 255, 255, 0.02)';
                     tdGroup.style.borderRight = '1px solid var(--border-color)';
                     tdGroup.classList.add('border-bottom-thick');
+
+                    if (!showModel && groupChanges[item.group]) {
+                        const dot = document.createElement('span');
+                        dot.innerHTML = '● ';
+                        dot.style.color = '#f59e0b';
+                        dot.style.marginRight = '6px';
+
+                        const serialsSet = groupChangedSerials[item.group];
+                        const serialsList = serialsSet ? Array.from(serialsSet).join(', ') : '';
+                        const titleText = serialsList
+                            ? `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기 (변동 S/O: ${serialsList})`
+                            : `클릭/더블클릭하여 [${item.group}] 전체 변동 상세 내역 보기`;
+
+                        dot.title = titleText;
+                        tdGroup.prepend(dot);
+                        tdGroup.style.cursor = 'pointer';
+                        tdGroup.title = titleText;
+                        tdGroup.addEventListener('click', () => {
+                            showCompareDetail(item.group, null, 'group');
+                        });
+                        tdGroup.addEventListener('dblclick', () => {
+                            showCompareDetail(item.group, null, 'group');
+                        });
+                    }
+
                     tr.appendChild(tdGroup);
                 }
 
-                if (item.modelSpan > 0) {
+                if (showModel && item.modelSpan > 0) {
                     const tdModel = document.createElement('td');
                     tdModel.textContent = item.model;
                     tdModel.rowSpan = item.modelSpan;
@@ -5039,27 +5287,31 @@ DST: 22. 지티테크`;
                         tdModel.style.cursor = 'pointer';
                         tdModel.title = titleText;
                         tdModel.addEventListener('click', () => {
-                            showCompareDetail(item.model);
+                            showCompareDetail(item.model, null, 'model');
                         });
                         tdModel.addEventListener('dblclick', () => {
-                            showCompareDetail(item.model);
+                            showCompareDetail(item.model, null, 'model');
                         });
                     }
                     tr.appendChild(tdModel);
                 }
 
-                const tdSite = document.createElement('td');
-                tdSite.textContent = item.site;
-                tdSite.style.textAlign = 'center';
-                if (isGroupLast) {
-                    tdSite.classList.add('border-bottom-thick');
-                } else if (isModelLast) {
-                    tdSite.classList.add('border-bottom-medium');
+                if (showSite) {
+                    const tdSite = document.createElement('td');
+                    tdSite.textContent = item.site;
+                    tdSite.style.textAlign = 'center';
+                    if (isGroupLast) {
+                        tdSite.classList.add('border-bottom-thick');
+                    } else if (isModelLast) {
+                        tdSite.classList.add('border-bottom-medium');
+                    }
+                    tr.appendChild(tdSite);
                 }
-                tr.appendChild(tdSite);
 
                 let rowSumA = 0;
                 let rowSumB = 0;
+                const detailTarget = showModel ? item.model : item.group;
+                const detailMode = showModel ? 'model' : 'group';
 
                 targetMonths.forEach(month => {
                     const hasA = monthsA.has(month);
@@ -5131,17 +5383,17 @@ DST: 22. 지티테크`;
                             tdDiff.style.color = '#10b981';
                             tdDiff.style.background = 'rgba(16, 185, 129, 0.15)';
                             tdDiff.classList.add('clickable-diff-cell');
-                            tdDiff.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기 (+${diff.toLocaleString()}대)`;
-                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
-                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                            tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (+${diff.toLocaleString()}대)`;
+                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
                         } else if (diff < 0) {
                             tdDiff.textContent = diff.toLocaleString();
                             tdDiff.style.color = '#ef4444';
                             tdDiff.style.background = 'rgba(239, 68, 68, 0.12)';
                             tdDiff.classList.add('clickable-diff-cell');
-                            tdDiff.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기 (${diff.toLocaleString()}대)`;
-                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
-                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                            tdDiff.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기 (${diff.toLocaleString()}대)`;
+                            tdDiff.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
+                            tdDiff.ondblclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
                         } else {
                             tdDiff.textContent = '-';
                             tdDiff.style.color = 'var(--text-secondary)';
@@ -5152,12 +5404,12 @@ DST: 22. 지티테크`;
 
                     if (diff !== 0) {
                         tdA.classList.add('clickable-diff-cell');
-                        tdA.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기`;
-                        tdA.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                        tdA.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
+                        tdA.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
                         
                         tdB.classList.add('clickable-diff-cell');
-                        tdB.title = `클릭하여 [${item.model}] ${month} 변동 상세 내역만 보기`;
-                        tdB.onclick = (e) => { e.stopPropagation(); showCompareDetail(item.model, month); };
+                        tdB.title = `클릭하여 [${detailTarget}] ${month} 변동 상세 내역만 보기`;
+                        tdB.onclick = (e) => { e.stopPropagation(); showCompareDetail(detailTarget, month, detailMode); };
                     }
 
                     tr.appendChild(tdDiff);
@@ -5214,6 +5466,65 @@ DST: 22. 지티테크`;
                 }
                 tr.appendChild(tdTotValDiff);
 
+                // Monthly Average Cells (A평균, B평균, Δ) - 소수점 첫째자리
+                const avgA = countMonthsA > 0 ? (rowSumA / countMonthsA) : 0;
+                const avgB = countMonthsB > 0 ? (rowSumB / countMonthsB) : 0;
+                const dispAvgA = Number(avgA.toFixed(1));
+                const dispAvgB = Number(avgB.toFixed(1));
+                const avgDiff = Number((dispAvgB - dispAvgA).toFixed(1));
+
+                const tdAvgValA = document.createElement('td');
+                tdAvgValA.textContent = (rowSumA > 0 && countMonthsA > 0) ? avgA.toFixed(1) : '-';
+                tdAvgValA.style.textAlign = 'right';
+                tdAvgValA.style.fontWeight = '500';
+                tdAvgValA.style.color = 'var(--accent-color)';
+                tdAvgValA.classList.add('month-start-cell');
+                tdAvgValA.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdAvgValA.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdAvgValA.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdAvgValA);
+
+                const tdAvgValB = document.createElement('td');
+                tdAvgValB.textContent = (rowSumB > 0 && countMonthsB > 0) ? avgB.toFixed(1) : '-';
+                tdAvgValB.style.textAlign = 'right';
+                tdAvgValB.style.fontWeight = '500';
+                tdAvgValB.style.color = 'var(--accent-color)';
+                tdAvgValB.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdAvgValB.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdAvgValB.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdAvgValB);
+
+                const tdAvgValDiff = document.createElement('td');
+                if (avgDiff > 0) {
+                    tdAvgValDiff.textContent = `+${avgDiff.toFixed(1)}`;
+                    tdAvgValDiff.style.color = '#10b981';
+                    tdAvgValDiff.style.background = 'rgba(16, 185, 129, 0.15)';
+                } else if (avgDiff < 0) {
+                    tdAvgValDiff.textContent = avgDiff.toFixed(1);
+                    tdAvgValDiff.style.color = '#ef4444';
+                    tdAvgValDiff.style.background = 'rgba(239, 68, 68, 0.12)';
+                } else {
+                    tdAvgValDiff.textContent = '-';
+                    tdAvgValDiff.style.color = 'var(--text-secondary)';
+                    tdAvgValDiff.style.opacity = '0.3';
+                    tdAvgValDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                }
+                tdAvgValDiff.style.textAlign = 'right';
+                tdAvgValDiff.style.fontWeight = 'bold';
+                tdAvgValDiff.classList.add('total-cell');
+                if (isGroupLast) {
+                    tdAvgValDiff.classList.add('border-bottom-thick');
+                } else if (isModelLast) {
+                    tdAvgValDiff.classList.add('border-bottom-medium');
+                }
+                tr.appendChild(tdAvgValDiff);
+
                 summaryBody.appendChild(tr);
             });
 
@@ -5227,7 +5538,7 @@ DST: 22. 지티테크`;
                 
                 const tdLabel = document.createElement('td');
                 tdLabel.textContent = '합계';
-                tdLabel.colSpan = 5;
+                tdLabel.colSpan = 3 + (showModel ? 1 : 0) + (showSite ? 1 : 0);
                 tdLabel.style.textAlign = 'center';
                 tdLabel.style.background = 'var(--surface-hover)';
                 trTotal.appendChild(tdLabel);
@@ -5340,23 +5651,70 @@ DST: 22. 지티테크`;
                 tdGrandDiff.classList.add('total-cell');
                 trTotal.appendChild(tdGrandDiff);
 
+                // Grand Monthly Average Cells (A평균, B평균, Δ)
+                const grandAvgA = countMonthsA > 0 ? (grandSumA / countMonthsA) : 0;
+                const grandAvgB = countMonthsB > 0 ? (grandSumB / countMonthsB) : 0;
+                const dispGrandAvgA = Number(grandAvgA.toFixed(1));
+                const dispGrandAvgB = Number(grandAvgB.toFixed(1));
+                const grandAvgDiff = Number((dispGrandAvgB - dispGrandAvgA).toFixed(1));
+
+                const tdGrandAvgA = document.createElement('td');
+                tdGrandAvgA.textContent = (grandSumA > 0 && countMonthsA > 0) ? grandAvgA.toFixed(1) : '-';
+                tdGrandAvgA.style.textAlign = 'right';
+                tdGrandAvgA.style.color = 'var(--accent-color)';
+                tdGrandAvgA.classList.add('month-start-cell');
+                tdGrandAvgA.classList.add('total-cell');
+                trTotal.appendChild(tdGrandAvgA);
+
+                const tdGrandAvgB = document.createElement('td');
+                tdGrandAvgB.textContent = (grandSumB > 0 && countMonthsB > 0) ? grandAvgB.toFixed(1) : '-';
+                tdGrandAvgB.style.textAlign = 'right';
+                tdGrandAvgB.style.color = 'var(--accent-color)';
+                tdGrandAvgB.classList.add('total-cell');
+                trTotal.appendChild(tdGrandAvgB);
+
+                const tdGrandAvgDiff = document.createElement('td');
+                if (grandAvgDiff > 0) {
+                    tdGrandAvgDiff.textContent = `+${grandAvgDiff.toFixed(1)}`;
+                    tdGrandAvgDiff.style.color = '#10b981';
+                    tdGrandAvgDiff.style.background = 'rgba(16, 185, 129, 0.18)';
+                } else if (grandAvgDiff < 0) {
+                    tdGrandAvgDiff.textContent = grandAvgDiff.toFixed(1);
+                    tdGrandAvgDiff.style.color = '#ef4444';
+                    tdGrandAvgDiff.style.background = 'rgba(239, 68, 68, 0.15)';
+                } else {
+                    tdGrandAvgDiff.textContent = '-';
+                    tdGrandAvgDiff.style.color = 'var(--text-secondary)';
+                    tdGrandAvgDiff.style.opacity = '0.3';
+                    tdGrandDiff.style.background = 'rgba(255, 255, 255, 0.02)';
+                }
+                tdGrandAvgDiff.style.textAlign = 'right';
+                tdGrandAvgDiff.style.fontWeight = 'bold';
+                tdGrandAvgDiff.classList.add('total-cell');
+                trTotal.appendChild(tdGrandAvgDiff);
+
                 summaryBody.appendChild(trTotal);
             }
         }
 
-        function showCompareDetail(modelName, selectedMonth = null) {
+        function showCompareDetail(modelName, selectedMonth = null, mode = 'model') {
             const listA = window.lastFilteredA || [];
             const listB = window.lastFilteredB || [];
+            const intersectionOnly = document.getElementById('compare-intersection-only') && document.getElementById('compare-intersection-only').checked;
+            const { useCustomGroups } = getSummaryViewOptions();
 
-            // Filter entries belonging to this model
-            const modelA = listA.filter(row => {
+            const matchTarget = (row) => {
+                if (mode === 'group') {
+                    return (row.Group || '-') === modelName;
+                }
                 const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
-                return rowModel === modelName;
-            });
-            const modelB = listB.filter(row => {
-                const rowModel = row.isUnmapped ? (row['UnmappedModel'] || row['Model'] || '') : (row.Model || '');
-                return rowModel === modelName;
-            });
+                const resolved = resolveSummaryModelName(rowModel, useCustomGroups);
+                return rowModel === modelName || resolved === modelName;
+            };
+
+            // Filter entries belonging to this model / custom group / group
+            const modelA = listA.filter(matchTarget);
+            const modelB = listB.filter(matchTarget);
 
             // Get unique months from both lists
             const monthsA = new Set();
@@ -7236,6 +7594,21 @@ DST: 22. 지티테크`;
             loadSiteMaster();
             initCellSelection();
             fetchSapSyncStatus();
+
+            // Restore summary view options
+            try {
+                const savedSummaryOpts = JSON.parse(localStorage.getItem('mps_summary_view_opts') || 'null');
+                if (savedSummaryOpts) {
+                    const showModelEl = document.getElementById('summary-show-model');
+                    const showSiteEl = document.getElementById('summary-show-site');
+                    const useCustomGroupsEl = document.getElementById('summary-use-custom-groups');
+                    if (showModelEl && typeof savedSummaryOpts.showModel === 'boolean') showModelEl.checked = savedSummaryOpts.showModel;
+                    if (showSiteEl && typeof savedSummaryOpts.showSite === 'boolean') showSiteEl.checked = savedSummaryOpts.showSite;
+                    if (useCustomGroupsEl && typeof savedSummaryOpts.useCustomGroups === 'boolean') useCustomGroupsEl.checked = savedSummaryOpts.useCustomGroups;
+                }
+            } catch (e) {}
+            updateSummaryMergeButtonUI();
+            renderPivotGroupList();
             
             // Restore active tab from localStorage
             const savedTab = localStorage.getItem('mps_active_tab') || 'main';
@@ -7306,6 +7679,16 @@ DST: 22. 지티테크`;
                 }
                 const ws = XLSX.utils.table_to_sheet(table);
 
+                // Find average columns by header text
+                const avgCols = new Set();
+                Object.keys(ws).forEach(key => {
+                    if (key.startsWith('!')) return;
+                    const r = parseInt(key.replace(/[^0-9]/g, '')) || 0;
+                    if (r === 1 && ws[key].v === '월평균') {
+                        avgCols.add(key.replace(/[0-9]/g, ''));
+                    }
+                });
+
                 // Apply styling to sheet cells
                 Object.keys(ws).forEach(key => {
                     if (key.startsWith('!')) return;
@@ -7323,6 +7706,7 @@ DST: 22. 지티테크`;
 
                     const val = ws[key].v;
                     const cellRef = key;
+                    const colLetter = cellRef.replace(/[0-9]/g, '');
                     const rowNum = parseInt(cellRef.replace(/[^0-9]/g, '')) || 0;
 
                     if (rowNum === 1) {
@@ -7330,6 +7714,9 @@ DST: 22. 지티테크`;
                             fgColor: { rgb: "F1F5F9" }
                         };
                         ws[key].s.font.bold = true;
+                    } else if (typeof val === 'number') {
+                        ws[key].t = 'n';
+                        ws[key].z = (avgCols.has(colLetter) || !Number.isInteger(val)) ? '#,##0.0' : '#,##0';
                     }
                 });
 
@@ -7360,12 +7747,16 @@ DST: 22. 지티테크`;
                 }
                 const ws = XLSX.utils.table_to_sheet(table);
 
-                // Find the maximum row number to identify the bottom total row
+                // Find the maximum row number to identify the bottom total row, and identify average columns
                 let maxRow = 0;
+                const avgCols = new Set();
                 Object.keys(ws).forEach(key => {
                     if (key.startsWith('!')) return;
                     const r = parseInt(key.replace(/[^0-9]/g, '')) || 0;
                     if (r > maxRow) maxRow = r;
+                    if ((r === 1 || r === 2) && typeof ws[key].v === 'string' && ws[key].v.includes('평균')) {
+                        avgCols.add(key.replace(/[0-9]/g, ''));
+                    }
                 });
                 
                 // Apply styling to sheet cells
@@ -7373,7 +7764,9 @@ DST: 22. 지티테크`;
                     if (key.startsWith('!')) return;
                     
                     const cellRef = key;
+                    const colLetter = cellRef.replace(/[0-9]/g, '');
                     const rowNum = parseInt(cellRef.replace(/[^0-9]/g, '')) || 0;
+                    const isAvgCol = avgCols.has(colLetter);
                     
                     ws[key].s = {
                         font: { name: "맑은 고딕", sz: 10 },
@@ -7415,7 +7808,7 @@ DST: 22. 지티테크`;
                         if (typeof val === 'number') {
                             ws[key].s.alignment.horizontal = "right";
                             ws[key].t = 'n';
-                            ws[key].z = '#,##0';
+                            ws[key].z = (isAvgCol || !Number.isInteger(val)) ? '#,##0.0' : '#,##0';
                         } else if (typeof val === 'string') {
                             if (val.startsWith('+')) {
                                 ws[key].s.font.color = { rgb: "10B981" };
@@ -7423,11 +7816,11 @@ DST: 22. 지티테크`;
                             } else if (val.startsWith('-') && val !== '-') {
                                 ws[key].s.font.color = { rgb: "EF4444" };
                                 ws[key].s.alignment.horizontal = "right";
-                            } else if (/^\d+$/.test(val)) {
+                            } else if (/^\d+(\.\d+)?$/.test(val)) {
                                 ws[key].s.alignment.horizontal = "right";
                                 ws[key].t = 'n';
-                                ws[key].z = '#,##0';
-                                ws[key].v = parseInt(val);
+                                ws[key].z = (isAvgCol || val.includes('.')) ? '#,##0.0' : '#,##0';
+                                ws[key].v = parseFloat(val);
                             } else {
                                 ws[key].s.alignment.horizontal = "center";
                             }
@@ -7445,7 +7838,7 @@ DST: 22. 지티테크`;
                         if (typeof val === 'number') {
                             ws[key].s.alignment.horizontal = "right";
                             ws[key].t = 'n';
-                            ws[key].z = '#,##0';
+                            ws[key].z = (isAvgCol || !Number.isInteger(val)) ? '#,##0.0' : '#,##0';
                         } else if (typeof val === 'string') {
                             if (val.startsWith('+')) {
                                 ws[key].s.font.color = { rgb: "10B981" };
@@ -7458,12 +7851,12 @@ DST: 22. 지티테크`;
                             } else if (val === '-') {
                                 ws[key].s.alignment.horizontal = "center";
                                 ws[key].s.font.color = { rgb: "94A3B8" };
-                            } else if (/^\d+$/.test(val)) {
+                            } else if (/^\d+(\.\d+)?$/.test(val)) {
                                 ws[key].s.alignment.horizontal = "right";
                                 ws[key].t = 'n';
-                                ws[key].z = '#,##0';
-                                ws[key].v = parseInt(val);
-                            } else if (val === '합계' || val === 'A합' || val === 'B합' || val === 'Δ') {
+                                ws[key].z = (isAvgCol || val.includes('.')) ? '#,##0.0' : '#,##0';
+                                ws[key].v = parseFloat(val);
+                            } else if (val === '합계' || val === '월평균' || val === 'A합' || val === 'B합' || val === 'A평균' || val === 'B평균' || val === 'Δ') {
                                 ws[key].s.alignment.horizontal = "center";
                                 ws[key].s.font.bold = true;
                             } else {
@@ -7689,59 +8082,116 @@ DST: 22. 지티테크`;
 
         function renderPivotGroupList() {
             const list = document.getElementById('pivot-group-list');
-            if (!list) return;
-            list.innerHTML = '';
+            const summaryList = document.getElementById('summary-group-list');
+            if (list) list.innerHTML = '';
+            if (summaryList) summaryList.innerHTML = '';
             
             window.pivotCustomGroups.forEach((g, idx) => {
-                const item = document.createElement('div');
-                item.style.display = 'flex';
-                item.style.justifyContent = 'space-between';
-                item.style.alignItems = 'center';
-                item.style.background = 'var(--surface-hover)';
-                item.style.padding = '0.4rem 0.6rem';
-                item.style.borderRadius = '6px';
-                item.style.border = '1px solid var(--border-color)';
-                item.style.fontSize = '0.85rem';
-                
-                const textSpan = document.createElement('span');
-                textSpan.style.fontWeight = '500';
-                textSpan.style.color = 'var(--text-primary)';
-                textSpan.title = g.models.join(', ');
-                textSpan.textContent = `${g.name} (${g.models.length}개)`;
-                
-                const actionContainer = document.createElement('div');
-                actionContainer.style.display = 'flex';
-                actionContainer.style.gap = '0.5rem';
-                
-                const editBtn = document.createElement('span');
-                editBtn.style.cursor = 'pointer';
-                editBtn.style.color = 'var(--accent-color)';
-                editBtn.style.fontWeight = 'bold';
-                editBtn.style.fontSize = '0.8rem';
-                editBtn.textContent = '수정';
-                editBtn.onclick = () => {
-                    openEditGroupModal(idx);
-                };
-                
-                const delBtn = document.createElement('span');
-                delBtn.style.cursor = 'pointer';
-                delBtn.style.color = 'var(--danger)';
-                delBtn.style.fontWeight = 'bold';
-                delBtn.style.fontSize = '0.8rem';
-                delBtn.textContent = '삭제';
-                delBtn.onclick = () => {
-                    window.pivotCustomGroups.splice(idx, 1);
-                    localStorage.setItem('mps_custom_model_groups', JSON.stringify(window.pivotCustomGroups));
-                    renderPivotGroupList();
-                    updatePivot();
-                };
-                
-                actionContainer.appendChild(editBtn);
-                actionContainer.appendChild(delBtn);
-                
-                item.appendChild(textSpan);
-                item.appendChild(actionContainer);
-                list.appendChild(item);
+                if (list) {
+                    const item = document.createElement('div');
+                    item.style.display = 'flex';
+                    item.style.justifyContent = 'space-between';
+                    item.style.alignItems = 'center';
+                    item.style.background = 'var(--surface-hover)';
+                    item.style.padding = '0.4rem 0.6rem';
+                    item.style.borderRadius = '6px';
+                    item.style.border = '1px solid var(--border-color)';
+                    item.style.fontSize = '0.85rem';
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.style.fontWeight = '500';
+                    textSpan.style.color = 'var(--text-primary)';
+                    textSpan.title = g.models.join(', ');
+                    textSpan.textContent = `${g.name} (${g.models.length}개)`;
+                    
+                    const actionContainer = document.createElement('div');
+                    actionContainer.style.display = 'flex';
+                    actionContainer.style.gap = '0.5rem';
+                    
+                    const editBtn = document.createElement('span');
+                    editBtn.style.cursor = 'pointer';
+                    editBtn.style.color = 'var(--accent-color)';
+                    editBtn.style.fontWeight = 'bold';
+                    editBtn.style.fontSize = '0.8rem';
+                    editBtn.textContent = '수정';
+                    editBtn.onclick = () => {
+                        openEditGroupModal(idx);
+                    };
+                    
+                    const delBtn = document.createElement('span');
+                    delBtn.style.cursor = 'pointer';
+                    delBtn.style.color = 'var(--danger)';
+                    delBtn.style.fontWeight = 'bold';
+                    delBtn.style.fontSize = '0.8rem';
+                    delBtn.textContent = '삭제';
+                    delBtn.onclick = () => {
+                        window.pivotCustomGroups.splice(idx, 1);
+                        localStorage.setItem('mps_custom_model_groups', JSON.stringify(window.pivotCustomGroups));
+                        renderPivotGroupList();
+                        updatePivot();
+                        if (currentTab === 'summary') {
+                            window.lastSummaryKeys = null;
+                            window.currentSummaryRows = null;
+                            window.lastComparisonKeys = null;
+                            window.currentComparisonRows = null;
+                            if (window.compareMode) applyComparisonFilters();
+                            else renderSummaryTable();
+                        }
+                    };
+                    
+                    actionContainer.appendChild(editBtn);
+                    actionContainer.appendChild(delBtn);
+                    
+                    item.appendChild(textSpan);
+                    item.appendChild(actionContainer);
+                    list.appendChild(item);
+                }
+
+                if (summaryList) {
+                    const chip = document.createElement('div');
+                    chip.style.display = 'inline-flex';
+                    chip.style.alignItems = 'center';
+                    chip.style.gap = '0.4rem';
+                    chip.style.background = 'var(--surface-hover)';
+                    chip.style.padding = '0.25rem 0.55rem';
+                    chip.style.borderRadius = '6px';
+                    chip.style.border = '1px solid var(--border-color)';
+                    chip.style.fontSize = '0.78rem';
+
+                    const chipLabel = document.createElement('span');
+                    chipLabel.style.fontWeight = '600';
+                    chipLabel.style.color = 'var(--text-primary)';
+                    chipLabel.title = g.models.join(', ');
+                    chipLabel.textContent = `${g.name} (${g.models.length})`;
+                    chipLabel.style.cursor = 'pointer';
+                    chipLabel.onclick = () => openEditGroupModal(idx);
+
+                    const chipDel = document.createElement('span');
+                    chipDel.style.cursor = 'pointer';
+                    chipDel.style.color = 'var(--danger)';
+                    chipDel.style.fontWeight = 'bold';
+                    chipDel.title = '그룹 삭제';
+                    chipDel.textContent = '×';
+                    chipDel.onclick = (e) => {
+                        e.stopPropagation();
+                        window.pivotCustomGroups.splice(idx, 1);
+                        localStorage.setItem('mps_custom_model_groups', JSON.stringify(window.pivotCustomGroups));
+                        renderPivotGroupList();
+                        updatePivot();
+                        if (currentTab === 'summary') {
+                            window.lastSummaryKeys = null;
+                            window.currentSummaryRows = null;
+                            window.lastComparisonKeys = null;
+                            window.currentComparisonRows = null;
+                            if (window.compareMode) applyComparisonFilters();
+                            else renderSummaryTable();
+                        }
+                    };
+
+                    chip.appendChild(chipLabel);
+                    chip.appendChild(chipDel);
+                    summaryList.appendChild(chip);
+                }
             });
         }
 
@@ -7898,6 +8348,14 @@ DST: 22. 지티테크`;
             closeCreateGroupModal();
             renderPivotGroupList();
             updatePivot();
+            if (currentTab === 'summary') {
+                window.lastSummaryKeys = null;
+                window.currentSummaryRows = null;
+                window.lastComparisonKeys = null;
+                window.currentComparisonRows = null;
+                if (window.compareMode) applyComparisonFilters();
+                else renderSummaryTable();
+            }
         }
 
         function getFilteredPivotData(data) {
@@ -8112,6 +8570,12 @@ DST: 22. 지티테크`;
             thTotal.textContent = '합계';
             thTotal.style.textAlign = 'center';
             trHead.appendChild(thTotal);
+
+            const thAvg = document.createElement('th');
+            thAvg.textContent = '월평균';
+            thAvg.style.textAlign = 'center';
+            trHead.appendChild(thAvg);
+
             thead.appendChild(trHead);
             
             const tbody = document.getElementById('pivot-body');
@@ -8120,11 +8584,14 @@ DST: 22. 지티테크`;
             const monthTotals = {};
             sortedMonths.forEach(m => { monthTotals[m] = 0; });
             let grandTotal = 0;
+            const allMonthsInSource = new Set();
+            sourceData.forEach(r => { if (r.Month) allMonthsInSource.add(r.Month); });
+            const pivotMonthCount = colMonthChecked ? sortedMonths.length : allMonthsInSource.size;
             
             if (pivotRows.length === 0) {
                 const trEmpty = document.createElement('tr');
                 const tdEmpty = document.createElement('td');
-                tdEmpty.colSpan = (activeRowDims.length || 1) + sortedMonths.length + 2;
+                tdEmpty.colSpan = (activeRowDims.length || 1) + sortedMonths.length + 3;
                 tdEmpty.textContent = '조건에 일치하는 데이터가 없습니다.';
                 tdEmpty.style.textAlign = 'center';
                 tdEmpty.style.padding = '2rem';
@@ -8211,6 +8678,14 @@ DST: 22. 지티테크`;
                 tdTotal.style.textAlign = 'center';
                 tdTotal.style.fontWeight = 'bold';
                 tr.appendChild(tdTotal);
+
+                const tdAvg = document.createElement('td');
+                const rowAvg = pivotMonthCount > 0 ? (rowSum / pivotMonthCount) : 0;
+                tdAvg.textContent = (rowSum > 0 && pivotMonthCount > 0) ? rowAvg.toFixed(1) : '-';
+                tdAvg.style.textAlign = 'center';
+                tdAvg.style.fontWeight = 'bold';
+                tdAvg.style.color = 'var(--accent-color)';
+                tr.appendChild(tdAvg);
                 
                 tbody.appendChild(tr);
             });
@@ -8239,6 +8714,13 @@ DST: 22. 지티테크`;
             tdGrandTotal.textContent = grandTotal > 0 ? grandTotal.toLocaleString() : '-';
             tdGrandTotal.style.textAlign = 'center';
             trGrand.appendChild(tdGrandTotal);
+
+            const tdGrandAvg = document.createElement('td');
+            const grandAvg = pivotMonthCount > 0 ? (grandTotal / pivotMonthCount) : 0;
+            tdGrandAvg.textContent = (grandTotal > 0 && pivotMonthCount > 0) ? grandAvg.toFixed(1) : '-';
+            tdGrandAvg.style.textAlign = 'center';
+            tdGrandAvg.style.color = 'var(--accent-color)';
+            trGrand.appendChild(tdGrandAvg);
             
             tbody.appendChild(trGrand);
         }
