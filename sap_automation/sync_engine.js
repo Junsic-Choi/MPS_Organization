@@ -15,6 +15,8 @@ const WATCH_DIRS = [
     process.env.TEMP || path.join(USER_PROFILE, "AppData", "Local", "Temp")
 ];
 
+const SYNC_STATE_PATH = path.join(WORKSPACE_DIR, "sap_cache", "last_sync_state.json");
+
 let currentSyncState = {
     running: false,
     currentStep: 0,
@@ -25,6 +27,60 @@ let currentSyncState = {
     finishedAt: null,
     results: {}
 };
+
+function loadPersistedSyncState() {
+    try {
+        if (fs.existsSync(SYNC_STATE_PATH)) {
+            const saved = JSON.parse(fs.readFileSync(SYNC_STATE_PATH, "utf8"));
+            if (saved && saved.finishedAt) {
+                currentSyncState.startedAt = saved.startedAt || null;
+                currentSyncState.finishedAt = saved.finishedAt;
+                currentSyncState.statusText = saved.statusText || "✅ SAP 최신 데이터 동기화 완료!";
+                currentSyncState.results = saved.results || {};
+                return;
+            }
+        }
+    } catch (e) {}
+
+    // Fallback: infer from existing SAP MHTML files on disk
+    try {
+        const sapFiles = ["sap_1840.mhtml", "sap_component_1840.mhtml", "sap_1842.mhtml", "sap_component_1842.mhtml"];
+        let minMtime = Infinity;
+        let maxMtime = 0;
+        let foundCount = 0;
+        sapFiles.forEach(fn => {
+            const fp = path.join(WORKSPACE_DIR, fn);
+            if (fs.existsSync(fp)) {
+                const ms = fs.statSync(fp).mtimeMs;
+                if (ms < minMtime) minMtime = ms;
+                if (ms > maxMtime) maxMtime = ms;
+                foundCount++;
+            }
+        });
+        if (foundCount > 0 && maxMtime > 0) {
+            currentSyncState.finishedAt = new Date(maxMtime).toISOString();
+            if (minMtime < maxMtime && (maxMtime - minMtime) < 6 * 3600 * 1000) {
+                currentSyncState.startedAt = new Date(minMtime).toISOString();
+            }
+            currentSyncState.statusText = "✅ SAP 최신 데이터 동기화 완료!";
+        }
+    } catch (e) {}
+}
+
+function savePersistedSyncState() {
+    try {
+        const dir = path.dirname(SYNC_STATE_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(SYNC_STATE_PATH, JSON.stringify({
+            startedAt: currentSyncState.startedAt,
+            finishedAt: currentSyncState.finishedAt,
+            statusText: currentSyncState.statusText,
+            results: currentSyncState.results
+        }, null, 2), "utf8");
+    } catch (e) {}
+}
+
+loadPersistedSyncState();
 
 function getSyncStatus() {
     return { ...currentSyncState };
@@ -512,6 +568,7 @@ async function runSapSync(options = {}) {
 
         currentSyncState.statusText = "✅ SAP 최신 데이터 동기화 완료! (남산+/성주 4개 파일 갱신됨)";
         currentSyncState.finishedAt = new Date().toISOString();
+        savePersistedSyncState();
         onProgress(currentSyncState);
         console.log("\n=======================================================");
         console.log("  [SAP One-Stop Sync] ALL 4 STEPS COMPLETED SUCCESSFULLY!");

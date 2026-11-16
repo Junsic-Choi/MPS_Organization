@@ -809,10 +809,26 @@ app.get('/api/sync-sap/status', (req, res) => {
     try {
         const status = getSyncStatus();
         const files = {};
+        let maxMtimeMs = 0;
+        let minMtimeMs = Infinity;
         ['sap_1840.mhtml', 'sap_1842.mhtml', 'sap_component_1840.mhtml', 'sap_component_1842.mhtml'].forEach(fn => {
             const fp = path.join(__dirname, fn);
-            files[fn] = getSapFileStats(fn, fp);
+            const stat = getSapFileStats(fn, fp);
+            files[fn] = stat;
+            if (stat && stat.mtimeMs) {
+                if (stat.mtimeMs > maxMtimeMs) maxMtimeMs = stat.mtimeMs;
+                if (stat.mtimeMs < minMtimeMs) minMtimeMs = stat.mtimeMs;
+            }
         });
+        if (!status.running && maxMtimeMs > 0) {
+            const finishedMs = status.finishedAt ? new Date(status.finishedAt).getTime() : 0;
+            if (!finishedMs || maxMtimeMs > finishedMs + 5000) {
+                status.finishedAt = new Date(maxMtimeMs).toISOString();
+                if (!status.startedAt && minMtimeMs < maxMtimeMs && (maxMtimeMs - minMtimeMs) < 6 * 3600 * 1000) {
+                    status.startedAt = new Date(minMtimeMs).toISOString();
+                }
+            }
+        }
         res.json({ success: true, ...status, files });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
