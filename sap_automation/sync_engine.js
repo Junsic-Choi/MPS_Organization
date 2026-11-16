@@ -86,7 +86,27 @@ function getSyncStatus() {
     return { ...currentSyncState };
 }
 
+function clearExcelResiliencyRegistry() {
+    // Clear Excel's Crash/Resiliency/DocumentRecovery entries so Excel never pops up:
+    // "마지막으로 'export.MHTML'을(를) 열었을 때 오류가 발생했습니다. 그래도 이 문서를 여시겠습니까?"
+    const regCmds = [
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\16.0\\Excel\\Resiliency\\DocumentRecovery" /f',
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\16.0\\Excel\\Resiliency\\DisabledItems" /f',
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\16.0\\Excel\\Resiliency\\StartupItems" /f',
+        'reg add "HKCU\\Software\\Microsoft\\Office\\16.0\\Excel" /v ExcelWorkbookAutoRecoverDirty /t REG_DWORD /d 0 /f',
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\15.0\\Excel\\Resiliency\\DocumentRecovery" /f',
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\15.0\\Excel\\Resiliency\\DisabledItems" /f',
+        'reg delete "HKCU\\Software\\Microsoft\\Office\\15.0\\Excel\\Resiliency\\StartupItems" /f'
+    ];
+    for (const cmd of regCmds) {
+        try {
+            execSync(cmd, { stdio: "ignore" });
+        } catch (e) {}
+    }
+}
+
 function cleanSapExportDir() {
+    clearExcelResiliencyRegistry();
     WATCH_DIRS.forEach(dir => {
         if (!fs.existsSync(dir)) return;
         try {
@@ -103,28 +123,62 @@ function cleanSapExportDir() {
 }
 
 function closeSapExcel(specificPath = null) {
-    // 1. First try to cleanly close only SAP export workbooks without killing user's own work
+    // Give SAP GUI 1.5s to finish handing off the exported file to Excel before closing
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < 1500) {}
+
+    // 1. First try to cleanly close only SAP export workbooks via COM (with DisplayAlerts = False)
     try {
         const script = path.join(__dirname, "close_sap_excel.vbs");
         if (fs.existsSync(script)) {
-            execSync(`cscript //Nologo "${script}"`, { stdio: "ignore" });
+            execSync(`cscript //Nologo //T:8 "${script}"`, { stdio: "ignore" });
         }
     } catch (e) {}
 
-    // 2. Release locks on candidate export files
-    const targets = specificPath ? [specificPath] : WATCH_DIRS.map(d => path.join(d, "export.MHTML"));
-    for (const p of targets) {
+    // 2. Collect all candidate export*.mhtml files to remove
+    const candidateSet = new Set();
+    if (specificPath) candidateSet.add(specificPath);
+    WATCH_DIRS.forEach(dir => {
+        if (!fs.existsSync(dir)) return;
+        try {
+            fs.readdirSync(dir).forEach(f => {
+                if (/^export.*\.mhtml$/i.test(f)) {
+                    candidateSet.add(path.join(dir, f));
+                }
+            });
+        } catch (e) {}
+    });
+
+    // 3. Release locks on candidate export files
+    for (const p of candidateSet) {
         if (fs.existsSync(p)) {
             try {
                 fs.unlinkSync(p);
             } catch (e) {
+                // First try graceful WM_CLOSE without /f so Excel doesn't flag a crash
                 try {
-                    execSync("taskkill /f /im excel.exe", { stdio: "ignore" });
-                } catch (kErr) {}
-                try { fs.unlinkSync(p); } catch (uErr) {}
+                    execSync("taskkill /im excel.exe", { stdio: "ignore" });
+                    const w1 = Date.now();
+                    while (Date.now() - w1 < 1000) {}
+                } catch (gErr) {}
+
+                try {
+                    fs.unlinkSync(p);
+                } catch (e2) {
+                    // Fallback to force kill if Excel is stuck on a modal dialog
+                    try {
+                        execSync("taskkill /f /im excel.exe", { stdio: "ignore" });
+                        const w2 = Date.now();
+                        while (Date.now() - w2 < 500) {}
+                    } catch (kErr) {}
+                    try { fs.unlinkSync(p); } catch (uErr) {}
+                }
             }
         }
     }
+
+    // 4. Always purge Excel Resiliency / DocumentRecovery registry keys after closing
+    clearExcelResiliencyRegistry();
 }
 
 function extractSalesDocsFromMhtml(filePath) {

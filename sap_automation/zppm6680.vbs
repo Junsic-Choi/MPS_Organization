@@ -91,7 +91,8 @@ WScript.Echo "SUCCESS: ZPPM6680 completed for Plant " & plant
 WScript.Quit 0
 
 Sub HandleExportPopups()
-    Dim loopCount, wnd
+    Dim loopCount, wnd, uniqueFn
+    uniqueFn = "export_" & Year(Now) & Right("0" & Month(Now), 2) & Right("0" & Day(Now), 2) & "_" & Right("0" & Hour(Now), 2) & Right("0" & Minute(Now), 2) & Right("0" & Second(Now), 2) & "_" & Replace(CStr(Int(Timer * 10)), ".", "") & ".MHTML"
     For loopCount = 1 To 25
         WScript.Sleep 1000
         On Error Resume Next
@@ -101,7 +102,7 @@ Sub HandleExportPopups()
             Err.Clear
             wnd.findById("usr/ctxtDY_PATH").text = "C:\Users\i0215099\Documents\SAP\SAP GUI"
             Err.Clear
-            wnd.findById("usr/ctxtDY_FILENAME").text = "export.MHTML"
+            wnd.findById("usr/ctxtDY_FILENAME").text = uniqueFn
             Err.Clear
             wnd.findById("tbar[0]/btn[11]").press
             If Err.Number <> 0 Then
