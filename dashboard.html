@@ -1115,45 +1115,56 @@
                     </div>
                 </div>
 
-                <!-- KPI Cards (4 Cards) -->
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-bottom: 0.8rem;">
-                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #10b981; font-weight: 600; margin-bottom: 2px;">🆕 신규 투입 부품 (설변)</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;"><span id="diff-kpi-new">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                <!-- KPI Cards (5 Cards) -->
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.7rem; margin-bottom: 0.8rem;">
+                    <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 8px; padding: 0.7rem 0.9rem;">
+                        <div style="font-size: 0.74rem; color: #a78bfa; font-weight: 700; margin-bottom: 2px;">🔄 품번 변경 (설변 A➔B)</div>
+                        <div style="font-size: 1.45rem; font-weight: 700; color: #8b5cf6;"><span id="diff-kpi-replaced">0</span> <span style="font-size: 0.82rem; font-weight: normal; color: var(--text-secondary);">쌍</span></div>
                     </div>
-                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #ef4444; font-weight: 600; margin-bottom: 2px;">❌ 삭제/단종 부품 (제외)</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #ef4444;"><span id="diff-kpi-deleted">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.7rem 0.9rem;">
+                        <div style="font-size: 0.74rem; color: #10b981; font-weight: 600; margin-bottom: 2px;">🆕 신규 투입 부품</div>
+                        <div style="font-size: 1.45rem; font-weight: 700; color: #10b981;"><span id="diff-kpi-new">0</span> <span id="diff-kpi-new-sub" style="font-size: 0.76rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
-                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #f59e0b; font-weight: 600; margin-bottom: 2px;">⚠️ 소요 수량 변동</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;"><span id="diff-kpi-qty">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.7rem 0.9rem;">
+                        <div style="font-size: 0.74rem; color: #ef4444; font-weight: 600; margin-bottom: 2px;">❌ 삭제/단종 부품</div>
+                        <div style="font-size: 1.45rem; font-weight: 700; color: #ef4444;"><span id="diff-kpi-deleted">0</span> <span id="diff-kpi-deleted-sub" style="font-size: 0.76rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
                     </div>
-                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="font-size: 0.75rem; color: #3b82f6; font-weight: 600; margin-bottom: 2px;">📦 영향받는 모기종/오더</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"><span id="diff-kpi-orders">0</span> <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.7rem 0.9rem;">
+                        <div style="font-size: 0.74rem; color: #f59e0b; font-weight: 600; margin-bottom: 2px;">⚠️ 소요 수량 변동</div>
+                        <div style="font-size: 1.45rem; font-weight: 700; color: #f59e0b;"><span id="diff-kpi-qty">0</span> <span style="font-size: 0.82rem; font-weight: normal; color: var(--text-secondary);">건</span></div>
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.7rem 0.9rem;">
+                        <div style="font-size: 0.74rem; color: #3b82f6; font-weight: 600; margin-bottom: 2px;">📦 영향받는 호기/오더</div>
+                        <div style="font-size: 1.45rem; font-weight: 700; color: #3b82f6;"><span id="diff-kpi-orders">0</span> <span style="font-size: 0.82rem; font-weight: normal; color: var(--text-secondary);">대</span></div>
                     </div>
                 </div>
 
                 <!-- Filters & Search Toolbar -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 8px;">
-                    <div style="display: flex; gap: 6px; align-items: center;">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <button id="diff-group-mode-btn" onclick="toggleDiffGroupMode()" style="padding: 0.32rem 0.75rem; border-radius: 6px; font-size: 0.76rem; font-weight: 700; border: 1px solid #8b5cf6; background: rgba(139, 92, 246, 0.18); color: #8b5cf6; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="동일 호기 내에서 유사한 가공품 품명의 삭제(A)와 신규(B)를 한 줄(A➔B)로 묶어서 보여줍니다.">
+                            <span>🔗 호기별 유사품명 묶음 보기 (A➔B)</span>
+                        </button>
+
+                        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 2px;"></div>
+
                         <span style="font-size: 0.78rem; color: var(--text-secondary); margin-right: 2px;">플랜트:</span>
                         <button class="diff-plant-btn active" onclick="setDiffPlantFilter('ALL')" id="diff-plant-ALL" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: none; background: var(--accent-color); color: white; cursor: pointer;">전체</button>
                         <button class="diff-plant-btn" onclick="setDiffPlantFilter('1840')" id="diff-plant-1840" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">1840 남산+</button>
                         <button class="diff-plant-btn" onclick="setDiffPlantFilter('1842')" id="diff-plant-1842" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">1842 성주</button>
                         
-                        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+                        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 2px;"></div>
                         
                         <span style="font-size: 0.78rem; color: var(--text-secondary); margin-right: 2px;">유형:</span>
                         <button class="diff-type-btn active" onclick="setDiffTypeFilter('ALL')" id="diff-type-ALL" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: none; background: var(--accent-color); color: white; cursor: pointer;">전체</button>
+                        <button class="diff-type-btn" onclick="setDiffTypeFilter('REPLACED')" id="diff-type-REPLACED" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">🔄 품번변경(A➔B)</button>
                         <button class="diff-type-btn" onclick="setDiffTypeFilter('NEW')" id="diff-type-NEW" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">🆕 신규투입</button>
                         <button class="diff-type-btn" onclick="setDiffTypeFilter('DELETED')" id="diff-type-DELETED" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">❌ 제외/단종</button>
                         <button class="diff-type-btn" onclick="setDiffTypeFilter('QTY_CHANGE')" id="diff-type-QTY_CHANGE" style="padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">⚠️ 수량변동</button>
                     </div>
 
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="sap-diff-search" placeholder="가공품번, 품명, S/O, 기종 검색..." oninput="renderSapDiffTable()" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; width: 220px;">
+                        <input type="text" id="sap-diff-search" placeholder="가공품번, 품명, 호기, S/O, 기종 검색..." oninput="renderSapDiffTable()" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; width: 220px;">
                         <span id="diff-count-label" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0건</span>
                     </div>
                 </div>
@@ -1161,21 +1172,21 @@
                 <!-- Table Container -->
                 <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh; background: var(--surface-color);">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;" id="sap-diff-table">
-                        <thead style="position: sticky; top: 0; background: var(--surface-hover); color: var(--text-primary); font-weight: 700; border-bottom: 2px solid var(--border-color);">
+                        <thead style="position: sticky; top: 0; background: var(--surface-hover); color: var(--text-primary); font-weight: 700; border-bottom: 2px solid var(--border-color); z-index: 2;">
                             <tr>
                                 <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 40px;">No.</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 85px;">변동구분</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 92px;">변동구분</th>
                                 <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 80px;">플랜트</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 95px;">S/O 번호</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 110px;">호기(Serial)</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color);">완제품 기종 (모품번/품명)</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); width: 130px;">가공품 품번</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 90px;">S/O·오더</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 115px;">호기(Serial)</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); width: 165px;">완제품 기종 (모품번/품명)</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); width: 240px;">가공품 품번 (이전 ➔ 변경)</th>
                                 <th style="padding: 7px 10px; border: 1px solid var(--border-color);">가공품 품명</th>
                                 <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 45px;">단위</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 75px;">이전소요</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 75px;">최신소요</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 85px;">변동차이</th>
-                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 75px;">생산월</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 65px;">이전소요</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 65px;">최신소요</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: right; width: 80px;">변동차이</th>
+                                <th style="padding: 7px 10px; border: 1px solid var(--border-color); text-align: center; width: 70px;">생산월</th>
                             </tr>
                         </thead>
                         <tbody id="sap-diff-tbody">
@@ -2860,6 +2871,33 @@ DST: 22. 지티테크`;
         let sapDiffCurrentResult = null;
         let currentDiffPlant = 'ALL';
         let currentDiffType = 'ALL';
+        let diffGroupMode = true;
+
+        function toggleDiffGroupMode() {
+            diffGroupMode = !diffGroupMode;
+            const btn = document.getElementById('diff-group-mode-btn');
+            if (btn) {
+                if (diffGroupMode) {
+                    btn.style.background = 'rgba(139, 92, 246, 0.18)';
+                    btn.style.color = '#8b5cf6';
+                    btn.style.borderColor = '#8b5cf6';
+                    btn.innerHTML = '<span>🔗 호기별 유사품명 묶음 보기 (A➔B)</span>';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.borderColor = 'var(--border-color)';
+                    btn.innerHTML = '<span>📋 개별 항목 따로 보기</span>';
+                }
+            }
+            if (!diffGroupMode && currentDiffType === 'REPLACED') {
+                setDiffTypeFilter('ALL');
+                return;
+            }
+            if ( sapDiffCurrentResult && sapDiffCurrentResult.summary ) {
+                updateDiffKpis(sapDiffCurrentResult.summary);
+            }
+            renderSapDiffTable();
+        }
 
         async function openSapDiffModal() {
             const overlay = document.getElementById('sap-diff-overlay');
@@ -2955,16 +2993,35 @@ DST: 22. 지티테크`;
 
         function updateDiffKpis(summary) {
             if (!summary) return;
-            document.getElementById('diff-kpi-new').textContent = Number(summary.totalNew || 0).toLocaleString();
-            document.getElementById('diff-kpi-deleted').textContent = Number(summary.totalDeleted || 0).toLocaleString();
+            const repEl = document.getElementById('diff-kpi-replaced');
+            if (repEl) repEl.textContent = Number(summary.totalReplaced || 0).toLocaleString();
+
+            if (diffGroupMode && typeof summary.totalPureNew === 'number') {
+                document.getElementById('diff-kpi-new').textContent = Number(summary.totalPureNew || 0).toLocaleString();
+                const newSub = document.getElementById('diff-kpi-new-sub');
+                if (newSub) newSub.textContent = `건 (전체 ${Number(summary.totalNew || 0)}건)`;
+
+                document.getElementById('diff-kpi-deleted').textContent = Number(summary.totalPureDeleted || 0).toLocaleString();
+                const delSub = document.getElementById('diff-kpi-deleted-sub');
+                if (delSub) delSub.textContent = `건 (전체 ${Number(summary.totalDeleted || 0)}건)`;
+            } else {
+                document.getElementById('diff-kpi-new').textContent = Number(summary.totalNew || 0).toLocaleString();
+                const newSub = document.getElementById('diff-kpi-new-sub');
+                if (newSub) newSub.textContent = '건';
+
+                document.getElementById('diff-kpi-deleted').textContent = Number(summary.totalDeleted || 0).toLocaleString();
+                const delSub = document.getElementById('diff-kpi-deleted-sub');
+                if (delSub) delSub.textContent = '건';
+            }
+
             document.getElementById('diff-kpi-qty').textContent = Number(summary.totalQtyChanged || 0).toLocaleString();
             document.getElementById('diff-kpi-orders').textContent = Number(summary.totalOrdersAffected || 0).toLocaleString();
 
             const badge = document.getElementById('diff-status-badge');
             if (badge) {
-                const total = summary.totalChanges || 0;
+                const total = diffGroupMode ? (summary.totalGroupedChanges ?? summary.totalChanges ?? 0) : (summary.totalChanges || 0);
                 if (total > 0) {
-                    badge.textContent = `⚠️ 변동 ${total.toLocaleString()}건 감지`;
+                    badge.textContent = `⚠️ 변동 ${total.toLocaleString()}건 감지 (설변교체 ${summary.totalReplaced || 0}쌍)`;
                     badge.style.background = 'rgba(245, 158, 11, 0.2)';
                     badge.style.color = '#fbbf24';
                 } else {
@@ -2994,8 +3051,11 @@ DST: 22. 지티테크`;
         }
 
         function setDiffTypeFilter(type) {
+            if (type === 'REPLACED' && !diffGroupMode) {
+                toggleDiffGroupMode();
+            }
             currentDiffType = type;
-            ['ALL', 'NEW', 'DELETED', 'QTY_CHANGE'].forEach(t => {
+            ['ALL', 'REPLACED', 'NEW', 'DELETED', 'QTY_CHANGE'].forEach(t => {
                 const btn = document.getElementById(`diff-type-${t}`);
                 if (!btn) return;
                 if (t === type) {
@@ -3012,17 +3072,22 @@ DST: 22. 지티테크`;
         }
 
         function renderSapDiffTable() {
-            if (!sapDiffCurrentResult || !sapDiffCurrentResult.changes) return;
-            const changes = sapDiffCurrentResult.changes;
+            if (!sapDiffCurrentResult) return;
+            const sourceList = (diffGroupMode && Array.isArray(sapDiffCurrentResult.groupedChanges))
+                ? sapDiffCurrentResult.groupedChanges
+                : (sapDiffCurrentResult.changes || []);
             const search = (document.getElementById('sap-diff-search')?.value || '').trim().toLowerCase();
 
-            const filtered = changes.filter(c => {
+            const filtered = sourceList.filter(c => {
                 if (currentDiffPlant !== 'ALL' && c.plant !== currentDiffPlant) return false;
                 if (currentDiffType !== 'ALL' && c.changeType !== currentDiffType) return false;
                 if (search) {
                     const match = (c.component && c.component.toLowerCase().includes(search)) ||
+                                  (c.oldComponent && c.oldComponent.toLowerCase().includes(search)) ||
                                   (c.compDesc && c.compDesc.toLowerCase().includes(search)) ||
+                                  (c.oldCompDesc && c.oldCompDesc.toLowerCase().includes(search)) ||
                                   (c.soOrder && c.soOrder.toLowerCase().includes(search)) ||
+                                  (c.order && c.order.toLowerCase().includes(search)) ||
                                   (c.serial && c.serial.toLowerCase().includes(search)) ||
                                   (c.material && c.material.toLowerCase().includes(search)) ||
                                   (c.matDesc && c.matDesc.toLowerCase().includes(search));
@@ -3031,11 +3096,11 @@ DST: 22. 지티테크`;
                 return true;
             });
 
-            document.getElementById('diff-count-label').textContent = `${filtered.length.toLocaleString()}건 / 전체 ${changes.length.toLocaleString()}건`;
+            document.getElementById('diff-count-label').textContent = `${filtered.length.toLocaleString()}건 / 전체 ${sourceList.length.toLocaleString()}건`;
 
             const tbody = document.getElementById('sap-diff-tbody');
             if (filtered.length === 0) {
-                if (changes.length === 0) {
+                if (sourceList.length === 0) {
                     tbody.innerHTML = `
                         <tr>
                             <td colspan="13" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
@@ -3051,40 +3116,95 @@ DST: 22. 지티테크`;
             }
 
             let html = '';
+            let machineGroupIdx = 0;
+            const getMachineKey = (item) => `${item.plant || ''}|${item.serial || item.order || item.soOrder || ''}`;
+
             filtered.forEach((c, idx) => {
-                const bg = idx % 2 === 0 ? 'var(--surface-color)' : 'var(--surface-hover)';
-                
+                const prevItem = idx > 0 ? filtered[idx - 1] : null;
+                const nextItem = idx < filtered.length - 1 ? filtered[idx + 1] : null;
+                const curMachineKey = getMachineKey(c);
+                if (prevItem && getMachineKey(prevItem) !== curMachineKey) {
+                    machineGroupIdx++;
+                }
+                const isMachineLast = !nextItem || getMachineKey(nextItem) !== curMachineKey;
+                const isMachineFirst = !prevItem || getMachineKey(prevItem) !== curMachineKey;
+
+                const bg = c.changeType === 'REPLACED'
+                    ? 'rgba(139, 92, 246, 0.05)'
+                    : (machineGroupIdx % 2 === 0 ? 'var(--surface-color)' : 'var(--surface-hover)');
+                const bottomBorder = isMachineLast
+                    ? '2px solid rgba(96, 165, 250, 0.45)'
+                    : '1px solid var(--border-color)';
+
                 let typeBadge = '';
-                if (c.changeType === 'NEW') {
+                if (c.changeType === 'REPLACED') {
+                    typeBadge = '<span style="background: rgba(139, 92, 246, 0.18); color: #8b5cf6; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.72rem; border: 1px solid rgba(139, 92, 246, 0.4);">🔄 품번변경</span>';
+                } else if (c.changeType === 'NEW') {
                     typeBadge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(16, 185, 129, 0.3);">🆕 신규</span>';
                 } else if (c.changeType === 'DELETED') {
                     typeBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(239, 68, 68, 0.3);">❌ 삭제</span>';
                 } else {
-                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 변동</span>';
+                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 수량변동</span>';
                 }
 
                 const plantText = c.plant === '1840' ? '<span style="color: #2563eb; font-weight: 700;">1840 남산+</span>' : '<span style="color: #9333ea; font-weight: 700;">1842 성주</span>';
-                
-                const diffVal = Number(c.diffQty);
-                const diffColor = diffVal > 0 ? '#10b981' : '#ef4444';
-                const diffPrefix = diffVal > 0 ? '+' : '';
+                const soOrOrderText = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-')
+                    ? c.soOrder
+                    : (c.order ? `<span style="color: var(--text-secondary); font-size: 0.7rem;" title="계획오더(재고생산)">오더:${c.order}</span>` : '-');
+                const serialHtml = c.serial
+                    ? `<span style="font-weight: ${isMachineFirst ? '800' : '600'}; color: var(--text-primary); background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px;">${c.serial}</span>`
+                    : '<span style="color: var(--text-secondary);">-</span>';
 
-                html += `<tr style="background: ${bg}; border-bottom: 1px solid var(--border-color); font-size: 0.76rem;">
+                let compCodeHtml = '';
+                let compDescHtml = '';
+                if (c.changeType === 'REPLACED') {
+                    compCodeHtml = `
+                        <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                            <span style="color: #ef4444; text-decoration: line-through; font-size: 0.73rem; opacity: 0.9;">${c.oldComponent || ''}</span>
+                            <span style="color: #8b5cf6; font-weight: 800;">➔</span>
+                            <span style="color: #10b981; font-weight: 800; background: rgba(16,185,129,0.12); padding: 1px 5px; border-radius: 4px;">${c.component || ''}</span>
+                        </div>`;
+                    if (c.oldCompDesc && c.oldCompDesc !== c.compDesc) {
+                        compDescHtml = `
+                            <div style="font-weight: 700; color: var(--text-primary);">${c.compDesc || ''}</div>
+                            <div style="font-size: 0.69rem; color: #ef4444; opacity: 0.85;">(이전: ${c.oldCompDesc})</div>`;
+                    } else {
+                        compDescHtml = `<div style="font-weight: 700; color: var(--text-primary);">${c.compDesc || ''}</div>`;
+                    }
+                } else if (c.changeType === 'DELETED') {
+                    compCodeHtml = `<span style="color: #ef4444; font-weight: 700;">${c.component || ''}</span>`;
+                    compDescHtml = `<span>${c.compDesc || ''}</span>`;
+                } else {
+                    compCodeHtml = `<span style="color: var(--accent-color); font-weight: 700;">${c.component || ''}</span>`;
+                    compDescHtml = `<span>${c.compDesc || ''}</span>`;
+                }
+
+                const diffVal = Number(c.diffQty);
+                let diffCellHtml = '';
+                if (c.changeType === 'REPLACED' && diffVal === 0) {
+                    diffCellHtml = '<span style="color: #8b5cf6; font-weight: 700;">교체(동일)</span>';
+                } else {
+                    const diffColor = diffVal > 0 ? '#10b981' : '#ef4444';
+                    const diffPrefix = diffVal > 0 ? '+' : '';
+                    diffCellHtml = `<span style="color: ${diffColor}; font-weight: 700;">${diffPrefix}${diffVal.toLocaleString()}</span>`;
+                }
+
+                html += `<tr style="background: ${bg}; border-bottom: ${bottomBorder}; font-size: 0.76rem;">
                     <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${idx + 1}</td>
-                    <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${typeBadge}</td>
-                    <td style="padding: 6px 10px; text-align: center; border-right: 1px solid var(--border-color);">${plantText}</td>
-                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color);">${c.soOrder || '-'}</td>
-                    <td style="padding: 6px 10px; font-family: monospace; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.serial || '-'}</td>
+                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid var(--border-color);">${typeBadge}</td>
+                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid var(--border-color);">${plantText}</td>
+                    <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color); text-align: center;">${soOrOrderText}</td>
+                    <td style="padding: 6px 8px; font-family: monospace; text-align: center; border-right: 1px solid var(--border-color);">${serialHtml}</td>
                     <td style="padding: 6px 10px; border-right: 1px solid var(--border-color);" title="${c.matDesc || ''}">
                         <div style="font-weight: 700; color: var(--text-primary);">${c.material || '-'}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.matDesc || ''}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.matDesc || ''}</div>
                     </td>
-                    <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: var(--accent-color); border-right: 1px solid var(--border-color);">${c.component}</td>
-                    <td style="padding: 6px 10px; color: var(--text-primary); border-right: 1px solid var(--border-color); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.compDesc}">${c.compDesc}</td>
+                    <td style="padding: 6px 10px; font-family: monospace; border-right: 1px solid var(--border-color);">${compCodeHtml}</td>
+                    <td style="padding: 6px 10px; color: var(--text-primary); border-right: 1px solid var(--border-color);" title="${c.oldCompDesc && c.oldCompDesc !== c.compDesc ? `${c.oldCompDesc} ➔ ${c.compDesc}` : (c.compDesc || '')}">${compDescHtml}</td>
                     <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.unit || '-'}</td>
                     <td style="padding: 6px 10px; text-align: right; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${Number(c.oldQty).toLocaleString()}</td>
                     <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color);">${Number(c.newQty).toLocaleString()}</td>
-                    <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: ${diffColor}; border-right: 1px solid var(--border-color);">${diffPrefix}${Number(c.diffQty).toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: right; border-right: 1px solid var(--border-color);">${diffCellHtml}</td>
                     <td style="padding: 6px 10px; text-align: center; color: var(--text-secondary);">${c.prodMonth || '-'}</td>
                 </tr>`;
             });
@@ -3092,7 +3212,14 @@ DST: 22. 지티테크`;
         }
 
         async function exportSapDiffToExcel() {
-            if (!sapDiffCurrentResult || !sapDiffCurrentResult.changes || sapDiffCurrentResult.changes.length === 0) {
+            if (!sapDiffCurrentResult) {
+                alert('다운로드할 변동 내역이 없습니다.');
+                return;
+            }
+            const exportList = (diffGroupMode && Array.isArray(sapDiffCurrentResult.groupedChanges))
+                ? sapDiffCurrentResult.groupedChanges
+                : (sapDiffCurrentResult.changes || []);
+            if (exportList.length === 0) {
                 alert('다운로드할 변동 내역이 없습니다.');
                 return;
             }
@@ -3103,7 +3230,7 @@ DST: 22. 지티테크`;
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        changes: sapDiffCurrentResult.changes,
+                        changes: exportList,
                         baseTitle: sapDiffCurrentResult.baseTitle,
                         targetTitle: sapDiffCurrentResult.targetTitle
                     })

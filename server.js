@@ -914,7 +914,7 @@ function parsePlanMhtml(filePath) {
             const matDesc = idxMatDesc !== -1 ? (cells[idxMatDesc] || '') : '';
 
             if (order && serial) orderToSerial.set(order, serial);
-            if (so && serial) soToSerial.set(so, serial);
+            if (so && so !== '0' && so !== '-' && serial) soToSerial.set(so, serial);
             if (order && month) orderToMonth.set(order, month);
             if (order && matDesc) orderToMatDesc.set(order, matDesc);
         });
@@ -993,7 +993,8 @@ function parseComponentMhtml(filePath, planData = null) {
 
         if (planData) {
             if (!serial || serial === '-') {
-                serial = planData.orderToSerial?.get(order) || planData.soToSerial?.get(soOrder) || '';
+                const validSo = (soOrder && soOrder !== '0' && soOrder !== '-') ? soOrder : '';
+                serial = planData.orderToSerial?.get(order) || (validSo ? planData.soToSerial?.get(validSo) : '') || '';
             }
             if (!prodMonth && planData.orderToMonth) {
                 prodMonth = planData.orderToMonth.get(order) || '';
@@ -1046,7 +1047,7 @@ function loadComponentDataset(snapshotId) {
     }
 
     const safeSnapId = String(snapshotId || 'current').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const diskDiffCachePath = path.join(SAP_CACHE_DIR, `diff_${safeSnapId}.cache.json`);
+    const diskDiffCachePath = path.join(SAP_CACHE_DIR, `diff_v2_${safeSnapId}.cache.json`);
     if (fs.existsSync(diskDiffCachePath)) {
         try {
             const cachedDisk = JSON.parse(fs.readFileSync(diskDiffCachePath, 'utf8'));
@@ -1111,7 +1112,187 @@ function getSnapshotList() {
     });
 }
 
+function scoreComponentSimilarity(delItem, newItem) {
+    const compA = (delItem.component || '').trim().toUpperCase();
+    const compB = (newItem.component || '').trim().toUpperCase();
+    const prefixA = compA.split('-')[0];
+    const prefixB = compB.split('-')[0];
+    const samePrefix = prefixA && prefixA.length >= 4 && prefixA === prefixB;
+
+    const descA = (delItem.compDesc || '').trim().toUpperCase();
+    const descB = (newItem.compDesc || '').trim().toUpperCase();
+    const mainA = descA.split(/[;,]/)[0].trim();
+    const mainB = descB.split(/[;,]/)[0].trim();
+    const subA = descA.split(/[;,]/).slice(1).join(' ').trim();
+    const subB = descB.split(/[;,]/).slice(1).join(' ').trim();
+
+    // Check directional/positional conflicts (e.g., LEFT vs RIGHT, UP vs BOTTOM, UPPER vs LOWER)
+    const hasDirConflict = (a, b, w1, w2) => {
+        const re1 = new RegExp(`\\b${w1}\\b`);
+        const re2 = new RegExp(`\\b${w2}\\b`);
+        return (re1.test(a) && re2.test(b)) || (re2.test(a) && re1.test(b));
+    };
+    if (
+        hasDirConflict(descA, descB, 'LEFT', 'RIGHT') ||
+        hasDirConflict(descA, descB, 'LH', 'RH') ||
+        hasDirConflict(descA, descB, 'UP', 'BOTTOM') ||
+        hasDirConflict(descA, descB, 'UPPER', 'LOWER') ||
+        hasDirConflict(descA, descB, 'FRONT', 'REAR')
+    ) {
+        return -100;
+    }
+
+    let score = 0;
+    if (descA && descA === descB) {
+        score += 200;
+    } else if (descA && descB && (descA.startsWith(descB) || descB.startsWith(descA))) {
+        score += 150;
+    }
+
+    if (mainA && mainA === mainB) {
+        score += 70;
+    } else if (mainA && mainB && (mainA.includes(mainB) || mainB.includes(mainA))) {
+        score += 40;
+    }
+
+    if (samePrefix) {
+        score += 50;
+    }
+
+    const tokensA = subA.split(/[\s_(),/&;-]+/).filter(Boolean);
+    const tokensB = subB.split(/[\s_(),/&;-]+/).filter(Boolean);
+    const usedB = new Set();
+    for (const tA of tokensA) {
+        for (let j = 0; j < tokensB.length; j++) {
+            if (usedB.has(j)) continue;
+            const tB = tokensB[j];
+            if (tA === tB) {
+                score += 25;
+                usedB.add(j);
+                break;
+            } else if (tA.length >= 3 && tB.length >= 3 && (tA.includes(tB) || tB.includes(tA))) {
+                score += 20;
+                usedB.add(j);
+                break;
+            }
+        }
+    }
+
+    return score;
+}
+
+function pairComponentReplacements(changes) {
+    // Group by machine (plant + serial, or plant + order if serial is absent)
+    const groups = new Map();
+    changes.forEach((c, idx) => {
+        const validSo = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-') ? c.soOrder : '';
+        const machineKey = `${c.plant || ''}|${c.serial || validSo || c.order || c.matDesc || idx}`;
+        if (!groups.has(machineKey)) {
+            groups.set(machineKey, []);
+        }
+        groups.get(machineKey).push(c);
+    });
+
+    const groupedChanges = [];
+
+    for (const [, items] of groups) {
+        const deletedList = items.filter(i => i.changeType === 'DELETED');
+        const newList = items.filter(i => i.changeType === 'NEW');
+        const qtyList = items.filter(i => i.changeType === 'QTY_CHANGE');
+
+        const candidatePairs = [];
+        deletedList.forEach((delItem, dIdx) => {
+            newList.forEach((newItem, nIdx) => {
+                const score = scoreComponentSimilarity(delItem, newItem);
+                if (score >= 70) {
+                    candidatePairs.push({ dIdx, nIdx, score });
+                }
+            });
+        });
+
+        // Sort candidate pairs by score descending for greedy best-first 1:1 matching
+        candidatePairs.sort((a, b) => b.score - a.score);
+
+        const matchedDel = new Set();
+        const matchedNew = new Set();
+        const machineResults = [];
+
+        for (const pair of candidatePairs) {
+            if (matchedDel.has(pair.dIdx) || matchedNew.has(pair.nIdx)) continue;
+            matchedDel.add(pair.dIdx);
+            matchedNew.add(pair.nIdx);
+
+            const delItem = deletedList[pair.dIdx];
+            const newItem = newList[pair.nIdx];
+            machineResults.push({
+                changeType: 'REPLACED',
+                plant: newItem.plant || delItem.plant,
+                soOrder: newItem.soOrder || delItem.soOrder,
+                serial: newItem.serial || delItem.serial,
+                order: newItem.order || delItem.order,
+                prodMonth: newItem.prodMonth || delItem.prodMonth,
+                material: newItem.material || delItem.material,
+                matDesc: newItem.matDesc || delItem.matDesc,
+                oldComponent: delItem.component,
+                component: newItem.component,
+                oldCompDesc: delItem.compDesc,
+                compDesc: newItem.compDesc,
+                unit: newItem.unit || delItem.unit,
+                wareCtrl: newItem.wareCtrl || delItem.wareCtrl || '',
+                wareCtrlDesc: newItem.wareCtrlDesc || delItem.wareCtrlDesc || '',
+                isUnitA: !!(newItem.isUnitA || delItem.isUnitA),
+                oldQty: delItem.oldQty,
+                newQty: newItem.newQty,
+                diffQty: newItem.newQty - delItem.oldQty,
+                matchScore: pair.score
+            });
+        }
+
+        // Add remaining unmatched NEW, DELETED, and QTY_CHANGE items for this machine
+        newList.forEach((newItem, nIdx) => {
+            if (!matchedNew.has(nIdx)) machineResults.push(newItem);
+        });
+        deletedList.forEach((delItem, dIdx) => {
+            if (!matchedDel.has(dIdx)) machineResults.push(delItem);
+        });
+        qtyList.forEach(qItem => {
+            machineResults.push(qItem);
+        });
+
+        // Sort items within the same machine: REPLACED first, then by compDesc
+        const typeOrder = { REPLACED: 1, NEW: 2, DELETED: 3, QTY_CHANGE: 4 };
+        machineResults.sort((a, b) => {
+            const tDiff = (typeOrder[a.changeType] || 9) - (typeOrder[b.changeType] || 9);
+            if (tDiff !== 0) return tDiff;
+            return (a.compDesc || '').localeCompare(b.compDesc || '', 'ko');
+        });
+
+        groupedChanges.push(...machineResults);
+    }
+
+    // Sort all grouped changes by plant -> serial/order -> type -> compDesc
+    groupedChanges.sort((a, b) => {
+        if (a.plant !== b.plant) return (a.plant || '').localeCompare(b.plant || '');
+        const aHasSerial = a.serial ? 0 : 1;
+        const bHasSerial = b.serial ? 0 : 1;
+        if (aHasSerial !== bHasSerial) return aHasSerial - bHasSerial;
+        const keyA = a.serial || a.order || a.soOrder || '';
+        const keyB = b.serial || b.order || b.soOrder || '';
+        if (keyA !== keyB) return keyA.localeCompare(keyB, 'ko');
+        return (a.compDesc || '').localeCompare(b.compDesc || '', 'ko');
+    });
+
+    return groupedChanges;
+}
+
 function calculateComponentDiff(recordsA, recordsB) {
+    const getAffectedOrderKey = (r) => {
+        if (r.serial && r.serial !== '-') return `S:${r.serial}`;
+        const validSo = (r.soOrder && r.soOrder !== '0' && r.soOrder !== '-') ? r.soOrder : '';
+        if (validSo) return `SO:${validSo}`;
+        return `ORD:${r.order || r.matDesc || ''}`;
+    };
+
     const aggregate = (records) => {
         const map = new Map();
         for (const r of records) {
@@ -1152,7 +1333,7 @@ function calculateComponentDiff(recordsA, recordsB) {
                 newQty: itemB.qty,
                 diffQty: itemB.qty
             });
-            ordersAffected.add(itemB.soOrder || itemB.order || itemB.serial);
+            ordersAffected.add(getAffectedOrderKey(itemB));
         } else {
             const itemA = mapA.get(key);
             if (Math.abs(itemA.qty - itemB.qty) > 0.0001) {
@@ -1176,7 +1357,7 @@ function calculateComponentDiff(recordsA, recordsB) {
                     newQty: itemB.qty,
                     diffQty: diff
                 });
-                ordersAffected.add(itemB.soOrder || itemB.order || itemB.serial);
+                ordersAffected.add(getAffectedOrderKey(itemB));
             }
         }
     }
@@ -1203,19 +1384,40 @@ function calculateComponentDiff(recordsA, recordsB) {
                 newQty: 0,
                 diffQty: -itemA.qty
             });
-            ordersAffected.add(itemA.soOrder || itemA.order || itemA.serial);
+            ordersAffected.add(getAffectedOrderKey(itemA));
         }
     }
 
+    // Sort raw changes by plant -> serial/order -> compDesc so even ungrouped view stays organized by machine
+    changes.sort((a, b) => {
+        if (a.plant !== b.plant) return (a.plant || '').localeCompare(b.plant || '');
+        const aHasSerial = a.serial ? 0 : 1;
+        const bHasSerial = b.serial ? 0 : 1;
+        if (aHasSerial !== bHasSerial) return aHasSerial - bHasSerial;
+        const keyA = a.serial || a.order || a.soOrder || '';
+        const keyB = b.serial || b.order || b.soOrder || '';
+        if (keyA !== keyB) return keyA.localeCompare(keyB, 'ko');
+        return (a.compDesc || '').localeCompare(b.compDesc || '', 'ko');
+    });
+
+    const groupedChanges = pairComponentReplacements(changes);
+    const totalReplaced = groupedChanges.filter(c => c.changeType === 'REPLACED').length;
+    const totalPureNew = groupedChanges.filter(c => c.changeType === 'NEW').length;
+    const totalPureDeleted = groupedChanges.filter(c => c.changeType === 'DELETED').length;
+
     const summary = {
+        totalReplaced,
+        totalPureNew,
+        totalPureDeleted,
         totalNew: changes.filter(c => c.changeType === 'NEW').length,
         totalDeleted: changes.filter(c => c.changeType === 'DELETED').length,
         totalQtyChanged: changes.filter(c => c.changeType === 'QTY_CHANGE').length,
         totalOrdersAffected: ordersAffected.size,
-        totalChanges: changes.length
+        totalChanges: changes.length,
+        totalGroupedChanges: groupedChanges.length
     };
 
-    return { summary, changes };
+    return { summary, changes, groupedChanges };
 }
 
 app.get('/api/sap-diff/history', (req, res) => {
@@ -1253,7 +1455,8 @@ app.post('/api/sap-diff/compare', (req, res) => {
             targetId,
             targetTitle,
             summary: diffResult.summary,
-            changes: diffResult.changes
+            changes: diffResult.changes,
+            groupedChanges: diffResult.groupedChanges
         });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
@@ -1268,19 +1471,20 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
         }
 
         const rows = changes.map(c => ({
-            '변동유형': c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'),
+            '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동')),
             '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
-            'S/O번호': c.soOrder,
-            '시리얼': c.serial,
-            '계획오더': c.order,
-            '생산월': c.prodMonth,
-            '모품번(기종)': c.material,
-            '기종내역': c.matDesc,
-            '가공품번(Component)': c.component,
-            '가공품명(Comp.Desc)': c.compDesc,
-            '창고관리자': c.wareCtrl ? (c.wareCtrlDesc ? `${c.wareCtrl} (${c.wareCtrlDesc})` : c.wareCtrl) : '',
-            '유니트구분': c.isUnitA ? '⭐ A급 유니트' : '사내 가공품',
-            '단위': c.unit,
+            'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
+            '호기(시리얼)': c.serial || '-',
+            '계획오더': c.order || '-',
+            '생산월': c.prodMonth || '-',
+            '모품번(기종)': c.material || '-',
+            '기종내역': c.matDesc || '-',
+            '이전 가공품번': c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? c.component : '-'),
+            '변경/최신 가공품번': c.changeType === 'DELETED' ? '-' : (c.component || ''),
+            '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
+                ? `${c.compDesc} (이전: ${c.oldCompDesc})`
+                : (c.compDesc || ''),
+            '단위': c.unit || '',
             '이전 소요량': c.oldQty,
             '최신 소요량': c.newQty,
             '소요량 차이(+/-)': c.diffQty
