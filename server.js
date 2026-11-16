@@ -931,6 +931,7 @@ function parseComponentMhtml(filePath, planData = null) {
     let idxPlant = -1, idxSerial = -1, idxSO = -1, idxOrder = -1, idxMonth = -1;
     let idxMat = -1, idxMatDesc = -1, idxComp = -1, idxCompDesc = -1, idxQty = -1;
     let idxUnit = -1, idxDel = -1, idxWareCtrl = -1, idxSortStr = -1;
+    let idxInvName = -1, idxInvCode = -1;
     let hasHeaders = false;
     const records = [];
 
@@ -952,6 +953,11 @@ function parseComponentMhtml(filePath, planData = null) {
                 idxDel = headers.findIndex(h => h.includes('DELETED ITEM') || h.includes('DELETED') || h.includes('삭제'));
                 idxWareCtrl = headers.findIndex(h => h.includes('WAREHOUSE CONTROLLER') || h.includes('창고관리자') || h.includes('창고 관리자'));
                 idxSortStr = headers.findIndex(h => h.includes('SORT STRING') || h.includes('정렬 문자열') || h.includes('정렬'));
+                const invIndices = headers
+                    .map((h, i) => (h.includes('INV.MANAGER') || h.includes('INV. MANAGER') || h.includes('INVENTORY MANAGER') || h.includes('재고관리자') || h.includes('담당자')) ? i : -1)
+                    .filter(i => i !== -1);
+                if (invIndices.length > 0) idxInvName = invIndices[0];
+                if (invIndices.length > 1) idxInvCode = invIndices[1];
                 hasHeaders = true;
                 return;
             }
@@ -1004,6 +1010,12 @@ function parseComponentMhtml(filePath, planData = null) {
             }
         }
 
+        const invManagerName = idxInvName !== -1 ? (cells[idxInvName] || '').trim() : '';
+        const invManagerCode = idxInvCode !== -1 ? (cells[idxInvCode] || '').trim() : '';
+        const invManager = invManagerName && invManagerCode
+            ? `${invManagerName} (${invManagerCode})`
+            : (invManagerName || invManagerCode || '');
+
         records.push({
             plant,
             serial,
@@ -1019,7 +1031,10 @@ function parseComponentMhtml(filePath, planData = null) {
             wareCtrl,
             wareCtrlDesc,
             sortStr,
-            isUnitA
+            isUnitA,
+            invManagerName,
+            invManagerCode,
+            invManager
         });
     });
     return records;
@@ -1041,13 +1056,13 @@ function loadComponentDataset(snapshotId) {
         try { return fs.existsSync(p) ? fs.statSync(p).mtimeMs : 0; } catch (e) { return 0; }
     }).join('_');
 
-    const memKey = `${snapshotId}:${mtimeSig}`;
+    const memKey = `v3:${snapshotId}:${mtimeSig}`;
     if (sapDiffMemoryCache.has(memKey)) {
         return sapDiffMemoryCache.get(memKey);
     }
 
     const safeSnapId = String(snapshotId || 'current').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const diskDiffCachePath = path.join(SAP_CACHE_DIR, `diff_v2_${safeSnapId}.cache.json`);
+    const diskDiffCachePath = path.join(SAP_CACHE_DIR, `diff_v3_${safeSnapId}.cache.json`);
     if (fs.existsSync(diskDiffCachePath)) {
         try {
             const cachedDisk = JSON.parse(fs.readFileSync(diskDiffCachePath, 'utf8'));
@@ -1241,6 +1256,10 @@ function pairComponentReplacements(changes) {
                 wareCtrl: newItem.wareCtrl || delItem.wareCtrl || '',
                 wareCtrlDesc: newItem.wareCtrlDesc || delItem.wareCtrlDesc || '',
                 isUnitA: !!(newItem.isUnitA || delItem.isUnitA),
+                oldInvManager: delItem.invManager || '',
+                invManager: newItem.invManager || '',
+                invManagerName: newItem.invManagerName || '',
+                invManagerCode: newItem.invManagerCode || '',
                 oldQty: delItem.oldQty,
                 newQty: newItem.newQty,
                 diffQty: newItem.newQty - delItem.oldQty,
@@ -1329,6 +1348,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                 wareCtrl: itemB.wareCtrl || '',
                 wareCtrlDesc: itemB.wareCtrlDesc || '',
                 isUnitA: !!itemB.isUnitA,
+                invManager: itemB.invManager || '',
+                invManagerName: itemB.invManagerName || '',
+                invManagerCode: itemB.invManagerCode || '',
                 oldQty: 0,
                 newQty: itemB.qty,
                 diffQty: itemB.qty
@@ -1353,6 +1375,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                     wareCtrl: itemB.wareCtrl || itemA.wareCtrl || '',
                     wareCtrlDesc: itemB.wareCtrlDesc || itemA.wareCtrlDesc || '',
                     isUnitA: !!(itemB.isUnitA || itemA.isUnitA),
+                    invManager: itemB.invManager || itemA.invManager || '',
+                    invManagerName: itemB.invManagerName || itemA.invManagerName || '',
+                    invManagerCode: itemB.invManagerCode || itemA.invManagerCode || '',
                     oldQty: itemA.qty,
                     newQty: itemB.qty,
                     diffQty: diff
@@ -1380,6 +1405,9 @@ function calculateComponentDiff(recordsA, recordsB) {
                 wareCtrl: itemA.wareCtrl || '',
                 wareCtrlDesc: itemA.wareCtrlDesc || '',
                 isUnitA: !!itemA.isUnitA,
+                invManager: itemA.invManager || '',
+                invManagerName: itemA.invManagerName || '',
+                invManagerCode: itemA.invManagerCode || '',
                 oldQty: itemA.qty,
                 newQty: 0,
                 diffQty: -itemA.qty
@@ -1387,6 +1415,47 @@ function calculateComponentDiff(recordsA, recordsB) {
             ordersAffected.add(getAffectedOrderKey(itemA));
         }
     }
+
+    // Also collect all active components in recordsB (current target dataset) that have NO Inv.Manager registered (초도품 / 담당자 미등록)
+    const unregMap = new Map();
+    for (const r of recordsB) {
+        if (!r.invManager) {
+            const uKey = [r.plant, r.soOrder || r.order || '', r.serial || '', r.component].join('|');
+            if (!unregMap.has(uKey)) {
+                unregMap.set(uKey, {
+                    changeType: 'UNREGISTERED_ALL',
+                    plant: r.plant,
+                    soOrder: r.soOrder,
+                    serial: r.serial,
+                    order: r.order,
+                    prodMonth: r.prodMonth,
+                    material: r.material,
+                    matDesc: r.matDesc,
+                    component: r.component,
+                    compDesc: r.compDesc,
+                    unit: r.unit,
+                    invManager: '',
+                    oldQty: 0,
+                    newQty: r.qty,
+                    diffQty: r.qty
+                });
+            } else {
+                unregMap.get(uKey).newQty += r.qty;
+                unregMap.get(uKey).diffQty += r.qty;
+            }
+        }
+    }
+    const unregisteredAll = Array.from(unregMap.values()).sort((a, b) => {
+        if (a.plant !== b.plant) return (a.plant || '').localeCompare(b.plant || '');
+        const aHasSerial = a.serial ? 0 : 1;
+        const bHasSerial = b.serial ? 0 : 1;
+        if (aHasSerial !== bHasSerial) return aHasSerial - bHasSerial;
+        const keyA = a.serial || a.order || a.soOrder || '';
+        const keyB = b.serial || b.order || b.soOrder || '';
+        if (keyA !== keyB) return keyA.localeCompare(keyB, 'ko');
+        return (a.compDesc || '').localeCompare(b.compDesc || '', 'ko');
+    });
+    const uniqueUnregisteredParts = new Set(unregisteredAll.map(u => u.component)).size;
 
     // Sort raw changes by plant -> serial/order -> compDesc so even ungrouped view stays organized by machine
     changes.sort((a, b) => {
@@ -1404,6 +1473,7 @@ function calculateComponentDiff(recordsA, recordsB) {
     const totalReplaced = groupedChanges.filter(c => c.changeType === 'REPLACED').length;
     const totalPureNew = groupedChanges.filter(c => c.changeType === 'NEW').length;
     const totalPureDeleted = groupedChanges.filter(c => c.changeType === 'DELETED').length;
+    const totalDiffUnregistered = groupedChanges.filter(c => c.changeType !== 'DELETED' && !c.invManager).length;
 
     const summary = {
         totalReplaced,
@@ -1414,10 +1484,13 @@ function calculateComponentDiff(recordsA, recordsB) {
         totalQtyChanged: changes.filter(c => c.changeType === 'QTY_CHANGE').length,
         totalOrdersAffected: ordersAffected.size,
         totalChanges: changes.length,
-        totalGroupedChanges: groupedChanges.length
+        totalGroupedChanges: groupedChanges.length,
+        totalDiffUnregistered,
+        totalAllUnregisteredRows: unregisteredAll.length,
+        uniqueUnregisteredParts
     };
 
-    return { summary, changes, groupedChanges };
+    return { summary, changes, groupedChanges, unregisteredAll };
 }
 
 app.get('/api/sap-diff/history', (req, res) => {
@@ -1456,7 +1529,8 @@ app.post('/api/sap-diff/compare', (req, res) => {
             targetTitle,
             summary: diffResult.summary,
             changes: diffResult.changes,
-            groupedChanges: diffResult.groupedChanges
+            groupedChanges: diffResult.groupedChanges,
+            unregisteredAll: diffResult.unregisteredAll
         });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
@@ -1471,7 +1545,7 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
         }
 
         const rows = changes.map(c => ({
-            '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동')),
+            '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'UNREGISTERED_ALL' ? '초도/담당자미등록' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'))),
             '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
             'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
             '호기(시리얼)': c.serial || '-',
@@ -1484,6 +1558,8 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
             '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
                 ? `${c.compDesc} (이전: ${c.oldCompDesc})`
                 : (c.compDesc || ''),
+            '담당자(Inv.Manager)': c.invManager || '🚨 미등록',
+            '이전품번 담당자': c.oldInvManager || '-',
             '단위': c.unit || '',
             '이전 소요량': c.oldQty,
             '최신 소요량': c.newQty,
