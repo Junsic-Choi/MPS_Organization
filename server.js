@@ -1648,120 +1648,193 @@ function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
     const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     const rowsHtml = groupedChanges.map((c, idx) => {
-        const typeLabel = c.changeType === 'REPLACED'
-            ? '품번변경(설변교체)'
-            : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'));
-        const typeColor = c.changeType === 'REPLACED'
-            ? '#6d28d9'
-            : (c.changeType === 'NEW' ? '#047857' : (c.changeType === 'DELETED' ? '#b91c1c' : '#b45309'));
-        const typeBg = c.changeType === 'REPLACED'
-            ? '#ede9fe'
-            : (c.changeType === 'NEW' ? '#d1fae5' : (c.changeType === 'DELETED' ? '#fee2e2' : '#fef3c7'));
+        let badgeBg = '#ede9fe', badgeColor = '#6d28d9', badgeText = '품번변경';
+        if (c.changeType === 'NEW') {
+            badgeBg = '#d1fae5'; badgeColor = '#047857'; badgeText = '신규투입';
+        } else if (c.changeType === 'DELETED') {
+            badgeBg = '#fee2e2'; badgeColor = '#b91c1c'; badgeText = '삭제/제외';
+        } else if (c.changeType === 'QTY_CHANGE') {
+            badgeBg = '#fef3c7'; badgeColor = '#b45309'; badgeText = '수량변동';
+        }
 
-        const plantLabel = c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : (c.plant || '-'));
-        const soText = (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-';
-        const oldComp = c.changeType === 'REPLACED' ? (c.oldComponent || '-') : (c.changeType === 'DELETED' ? (c.component || '-') : '-');
-        const newComp = c.changeType === 'DELETED' ? '-' : (c.component || '-');
-        const descText = (c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc)
-            ? `${c.compDesc} (이전: ${c.oldCompDesc})`
-            : (c.compDesc || '-');
+        const plantBadge = c.plant === '1840'
+            ? '<span style="color:#1d4ed8; font-weight:700;">1840 남산+</span>'
+            : (c.plant === '1842' ? '<span style="color:#7e22ce; font-weight:700;">1842 성주</span>' : escapeHtml(c.plant || '-'));
+        const monthSub = c.prodMonth ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(c.prodMonth)}</div>` : '';
+
+        const serialMain = c.serial
+            ? `<div style="font-weight:700; color:#0f172a; font-family:Consolas,'Malgun Gothic',monospace; font-size:12px;">${escapeHtml(c.serial)}</div>`
+            : `<div style="color:#64748b; font-size:12px;">호기 미지정</div>`;
+        const orderOrSo = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-')
+            ? `S/O: ${escapeHtml(c.soOrder)}`
+            : (c.order ? `오더: ${escapeHtml(c.order)}` : '');
+        const orderSub = orderOrSo ? `<div style="font-size:11px; color:#64748b; margin-top:2px; font-family:Consolas,monospace;">${orderOrSo}</div>` : '';
+
+        const matTitle = c.matDesc ? escapeHtml(c.matDesc) : escapeHtml(c.material || '-');
+        const matSub = (c.material && c.material !== 'SEMI' && c.matDesc)
+            ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(c.material)}</div>`
+            : '';
+
+        let partNumHtml = '';
+        if (c.changeType === 'REPLACED') {
+            partNumHtml = `
+                <div style="font-family:Consolas,monospace; font-size:11px; color:#94a3b8; text-decoration:line-through;">${escapeHtml(c.oldComponent || '-')}</div>
+                <div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#0f172a; margin-top:2px;">
+                    <span style="color:#7c3aed; font-weight:700;">➔</span> <span style="background:#f5f3ff; color:#5b21b6; padding:1px 5px; font-weight:700;">${escapeHtml(c.component || '-')}</span>
+                </div>`;
+        } else if (c.changeType === 'DELETED') {
+            partNumHtml = `<div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#dc2626; text-decoration:line-through;">${escapeHtml(c.component || '-')}</div>`;
+        } else {
+            partNumHtml = `<div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#0284c7;">${escapeHtml(c.component || '-')}</div>`;
+        }
+
+        let partDescHtml = `<div style="font-weight:600; color:#1e293b; font-size:12px;">${escapeHtml(c.compDesc || '-')}</div>`;
+        if (c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc) {
+            partDescHtml += `<div style="font-size:11px; color:#64748b; margin-top:2px;">이전 품명: ${escapeHtml(c.oldCompDesc)}</div>`;
+        }
 
         const isUnreg = c.changeType !== 'DELETED' && !c.invManager;
-        const invMgrHtml = c.invManager
-            ? `<span style="color:#1e40af; font-weight:bold;">${escapeHtml(c.invManager)}</span>`
-            : (c.changeType === 'DELETED' ? '<span style="color:#64748b;">-</span>' : '<span style="background:#ffe4e6; color:#e11d48; padding:2px 6px; border-radius:4px; font-weight:bold;">🚨 미등록</span>');
-        const oldInvHtml = escapeHtml(c.oldInvManager || (c.changeType === 'DELETED' ? (c.invManager || '-') : '-'));
+        let invHtml = '';
+        if (c.invManager) {
+            invHtml = `<span style="background:#eff6ff; color:#1d4ed8; padding:3px 8px; font-weight:700; font-size:11px;">${escapeHtml(c.invManager)}</span>`;
+            if (c.changeType === 'REPLACED' && c.oldInvManager && c.oldInvManager !== c.invManager) {
+                invHtml += `<div style="font-size:11px; color:#64748b; margin-top:3px;">이전: ${escapeHtml(c.oldInvManager)}</div>`;
+            }
+        } else if (c.changeType === 'DELETED') {
+            invHtml = `<span style="color:#94a3b8; font-size:11px;">${escapeHtml(c.oldInvManager || '-')}</span>`;
+        } else {
+            invHtml = `<span style="background:#ffe4e6; color:#e11d48; padding:3px 8px; font-weight:700; font-size:11px;">미등록</span>`;
+            if (c.oldInvManager) {
+                invHtml += `<div style="font-size:11px; color:#d97706; font-weight:600; margin-top:3px;">이전담당: ${escapeHtml(c.oldInvManager)}</div>`;
+            }
+        }
 
-        const rowBg = isUnreg ? '#fff1f2' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+        const oldQ = Number(c.oldQty || 0).toLocaleString();
+        const newQ = Number(c.newQty || 0).toLocaleString();
         const diffNum = Number(c.diffQty || 0);
-        const diffStr = diffNum > 0 ? `+${diffNum}` : `${diffNum}`;
+        const unitStr = c.unit ? ` ${escapeHtml(c.unit)}` : '';
+        let qtySubHtml = '';
+        if (c.changeType === 'REPLACED' && diffNum === 0) {
+            qtySubHtml = `<span style="color:#6d28d9; font-weight:700; font-size:11px;">1:1 교체</span>`;
+        } else if (diffNum > 0) {
+            qtySubHtml = `<span style="color:#059669; font-weight:700; font-size:11px;">+${diffNum.toLocaleString()}${unitStr}</span>`;
+        } else if (diffNum < 0) {
+            qtySubHtml = `<span style="color:#dc2626; font-weight:700; font-size:11px;">${diffNum.toLocaleString()}${unitStr}</span>`;
+        }
 
-        return `<tr style="background:${rowBg};">
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:bold; color:${typeColor}; background:${typeBg};">${escapeHtml(typeLabel)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(plantLabel)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(soText)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:bold;">${escapeHtml(c.serial || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.order || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.prodMonth || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(c.material || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(c.matDesc || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; color:#dc2626; font-family:Consolas,monospace;">${escapeHtml(oldComp)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; color:#047857; font-weight:bold; font-family:Consolas,monospace;">${escapeHtml(newComp)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(descText)}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${invMgrHtml}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${oldInvHtml}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.unit || '-')}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right;">${Number(c.oldQty || 0).toLocaleString()}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right; font-weight:bold;">${Number(c.newQty || 0).toLocaleString()}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right; font-weight:bold;">${escapeHtml(diffStr)}</td>
+        const rowBg = isUnreg ? '#fff5f7' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+
+        return `<tr style="background-color:${rowBg};">
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+                <span style="background-color:${badgeBg}; color:${badgeColor}; padding:4px 8px; font-weight:700; font-size:11px; display:inline-block;">${badgeText}</span>
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+                ${plantBadge}${monthSub}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+                ${serialMain}${orderSub}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle; color:#334155; font-size:12px;">
+                <div style="font-weight:600;">${matTitle}</div>${matSub}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+                ${partNumHtml}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+                ${partDescHtml}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+                ${invHtml}
+            </td>
+            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:right; vertical-align:middle;">
+                <div style="font-size:12px; color:#334155;"><span style="color:#94a3b8;">${oldQ}</span> ➔ <b style="color:#0f172a;">${newQ}</b><span style="font-size:11px; color:#64748b;">${unitStr}</span></div>
+                <div style="margin-top:2px;">${qtySubHtml}</div>
+            </td>
         </tr>`;
     }).join('\r\n');
 
     return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="font-family:'Malgun Gothic','맑은 고딕',sans-serif; font-size:12px; color:#1e293b; line-height:1.5;">
-    <div style="background:#1e293b; color:#ffffff; padding:14px 18px; border-radius:8px; margin-bottom:14px;">
-        <h2 style="margin:0 0 4px 0; font-size:16px; color:#93c5fd;">🔄 [MPS 대시보드] SAP ERP 설계변경(설변) 및 하위 가공품 소요량 변동 리포트</h2>
-        <div style="font-size:12px; color:#cbd5e1;">
-            비교 기준(과거): <b>${escapeHtml(baseTitle)}</b> &nbsp;➔&nbsp; 비교 대상(최신): <b>${escapeHtml(targetTitle)}</b> &nbsp;|&nbsp; 발송 시각: <b>${nowStr}</b>
-        </div>
-    </div>
-
-    <table style="border-collapse:collapse; margin-bottom:14px; width:100%; max-width:900px;">
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:'Malgun Gothic','맑은 고딕','Segoe UI',sans-serif; color:#0f172a;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9; padding:24px 16px;">
         <tr>
-            <td style="border:1px solid #cbd5e1; background:#f5f3ff; padding:8px 12px; text-align:center;">
-                <div style="font-size:11px; color:#6d28d9; font-weight:bold;">🔄 품번 변경 (설변 A➔B)</div>
-                <div style="font-size:16px; font-weight:bold; color:#5b21b6;">${summary.totalReplaced || 0}쌍</div>
-            </td>
-            <td style="border:1px solid #cbd5e1; background:#ecfdf5; padding:8px 12px; text-align:center;">
-                <div style="font-size:11px; color:#047857; font-weight:bold;">🆕 순수 신규 투입</div>
-                <div style="font-size:16px; font-weight:bold; color:#065f46;">${summary.totalPureNew || 0}건 <span style="font-size:11px; font-weight:normal;">(전체 ${summary.totalNew || 0})</span></div>
-            </td>
-            <td style="border:1px solid #cbd5e1; background:#fef2f2; padding:8px 12px; text-align:center;">
-                <div style="font-size:11px; color:#b91c1c; font-weight:bold;">❌ 순수 삭제/제외</div>
-                <div style="font-size:16px; font-weight:bold; color:#991b1b;">${summary.totalPureDeleted || 0}건 <span style="font-size:11px; font-weight:normal;">(전체 ${summary.totalDeleted || 0})</span></div>
-            </td>
-            <td style="border:1px solid #cbd5e1; background:#fffbeb; padding:8px 12px; text-align:center;">
-                <div style="font-size:11px; color:#b45309; font-weight:bold;">⚠️ 소요 수량 변동</div>
-                <div style="font-size:16px; font-weight:bold; color:#92400e;">${summary.totalQtyChanged || 0}건</div>
-            </td>
-            <td style="border:1px solid #cbd5e1; background:#fff1f2; padding:8px 12px; text-align:center;">
-                <div style="font-size:11px; color:#e11d48; font-weight:bold;">🚨 변동중 담당자 미등록</div>
-                <div style="font-size:16px; font-weight:bold; color:#be123c;">${summary.totalDiffUnregistered || 0}건 <span style="font-size:11px; font-weight:normal;">(전체미등록 ${summary.uniqueUnregisteredParts || 0}품번)</span></div>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:1160px; background-color:#ffffff; border:1px solid #e2e8f0; border-top:4px solid #2563eb;">
+                    <!-- Header Section -->
+                    <tr>
+                        <td style="padding:24px 28px 18px 28px; border-bottom:1px solid #f1f5f9;">
+                            <div style="font-size:11px; font-weight:700; color:#2563eb; letter-spacing:0.5px; margin-bottom:4px;">SAP ERP ENGINEERING CHANGE &amp; BOM MONITOR</div>
+                            <div style="font-size:20px; font-weight:800; color:#0f172a; margin-bottom:8px;">설계변경(설변) 및 하위 가공품 소요량 변동 리포트</div>
+                            <div style="font-size:12px; color:#64748b;">
+                                비교 구간: <b style="color:#334155;">${escapeHtml(baseTitle)}</b> &nbsp;➔&nbsp; <b style="color:#2563eb;">${escapeHtml(targetTitle)}</b>
+                                &nbsp;&nbsp;|&nbsp;&nbsp; 자동 발송 일시: <b style="color:#334155;">${nowStr}</b>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- KPI Cards Section -->
+                    <tr>
+                        <td style="padding:18px 28px 10px 28px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #7c3aed; padding:12px 14px;">
+                                        <div style="font-size:11px; color:#64748b; font-weight:700;">품번 변경 (설변 A➔B)</div>
+                                        <div style="font-size:22px; font-weight:800; color:#6d28d9; margin-top:4px;">${summary.totalReplaced || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 쌍</span></div>
+                                    </td>
+                                    <td width="1%">&nbsp;</td>
+                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #10b981; padding:12px 14px;">
+                                        <div style="font-size:11px; color:#64748b; font-weight:700;">순수 신규 투입</div>
+                                        <div style="font-size:22px; font-weight:800; color:#059669; margin-top:4px;">${summary.totalPureNew || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalNew || 0})</span></div>
+                                    </td>
+                                    <td width="1%">&nbsp;</td>
+                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #ef4444; padding:12px 14px;">
+                                        <div style="font-size:11px; color:#64748b; font-weight:700;">순수 삭제/제외</div>
+                                        <div style="font-size:22px; font-weight:800; color:#dc2626; margin-top:4px;">${summary.totalPureDeleted || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalDeleted || 0})</span></div>
+                                    </td>
+                                    <td width="1%">&nbsp;</td>
+                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #f59e0b; padding:12px 14px;">
+                                        <div style="font-size:11px; color:#64748b; font-weight:700;">소요 수량 변동</div>
+                                        <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;">${summary.totalQtyChanged || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건</span></div>
+                                    </td>
+                                    <td width="1%">&nbsp;</td>
+                                    <td width="20%" style="background-color:#fff1f2; border:1px solid #fecdd3; border-top:3px solid #e11d48; padding:12px 14px;">
+                                        <div style="font-size:11px; color:#be123c; font-weight:700;">변동중 담당자 미등록</div>
+                                        <div style="font-size:22px; font-weight:800; color:#e11d48; margin-top:4px;">${summary.totalDiffUnregistered || 0}<span style="font-size:12px; font-weight:600; color:#9f1239;"> 건 (전체 ${summary.uniqueUnregisteredParts || 0}품번)</span></div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Table Section -->
+                    <tr>
+                        <td style="padding:12px 28px 28px 28px;">
+                            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
+                                총 <b style="color:#0f172a;">${groupedChanges.length}건</b>의 변동 내역이 감지되었습니다. 상세 원본 데이터는 첨부된 Excel 파일을 참고해 주세요.
+                            </div>
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; border-top:2px solid #0f172a;">
+                                <thead>
+                                    <tr style="background-color:#f8fafc; color:#475569; font-size:11px; text-align:left;">
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:76px;">구분</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:86px;">플랜트/월</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:125px;">호기(Serial)/오더</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:170px;">완제품 기종내역</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:165px;">가공품 품번 (이전 ➔ 변경)</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1;">가공품 품명 (Comp.Desc)</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:115px;">담당자 (Inv.Mgr)</th>
+                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:right; width:105px;">소요량 (이전➔최신)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rowsHtml}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
-    </table>
-
-    <p style="margin:0 0 8px 0; font-size:12px; color:#475569;">
-        ※ 전체 상세 내역은 첨부된 엑셀 파일(<b>ERP_설변_가공품변동.xlsx</b>)에서도 확인하실 수 있습니다. (총 <b>${groupedChanges.length}</b>건)
-    </p>
-
-    <table style="border-collapse:collapse; width:100%; font-size:11px;">
-        <thead>
-            <tr style="background:#e2e8f0; color:#0f172a;">
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">변동유형</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">플랜트</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">S/O번호</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">호기(시리얼)</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">계획오더</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">생산월</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">모품번(기종)</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">기종내역</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전 가공품번</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">변경/최신 가공품번</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">가공품명(Comp.Desc)</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">담당자(Inv.Manager)</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전품번 담당자</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">단위</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전 소요량</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">최신 소요량</th>
-                <th style="border:1px solid #94a3b8; padding:6px 8px;">소요량 차이</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${rowsHtml}
-        </tbody>
     </table>
 </body>
 </html>`;

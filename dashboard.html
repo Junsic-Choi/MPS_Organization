@@ -1206,24 +1206,19 @@
                 </div>
 
                 <!-- Table Container -->
-                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 48vh; background: var(--surface-color);">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;" id="sap-diff-table">
-                        <thead style="position: sticky; top: 0; background: var(--surface-hover); color: var(--text-primary); font-weight: 700; border-bottom: 2px solid var(--border-color); z-index: 2;">
+                <div style="flex: 1; overflow: auto; border: 1px solid var(--border-color); border-radius: 10px; max-height: 50vh; background: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;" id="sap-diff-table">
+                        <thead style="position: sticky; top: 0; background: var(--surface-hover); color: var(--text-secondary); font-weight: 700; font-size: 0.74rem; letter-spacing: 0.02em; border-bottom: 2px solid var(--border-color); z-index: 2;">
                             <tr>
-                                <th style="padding: 7px 6px; border: 1px solid var(--border-color); text-align: center; width: 38px;">No.</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 88px;">변동구분</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 76px;">플랜트</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 86px;">S/O·오더</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 112px;">호기(Serial)</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); width: 150px;">완제품 기종 (모품번/품명)</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); width: 225px;">가공품 품번 (이전 ➔ 변경)</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color);">가공품 품명</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 105px;">담당자(Inv.Mgr)</th>
-                                <th style="padding: 7px 6px; border: 1px solid var(--border-color); text-align: center; width: 42px;">단위</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: right; width: 60px;">이전</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: right; width: 60px;">최신</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: right; width: 72px;">차이</th>
-                                <th style="padding: 7px 8px; border: 1px solid var(--border-color); text-align: center; width: 64px;">생산월</th>
+                                <th style="padding: 10px 8px; text-align: center; width: 42px;">No.</th>
+                                <th style="padding: 10px 10px; text-align: center; width: 92px;">구분</th>
+                                <th style="padding: 10px 10px; text-align: center; width: 95px;">플랜트 / 생산월</th>
+                                <th style="padding: 10px 10px; width: 135px;">호기(Serial) / 오더</th>
+                                <th style="padding: 10px 10px; width: 175px;">완제품 기종내역</th>
+                                <th style="padding: 10px 10px; width: 230px;">가공품 품번 (이전 ➔ 변경)</th>
+                                <th style="padding: 10px 10px;">가공품 품명 (Comp.Desc)</th>
+                                <th style="padding: 10px 10px; text-align: center; width: 118px;">담당자 (Inv.Mgr)</th>
+                                <th style="padding: 10px 12px; text-align: right; width: 115px;">소요량 (이전➔최신)</th>
                             </tr>
                         </thead>
                         <tbody id="sap-diff-tbody">
@@ -3316,14 +3311,14 @@ DST: 22. 지티테크`;
                 if (sourceList.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="14" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                            <td colspan="9" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
                                 <div style="font-size: 2rem; margin-bottom: 8px;">✨</div>
                                 <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">선택하신 두 동기화 시점 간에 하위 가공품(BOM) 소요량 변동(설변)이 없습니다.</div>
                                 <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">ERP 생산계획 및 부품 소요량이 이전과 동일하게 유지되고 있습니다.</div>
                             </td>
                         </tr>`;
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 30px; color: var(--text-secondary);">선택하신 필터 조건에 일치하는 내역이 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-secondary);">선택하신 필터 조건에 일치하는 내역이 없습니다.</td></tr>';
                 }
                 return;
             }
@@ -3354,94 +3349,102 @@ DST: 22. 지티테크`;
 
                 let typeBadge = '';
                 if (c.changeType === 'REPLACED') {
-                    typeBadge = '<span style="background: rgba(139, 92, 246, 0.18); color: #8b5cf6; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.72rem; border: 1px solid rgba(139, 92, 246, 0.4);">🔄 품번변경</span>';
+                    typeBadge = '<span style="background: rgba(139, 92, 246, 0.16); color: #8b5cf6; padding: 3px 9px; border-radius: 999px; font-weight: 800; font-size: 0.72rem; border: 1px solid rgba(139, 92, 246, 0.35);">🔄 품번변경</span>';
                 } else if (c.changeType === 'UNREGISTERED_ALL') {
-                    typeBadge = '<span style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 0.71rem; border: 1px solid rgba(244, 63, 94, 0.35);">🚨 초도/미등록</span>';
+                    typeBadge = '<span style="background: rgba(244, 63, 94, 0.14); color: #f43f5e; padding: 3px 9px; border-radius: 999px; font-weight: 800; font-size: 0.71rem; border: 1px solid rgba(244, 63, 94, 0.35);">🚨 초도미등록</span>';
                 } else if (c.changeType === 'NEW') {
-                    typeBadge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(16, 185, 129, 0.3);">🆕 신규</span>';
+                    typeBadge = '<span style="background: rgba(16, 185, 129, 0.14); color: #10b981; padding: 3px 9px; border-radius: 999px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(16, 185, 129, 0.3);">🆕 신규투입</span>';
                 } else if (c.changeType === 'DELETED') {
-                    typeBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(239, 68, 68, 0.3);">❌ 삭제</span>';
+                    typeBadge = '<span style="background: rgba(239, 68, 68, 0.14); color: #ef4444; padding: 3px 9px; border-radius: 999px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(239, 68, 68, 0.3);">❌ 삭제/제외</span>';
                 } else {
-                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 수량변동</span>';
+                    typeBadge = '<span style="background: rgba(245, 158, 11, 0.14); color: #f59e0b; padding: 3px 9px; border-radius: 999px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 수량변동</span>';
                 }
 
-                const plantText = c.plant === '1840' ? '<span style="color: #2563eb; font-weight: 700;">1840 남산+</span>' : '<span style="color: #9333ea; font-weight: 700;">1842 성주</span>';
-                const soOrOrderText = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-')
-                    ? c.soOrder
-                    : (c.order ? `<span style="color: var(--text-secondary); font-size: 0.7rem;" title="계획오더(재고생산)">오더:${c.order}</span>` : '-');
-                const serialHtml = c.serial
-                    ? `<span style="font-weight: ${isMachineFirst ? '800' : '600'}; color: var(--text-primary); background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px;">${c.serial}</span>`
-                    : '<span style="color: var(--text-secondary);">-</span>';
+                const plantText = c.plant === '1840'
+                    ? '<div style="color: #2563eb; font-weight: 700;">1840 남산+</div>'
+                    : '<div style="color: #9333ea; font-weight: 700;">1842 성주</div>';
+                const monthSub = c.prodMonth
+                    ? `<div style="font-size: 0.69rem; color: var(--text-secondary); margin-top: 2px;">${c.prodMonth}</div>`
+                    : '';
+
+                const serialLine = c.serial
+                    ? `<div style="font-weight: ${isMachineFirst ? '800' : '600'}; color: var(--text-primary); font-family: monospace; font-size: 0.8rem;">${c.serial}</div>`
+                    : '<div style="color: var(--text-secondary); font-size: 0.75rem;">호기 미지정</div>';
+                const soOrOrderLine = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-')
+                    ? `<div style="font-size: 0.69rem; color: var(--text-secondary); font-family: monospace; margin-top: 2px;">S/O: ${c.soOrder}</div>`
+                    : (c.order ? `<div style="font-size: 0.69rem; color: var(--text-secondary); font-family: monospace; margin-top: 2px;">오더: ${c.order}</div>` : '');
+
+                const matMain = c.matDesc || c.material || '-';
+                const matSub = (c.material && c.material !== 'SEMI' && c.matDesc)
+                    ? `<div style="font-size: 0.69rem; color: var(--text-secondary); margin-top: 2px;">${c.material}</div>`
+                    : '';
 
                 let compCodeHtml = '';
                 let compDescHtml = '';
                 if (c.changeType === 'REPLACED') {
                     compCodeHtml = `
-                        <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-                            <span style="color: #ef4444; text-decoration: line-through; font-size: 0.73rem; opacity: 0.9;">${c.oldComponent || ''}</span>
+                        <div style="color: #ef4444; text-decoration: line-through; font-size: 0.72rem; opacity: 0.85;">${c.oldComponent || ''}</div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
                             <span style="color: #8b5cf6; font-weight: 800;">➔</span>
-                            <span style="color: #10b981; font-weight: 800; background: rgba(16,185,129,0.12); padding: 1px 5px; border-radius: 4px;">${c.component || ''}</span>
+                            <span style="color: #10b981; font-weight: 800; background: rgba(16,185,129,0.12); padding: 1px 6px; border-radius: 4px; font-size: 0.8rem;">${c.component || ''}</span>
                         </div>`;
                     if (c.oldCompDesc && c.oldCompDesc !== c.compDesc) {
                         compDescHtml = `
                             <div style="font-weight: 700; color: var(--text-primary);">${c.compDesc || ''}</div>
-                            <div style="font-size: 0.69rem; color: #ef4444; opacity: 0.85;">(이전: ${c.oldCompDesc})</div>`;
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">이전 품명: ${c.oldCompDesc}</div>`;
                     } else {
                         compDescHtml = `<div style="font-weight: 700; color: var(--text-primary);">${c.compDesc || ''}</div>`;
                     }
                 } else if (c.changeType === 'DELETED') {
-                    compCodeHtml = `<span style="color: #ef4444; font-weight: 700;">${c.component || ''}</span>`;
+                    compCodeHtml = `<span style="color: #ef4444; font-weight: 700; text-decoration: line-through;">${c.component || ''}</span>`;
                     compDescHtml = `<span>${c.compDesc || ''}</span>`;
                 } else {
-                    compCodeHtml = `<span style="color: var(--accent-color); font-weight: 700;">${c.component || ''}</span>`;
-                    compDescHtml = `<span>${c.compDesc || ''}</span>`;
+                    compCodeHtml = `<span style="color: var(--accent-color); font-weight: 700; font-size: 0.8rem;">${c.component || ''}</span>`;
+                    compDescHtml = `<span style="font-weight: 600;">${c.compDesc || ''}</span>`;
                 }
 
                 let invMgrHtml = '';
                 if (c.invManager) {
-                    invMgrHtml = `<span style="background: rgba(59, 130, 246, 0.12); color: var(--accent-color); padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">${c.invManager}</span>`;
+                    invMgrHtml = `<span style="background: rgba(59, 130, 246, 0.12); color: var(--accent-color); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.73rem;">${c.invManager}</span>`;
                     if (c.changeType === 'REPLACED' && c.oldInvManager && c.oldInvManager !== c.invManager) {
-                        invMgrHtml += `<div style="font-size: 0.66rem; color: var(--text-secondary); margin-top: 2px;">(이전: ${c.oldInvManager})</div>`;
+                        invMgrHtml += `<div style="font-size: 0.67rem; color: var(--text-secondary); margin-top: 3px;">이전: ${c.oldInvManager}</div>`;
                     }
                 } else if (c.changeType === 'DELETED') {
-                    invMgrHtml = '<span style="color: var(--text-secondary); font-size: 0.72rem;">미지정</span>';
+                    invMgrHtml = `<span style="color: var(--text-secondary); font-size: 0.72rem;">${c.oldInvManager || '-'}</span>`;
                 } else {
-                    invMgrHtml = '<span style="background: rgba(244, 63, 94, 0.16); color: #f43f5e; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 0.72rem; border: 1px solid rgba(244, 63, 94, 0.4);">🚨 미등록</span>';
-                    if (c.changeType === 'REPLACED' && c.oldInvManager) {
-                        invMgrHtml += `<div style="font-size: 0.66rem; color: #f59e0b; font-weight: 600; margin-top: 2px;">(이전담당: ${c.oldInvManager})</div>`;
+                    invMgrHtml = '<span style="background: rgba(244, 63, 94, 0.16); color: #f43f5e; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.72rem; border: 1px solid rgba(244, 63, 94, 0.35);">🚨 미등록</span>';
+                    if (c.oldInvManager) {
+                        invMgrHtml += `<div style="font-size: 0.68rem; color: #f59e0b; font-weight: 600; margin-top: 3px;">이전담당: ${c.oldInvManager}</div>`;
                     }
                 }
 
                 const diffVal = Number(c.diffQty);
-                let diffCellHtml = '';
+                const unitStr = c.unit ? ` ${c.unit}` : '';
+                let qtyBadgeHtml = '';
                 if (c.changeType === 'REPLACED' && diffVal === 0) {
-                    diffCellHtml = '<span style="color: #8b5cf6; font-weight: 700;">교체(동일)</span>';
-                } else if (c.changeType === 'UNREGISTERED_ALL') {
-                    diffCellHtml = `<span style="color: var(--text-secondary);">${Number(c.newQty).toLocaleString()}</span>`;
-                } else {
+                    qtyBadgeHtml = '<div style="color: #8b5cf6; font-weight: 700; font-size: 0.7rem; margin-top: 2px;">1:1 교체</div>';
+                } else if (c.changeType !== 'UNREGISTERED_ALL') {
                     const diffColor = diffVal > 0 ? '#10b981' : '#ef4444';
                     const diffPrefix = diffVal > 0 ? '+' : '';
-                    diffCellHtml = `<span style="color: ${diffColor}; font-weight: 700;">${diffPrefix}${diffVal.toLocaleString()}</span>`;
+                    qtyBadgeHtml = `<div style="color: ${diffColor}; font-weight: 700; font-size: 0.72rem; margin-top: 2px;">${diffPrefix}${diffVal.toLocaleString()}${unitStr}</div>`;
                 }
 
-                html += `<tr style="background: ${bg}; border-bottom: ${bottomBorder}; font-size: 0.76rem;">
-                    <td style="padding: 6px 6px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${idx + 1}</td>
-                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid var(--border-color);">${typeBadge}</td>
-                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid var(--border-color);">${plantText}</td>
-                    <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color); text-align: center;">${soOrOrderText}</td>
-                    <td style="padding: 6px 8px; font-family: monospace; text-align: center; border-right: 1px solid var(--border-color);">${serialHtml}</td>
-                    <td style="padding: 6px 8px; border-right: 1px solid var(--border-color);" title="${c.matDesc || ''}">
-                        <div style="font-weight: 700; color: var(--text-primary);">${c.material || '-'}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.matDesc || ''}</div>
+                html += `<tr style="background: ${bg}; border-bottom: ${bottomBorder}; font-size: 0.78rem; transition: background 0.15s;">
+                    <td style="padding: 10px 8px; text-align: center; color: var(--text-secondary);">${idx + 1}</td>
+                    <td style="padding: 10px 8px; text-align: center;">${typeBadge}</td>
+                    <td style="padding: 10px 8px; text-align: center;">${plantText}${monthSub}</td>
+                    <td style="padding: 10px 10px;">${serialLine}${soOrOrderLine}</td>
+                    <td style="padding: 10px 10px;" title="${c.matDesc || ''}">
+                        <div style="font-weight: 600; color: var(--text-primary); max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${matMain}</div>
+                        ${matSub}
                     </td>
-                    <td style="padding: 6px 8px; font-family: monospace; border-right: 1px solid var(--border-color);">${compCodeHtml}</td>
-                    <td style="padding: 6px 8px; color: var(--text-primary); border-right: 1px solid var(--border-color);" title="${c.oldCompDesc && c.oldCompDesc !== c.compDesc ? `${c.oldCompDesc} ➔ ${c.compDesc}` : (c.compDesc || '')}">${compDescHtml}</td>
-                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid var(--border-color); white-space: nowrap;">${invMgrHtml}</td>
-                    <td style="padding: 6px 6px; text-align: center; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${c.unit || '-'}</td>
-                    <td style="padding: 6px 8px; text-align: right; color: var(--text-secondary); border-right: 1px solid var(--border-color);">${Number(c.oldQty).toLocaleString()}</td>
-                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: var(--text-primary); border-right: 1px solid var(--border-color);">${Number(c.newQty).toLocaleString()}</td>
-                    <td style="padding: 6px 8px; text-align: right; border-right: 1px solid var(--border-color);">${diffCellHtml}</td>
-                    <td style="padding: 6px 8px; text-align: center; color: var(--text-secondary);">${c.prodMonth || '-'}</td>
+                    <td style="padding: 10px 10px; font-family: monospace;">${compCodeHtml}</td>
+                    <td style="padding: 10px 10px; color: var(--text-primary);" title="${c.oldCompDesc && c.oldCompDesc !== c.compDesc ? `${c.oldCompDesc} ➔ ${c.compDesc}` : (c.compDesc || '')}">${compDescHtml}</td>
+                    <td style="padding: 10px 10px; text-align: center; white-space: nowrap;">${invMgrHtml}</td>
+                    <td style="padding: 10px 12px; text-align: right; white-space: nowrap;">
+                        <div style="color: var(--text-primary);"><span style="color: var(--text-secondary);">${Number(c.oldQty).toLocaleString()}</span> ➔ <b>${Number(c.newQty).toLocaleString()}</b><span style="font-size: 0.7rem; color: var(--text-secondary);">${unitStr}</span></div>
+                        ${qtyBadgeHtml}
+                    </td>
                 </tr>`;
             });
             tbody.innerHTML = html;
