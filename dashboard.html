@@ -1109,11 +1109,38 @@
                         <button onclick="loadSapDiffHistory(true)" class="btn-small" style="background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; color: var(--accent-color); padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 0.78rem; font-weight: 600;">🔄 다시 비교</button>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="diff-email-panel-btn" onclick="toggleDiffEmailPanel()" class="btn-small" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.45); padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 5px; cursor: pointer;" title="SAP 동기화 완료 직후 Outlook으로 설변/가공품 변동 내역 메일을 자동 발송하거나 지금 즉시 메일을 발송합니다.">
+                            <span>📧</span> <span id="diff-email-btn-label">자동 메일 설정 / 발송</span>
+                        </button>
                         <button id="diff-copy-unreg-btn" onclick="copyUnregisteredPartsForSap()" class="btn-small" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.45); padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 5px; cursor: pointer;" title="담당자(Inv.Manager)가 미등록된 고유 품번만 클립보드에 복사합니다. SAP ZMMM5380 다중선택(클립보드 붙여넣기)에 바로 사용할 수 있습니다.">
                             <span>📋</span> <span id="diff-copy-unreg-label">미등록 품번 복사 (ZMMM5380)</span>
                         </button>
                         <button id="diff-excel-btn" onclick="exportSapDiffToExcel()" class="btn-small" style="background: #10b981; color: white; border: none; padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
                             <span>📥</span> <span>변동 내역 엑셀 다운로드</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Outlook Auto Email Config & Instant Send Bar -->
+                <div id="diff-email-config-bar" style="display: none; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(59, 130, 246, 0.45); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.8rem; color: #f1f5f9;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 0.55rem;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-weight: 700; font-size: 0.84rem; color: #93c5fd;">📧 Outlook 자동 메일 발송 설정</span>
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #e2e8f0; cursor: pointer; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); padding: 3px 10px; border-radius: 6px; font-weight: 600;">
+                                <input type="checkbox" id="diff-email-enabled" checked style="accent-color: #10b981; cursor: pointer;">
+                                <span>SAP 동기화 완료 직후 자동 발송 (변동 0건일 때 자동 제외)</span>
+                            </label>
+                        </div>
+                        <div id="diff-email-last-status" style="font-size: 0.75rem; color: #fde68a; font-weight: 600;"></div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.78rem; color: #cbd5e1; font-weight: 600;">받는 사람(To):</span>
+                        <input type="text" id="diff-email-to" placeholder="예: junsic.choi@dncompany.com; colleague@dncompany.com" style="flex: 1.4; min-width: 240px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.35); color: #f8fafc; padding: 0.38rem 0.7rem; border-radius: 6px; font-size: 0.8rem;">
+                        <span style="font-size: 0.78rem; color: #cbd5e1; font-weight: 600;">참조(Cc):</span>
+                        <input type="text" id="diff-email-cc" placeholder="선택사항 (;로 구분)" style="flex: 1; min-width: 170px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.35); color: #f8fafc; padding: 0.38rem 0.7rem; border-radius: 6px; font-size: 0.8rem;">
+                        <button onclick="saveDiffEmailConfigUI()" class="btn-small" style="background: #2563eb; color: white; border: none; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.78rem; font-weight: 700; cursor: pointer;">💾 설정 저장</button>
+                        <button id="diff-send-now-btn" onclick="sendDiffEmailNow()" class="btn-small" style="background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; border: none; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            <span>🚀</span> <span>지금 메일 발송</span>
                         </button>
                     </div>
                 </div>
@@ -2911,8 +2938,129 @@ DST: 22. 지티테크`;
 
         async function openSapDiffModal() {
             const overlay = document.getElementById('sap-diff-overlay');
+            if (overlay) overlay.display = 'flex';
             if (overlay) overlay.style.display = 'flex';
+            loadDiffEmailConfig();
             await loadSapDiffHistory();
+        }
+
+        function toggleDiffEmailPanel() {
+            const bar = document.getElementById('diff-email-config-bar');
+            if (!bar) return;
+            const isHidden = bar.style.display === 'none' || !bar.style.display;
+            bar.style.display = isHidden ? 'block' : 'none';
+            if (isHidden) {
+                loadDiffEmailConfig();
+            }
+        }
+
+        function updateDiffEmailStatusUI(cfg) {
+            if (!cfg) return;
+            const enabledEl = document.getElementById('diff-email-enabled');
+            const toEl = document.getElementById('diff-email-to');
+            const ccEl = document.getElementById('diff-email-cc');
+            const statusEl = document.getElementById('diff-email-last-status');
+            const btnLabel = document.getElementById('diff-email-btn-label');
+
+            if (enabledEl) enabledEl.checked = !!cfg.enabled;
+            if (toEl && cfg.to !== undefined) toEl.value = cfg.to;
+            if (ccEl && cfg.cc !== undefined) ccEl.value = cfg.cc;
+
+            if (btnLabel) {
+                btnLabel.textContent = cfg.enabled ? '자동 메일 ON (설정/발송)' : '자동 메일 OFF (설정/발송)';
+            }
+            if (statusEl) {
+                if (cfg.lastSentAt) {
+                    const d = new Date(cfg.lastSentAt);
+                    const ts = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                    statusEl.textContent = `🕒 최근 발송: ${ts} · ${cfg.lastSentStatus || ''}`;
+                } else if (cfg.lastSentStatus) {
+                    statusEl.textContent = `ℹ️ ${cfg.lastSentStatus}`;
+                } else {
+                    statusEl.textContent = '✨ 동기화 완료 시 변동 내역이 있으면 Outlook으로 자동 발송됩니다.';
+                }
+            }
+        }
+
+        async function loadDiffEmailConfig() {
+            try {
+                const res = await fetch('/api/sap-diff/email-config');
+                const data = await res.json();
+                if (data.success && data.config) {
+                    updateDiffEmailStatusUI(data.config);
+                }
+            } catch (e) {}
+        }
+
+        async function saveDiffEmailConfigUI() {
+            const enabled = !!document.getElementById('diff-email-enabled')?.checked;
+            const to = (document.getElementById('diff-email-to')?.value || '').trim();
+            const cc = (document.getElementById('diff-email-cc')?.value || '').trim();
+            try {
+                const res = await fetch('/api/sap-diff/email-config', {
+                    method: 'POST',
+                    headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ enabled, to, cc })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert('설정 저장 실패: ' + (data.error || '권한 없음'));
+                    return;
+                }
+                updateDiffEmailStatusUI(data.config);
+                if (typeof showToast === 'function') {
+                    showToast('✅ Outlook 자동 메일 발송 설정이 저장되었습니다.');
+                } else {
+                    alert('설정이 저장되었습니다.');
+                }
+            } catch (e) {
+                alert('서버 오류: ' + e.message);
+            }
+        }
+
+        async function sendDiffEmailNow() {
+            const to = (document.getElementById('diff-email-to')?.value || '').trim();
+            const cc = (document.getElementById('diff-email-cc')?.value || '').trim();
+            const baseId = document.getElementById('sap-diff-base-select')?.value || '';
+            const targetId = document.getElementById('sap-diff-target-select')?.value || 'current';
+            if (!to) {
+                alert('받는 사람(To) 이메일 주소를 입력해 주세요.');
+                return;
+            }
+            const btn = document.getElementById('diff-send-now-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⏳</span> <span>발송 중...</span>';
+            }
+            try {
+                const res = await fetch('/api/sap-diff/send-email', {
+                    method: 'POST',
+                    headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ baseId, targetId, to, cc })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert('메일 발송 실패: ' + (data.error || '오류 발생'));
+                    return;
+                }
+                if (data.config) updateDiffEmailStatusUI(data.config);
+                if (data.skipped) {
+                    alert('발송 생략: ' + data.reason);
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast(`📧 Outlook 메일 발송 완료! (수신: ${data.to}, 총 ${data.totalRows}건)`);
+                    } else {
+                        alert(`Outlook 메일 발송 완료! (${data.to})`);
+                    }
+                }
+            } catch (e) {
+                alert('메일 발송 실패: ' + e.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>🚀</span> <span>지금 메일 발송</span>';
+                }
+            }
         }
 
         function closeSapDiffModal() {

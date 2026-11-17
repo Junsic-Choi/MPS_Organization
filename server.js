@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const { exec, spawn } = require('child_process');
+const { exec, execSync, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const zlib = require('zlib');
@@ -766,6 +766,12 @@ app.post('/api/sync-sap', requireAdmin, async (req, res) => {
             ['1842', '1840', 'component_1842', 'component_1840'].forEach(t => {
                 try { getOrBuildSapCache(t); } catch (e) {}
             });
+            // SAP 동기화 완료 직후 변동 내역 자동 메일 발송 (변동 0건일 때는 자동 제외)
+            setTimeout(() => {
+                sendSapDiffEmail({ isAutoAfterSync: true }).catch(err => {
+                    console.error('[SAP Diff Auto Email] Error:', err.message);
+                });
+            }, 1000);
         }).catch(e => {
             console.error('[SAP Sync Error in background]:', e.message);
         });
@@ -1537,49 +1543,48 @@ app.post('/api/sap-diff/compare', (req, res) => {
     }
 });
 
+function buildDiffExcelBuffer(changes) {
+    const rows = changes.map(c => ({
+        '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'UNREGISTERED_ALL' ? '초도/담당자미등록' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'))),
+        '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
+        'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
+        '호기(시리얼)': c.serial || '-',
+        '계획오더': c.order || '-',
+        '생산월': c.prodMonth || '-',
+        '모품번(기종)': c.material || '-',
+        '기종내역': c.matDesc || '-',
+        '이전 가공품번': c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? c.component : '-'),
+        '변경/최신 가공품번': c.changeType === 'DELETED' ? '-' : (c.component || ''),
+        '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
+            ? `${c.compDesc} (이전: ${c.oldCompDesc})`
+            : (c.compDesc || ''),
+        '담당자(Inv.Manager)': c.invManager || '🚨 미등록',
+        '이전품번 담당자': c.oldInvManager || '-',
+        '단위': c.unit || '',
+        '이전 소요량': c.oldQty,
+        '최신 소요량': c.newQty,
+        '소요량 차이(+/-)': c.diffQty
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+        { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 16 },
+        { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 28 },
+        { wch: 18 }, { wch: 18 }, { wch: 32 }, { wch: 16 },
+        { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 14 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'ERP설변_가공품변동');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 app.post('/api/sap-diff/export-excel', (req, res) => {
     try {
         const { changes } = req.body;
         if (!Array.isArray(changes)) {
             return res.status(400).send('Invalid changes data');
         }
-
-        const rows = changes.map(c => ({
-            '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'UNREGISTERED_ALL' ? '초도/담당자미등록' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'))),
-            '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
-            'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
-            '호기(시리얼)': c.serial || '-',
-            '계획오더': c.order || '-',
-            '생산월': c.prodMonth || '-',
-            '모품번(기종)': c.material || '-',
-            '기종내역': c.matDesc || '-',
-            '이전 가공품번': c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? c.component : '-'),
-            '변경/최신 가공품번': c.changeType === 'DELETED' ? '-' : (c.component || ''),
-            '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
-                ? `${c.compDesc} (이전: ${c.oldCompDesc})`
-                : (c.compDesc || ''),
-            '담당자(Inv.Manager)': c.invManager || '🚨 미등록',
-            '이전품번 담당자': c.oldInvManager || '-',
-            '단위': c.unit || '',
-            '이전 소요량': c.oldQty,
-            '최신 소요량': c.newQty,
-            '소요량 차이(+/-)': c.diffQty
-        }));
-
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(rows);
-
-        const colWidths = [
-            { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 },
-            { wch: 14 }, { wch: 10 }, { wch: 22 }, { wch: 30 },
-            { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 12 },
-            { wch: 12 }, { wch: 14 }
-        ];
-        ws['!cols'] = colWidths;
-
-        XLSX.utils.book_append_sheet(wb, ws, 'ERP설변_가공품변동');
-        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
+        const buf = buildDiffExcelBuffer(changes);
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const filename = `ERP_Component_Changes_${dateStr}.xlsx`;
 
@@ -1588,6 +1593,305 @@ app.post('/api/sap-diff/export-excel', (req, res) => {
         res.send(buf);
     } catch (e) {
         res.status(500).send(e.message);
+    }
+});
+
+// ==========================================
+// SAP 설변/가공품 변동 내역 Outlook 자동 메일 발송 시스템
+// ==========================================
+const DEFAULT_DIFF_EMAIL_CONFIG = {
+    enabled: true,
+    to: 'junsic.choi@dncompany.com',
+    cc: '',
+    lastSentAt: null,
+    lastSentStatus: ''
+};
+
+function getDiffEmailConfig() {
+    try {
+        const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+        const prefPath = path.join(uploadDir, 'preferences.json');
+        if (fs.existsSync(prefPath)) {
+            const pref = JSON.parse(fs.readFileSync(prefPath, 'utf8')) || {};
+            if (pref.diffEmailConfig) {
+                return { ...DEFAULT_DIFF_EMAIL_CONFIG, ...pref.diffEmailConfig };
+            }
+        }
+    } catch (e) {}
+    return { ...DEFAULT_DIFF_EMAIL_CONFIG };
+}
+
+function saveDiffEmailConfig(patch) {
+    const uploadDir = process.pkg ? path.dirname(process.execPath) : __dirname;
+    const prefPath = path.join(uploadDir, 'preferences.json');
+    let existing = {};
+    if (fs.existsSync(prefPath)) {
+        try { existing = JSON.parse(fs.readFileSync(prefPath, 'utf8')) || {}; } catch (e) {}
+    }
+    const merged = { ...getDiffEmailConfig(), ...(patch || {}) };
+    existing.diffEmailConfig = merged;
+    fs.writeFileSync(prefPath, JSON.stringify(existing, null, 2), 'utf8');
+    return merged;
+}
+
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const rowsHtml = groupedChanges.map((c, idx) => {
+        const typeLabel = c.changeType === 'REPLACED'
+            ? '품번변경(설변교체)'
+            : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'));
+        const typeColor = c.changeType === 'REPLACED'
+            ? '#6d28d9'
+            : (c.changeType === 'NEW' ? '#047857' : (c.changeType === 'DELETED' ? '#b91c1c' : '#b45309'));
+        const typeBg = c.changeType === 'REPLACED'
+            ? '#ede9fe'
+            : (c.changeType === 'NEW' ? '#d1fae5' : (c.changeType === 'DELETED' ? '#fee2e2' : '#fef3c7'));
+
+        const plantLabel = c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : (c.plant || '-'));
+        const soText = (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-';
+        const oldComp = c.changeType === 'REPLACED' ? (c.oldComponent || '-') : (c.changeType === 'DELETED' ? (c.component || '-') : '-');
+        const newComp = c.changeType === 'DELETED' ? '-' : (c.component || '-');
+        const descText = (c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc)
+            ? `${c.compDesc} (이전: ${c.oldCompDesc})`
+            : (c.compDesc || '-');
+
+        const isUnreg = c.changeType !== 'DELETED' && !c.invManager;
+        const invMgrHtml = c.invManager
+            ? `<span style="color:#1e40af; font-weight:bold;">${escapeHtml(c.invManager)}</span>`
+            : (c.changeType === 'DELETED' ? '<span style="color:#64748b;">-</span>' : '<span style="background:#ffe4e6; color:#e11d48; padding:2px 6px; border-radius:4px; font-weight:bold;">🚨 미등록</span>');
+        const oldInvHtml = escapeHtml(c.oldInvManager || (c.changeType === 'DELETED' ? (c.invManager || '-') : '-'));
+
+        const rowBg = isUnreg ? '#fff1f2' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+        const diffNum = Number(c.diffQty || 0);
+        const diffStr = diffNum > 0 ? `+${diffNum}` : `${diffNum}`;
+
+        return `<tr style="background:${rowBg};">
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:bold; color:${typeColor}; background:${typeBg};">${escapeHtml(typeLabel)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(plantLabel)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(soText)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:bold;">${escapeHtml(c.serial || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.order || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.prodMonth || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(c.material || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(c.matDesc || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; color:#dc2626; font-family:Consolas,monospace;">${escapeHtml(oldComp)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; color:#047857; font-weight:bold; font-family:Consolas,monospace;">${escapeHtml(newComp)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px;">${escapeHtml(descText)}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${invMgrHtml}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${oldInvHtml}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">${escapeHtml(c.unit || '-')}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right;">${Number(c.oldQty || 0).toLocaleString()}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right; font-weight:bold;">${Number(c.newQty || 0).toLocaleString()}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:right; font-weight:bold;">${escapeHtml(diffStr)}</td>
+        </tr>`;
+    }).join('\r\n');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Malgun Gothic','맑은 고딕',sans-serif; font-size:12px; color:#1e293b; line-height:1.5;">
+    <div style="background:#1e293b; color:#ffffff; padding:14px 18px; border-radius:8px; margin-bottom:14px;">
+        <h2 style="margin:0 0 4px 0; font-size:16px; color:#93c5fd;">🔄 [MPS 대시보드] SAP ERP 설계변경(설변) 및 하위 가공품 소요량 변동 리포트</h2>
+        <div style="font-size:12px; color:#cbd5e1;">
+            비교 기준(과거): <b>${escapeHtml(baseTitle)}</b> &nbsp;➔&nbsp; 비교 대상(최신): <b>${escapeHtml(targetTitle)}</b> &nbsp;|&nbsp; 발송 시각: <b>${nowStr}</b>
+        </div>
+    </div>
+
+    <table style="border-collapse:collapse; margin-bottom:14px; width:100%; max-width:900px;">
+        <tr>
+            <td style="border:1px solid #cbd5e1; background:#f5f3ff; padding:8px 12px; text-align:center;">
+                <div style="font-size:11px; color:#6d28d9; font-weight:bold;">🔄 품번 변경 (설변 A➔B)</div>
+                <div style="font-size:16px; font-weight:bold; color:#5b21b6;">${summary.totalReplaced || 0}쌍</div>
+            </td>
+            <td style="border:1px solid #cbd5e1; background:#ecfdf5; padding:8px 12px; text-align:center;">
+                <div style="font-size:11px; color:#047857; font-weight:bold;">🆕 순수 신규 투입</div>
+                <div style="font-size:16px; font-weight:bold; color:#065f46;">${summary.totalPureNew || 0}건 <span style="font-size:11px; font-weight:normal;">(전체 ${summary.totalNew || 0})</span></div>
+            </td>
+            <td style="border:1px solid #cbd5e1; background:#fef2f2; padding:8px 12px; text-align:center;">
+                <div style="font-size:11px; color:#b91c1c; font-weight:bold;">❌ 순수 삭제/제외</div>
+                <div style="font-size:16px; font-weight:bold; color:#991b1b;">${summary.totalPureDeleted || 0}건 <span style="font-size:11px; font-weight:normal;">(전체 ${summary.totalDeleted || 0})</span></div>
+            </td>
+            <td style="border:1px solid #cbd5e1; background:#fffbeb; padding:8px 12px; text-align:center;">
+                <div style="font-size:11px; color:#b45309; font-weight:bold;">⚠️ 소요 수량 변동</div>
+                <div style="font-size:16px; font-weight:bold; color:#92400e;">${summary.totalQtyChanged || 0}건</div>
+            </td>
+            <td style="border:1px solid #cbd5e1; background:#fff1f2; padding:8px 12px; text-align:center;">
+                <div style="font-size:11px; color:#e11d48; font-weight:bold;">🚨 변동중 담당자 미등록</div>
+                <div style="font-size:16px; font-weight:bold; color:#be123c;">${summary.totalDiffUnregistered || 0}건 <span style="font-size:11px; font-weight:normal;">(전체미등록 ${summary.uniqueUnregisteredParts || 0}품번)</span></div>
+            </td>
+        </tr>
+    </table>
+
+    <p style="margin:0 0 8px 0; font-size:12px; color:#475569;">
+        ※ 전체 상세 내역은 첨부된 엑셀 파일(<b>ERP_설변_가공품변동.xlsx</b>)에서도 확인하실 수 있습니다. (총 <b>${groupedChanges.length}</b>건)
+    </p>
+
+    <table style="border-collapse:collapse; width:100%; font-size:11px;">
+        <thead>
+            <tr style="background:#e2e8f0; color:#0f172a;">
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">변동유형</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">플랜트</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">S/O번호</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">호기(시리얼)</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">계획오더</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">생산월</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">모품번(기종)</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">기종내역</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전 가공품번</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">변경/최신 가공품번</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">가공품명(Comp.Desc)</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">담당자(Inv.Manager)</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전품번 담당자</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">단위</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">이전 소요량</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">최신 소요량</th>
+                <th style="border:1px solid #94a3b8; padding:6px 8px;">소요량 차이</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rowsHtml}
+        </tbody>
+    </table>
+</body>
+</html>`;
+}
+
+async function sendSapDiffEmail(options = {}) {
+    const cfg = getDiffEmailConfig();
+    const isAuto = !!options.isAutoAfterSync;
+    if (isAuto && !cfg.enabled) {
+        console.log('[SAP Diff Email] Auto-send is disabled in config. Skipping.');
+        return { skipped: true, reason: '자동 메일 발송 설정이 꺼져 있습니다.' };
+    }
+
+    const toAddr = (options.customTo !== undefined ? options.customTo : cfg.to || '').trim();
+    const ccAddr = (options.customCc !== undefined ? options.customCc : cfg.cc || '').trim();
+    if (!toAddr) {
+        return { skipped: true, reason: '수신자(To) 이메일 주소가 설정되지 않았습니다.' };
+    }
+
+    const snapshots = getSnapshotList();
+    const targetId = options.targetId || 'current';
+    let baseId = options.baseId;
+    if (!baseId) {
+        const prev = snapshots.find(s => s.id !== targetId);
+        baseId = prev ? prev.id : targetId;
+    }
+
+    if (baseId === targetId) {
+        return { skipped: true, reason: '비교할 이전 스냅샷 데이터가 없습니다.' };
+    }
+
+    const baseTitle = (snapshots.find(s => s.id === baseId) || {}).title || baseId;
+    const targetTitle = (snapshots.find(s => s.id === targetId) || {}).title || targetId;
+
+    const baseRecords = loadComponentDataset(baseId);
+    const targetRecords = loadComponentDataset(targetId);
+    const diffResult = calculateComponentDiff(baseRecords, targetRecords);
+    const { summary, groupedChanges } = diffResult;
+
+    // 변동 0건일 때는 자동 발송 제외
+    if ((summary.totalChanges || 0) === 0 || groupedChanges.length === 0) {
+        const msg = `변동 내역 0건으로 발송 생략 (${baseTitle} -> ${targetTitle})`;
+        console.log(`[SAP Diff Email] ${msg}`);
+        saveDiffEmailConfig({ lastSentStatus: msg });
+        return { skipped: true, reason: msg, summary };
+    }
+
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const fileDateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+    const subject = `[ERP 설변/가공품 변동 알림] ${dateStr} (품번변경 ${summary.totalReplaced || 0}쌍 · 신규 ${summary.totalPureNew || 0}건 · 담당자미등록 ${summary.totalDiffUnregistered || 0}건)`;
+    const htmlBody = buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle);
+    const excelBuf = buildDiffExcelBuffer(groupedChanges);
+
+    const tempDir = SAP_CACHE_DIR;
+    const excelPath = path.join(tempDir, `ERP_설변_가공품변동_${fileDateStr}.xlsx`);
+    const htmlPath = path.join(tempDir, `diff_mail_body_${fileDateStr}.html`);
+    const payloadPath = path.join(tempDir, `diff_mail_payload_${fileDateStr}.json`);
+
+    fs.writeFileSync(excelPath, excelBuf);
+    fs.writeFileSync(htmlPath, htmlBody, 'utf8');
+    fs.writeFileSync(payloadPath, JSON.stringify({
+        subject,
+        to: toAddr,
+        cc: ccAddr,
+        htmlBodyPath: htmlPath,
+        attachmentPath: excelPath
+    }, null, 2), 'utf8');
+
+    const psScript = path.join(__dirname, 'sap_automation', 'send_outlook_mail.ps1');
+    try {
+        execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" -PayloadPath "${payloadPath}"`, {
+            stdio: 'pipe',
+            timeout: 30000
+        });
+        const sentAt = new Date().toISOString();
+        const statusMsg = `발송 성공 (${toAddr}, 총 ${groupedChanges.length}건)`;
+        saveDiffEmailConfig({
+            to: toAddr,
+            cc: ccAddr,
+            lastSentAt: sentAt,
+            lastSentStatus: statusMsg
+        });
+        console.log(`[SAP Diff Email] Successfully sent via Outlook to ${toAddr}`);
+        return { sent: true, sentAt, to: toAddr, cc: ccAddr, summary, totalRows: groupedChanges.length };
+    } finally {
+        try { fs.unlinkSync(htmlPath); } catch (e) {}
+        try { fs.unlinkSync(payloadPath); } catch (e) {}
+        try { fs.unlinkSync(excelPath); } catch (e) {}
+    }
+}
+
+app.get('/api/sap-diff/email-config', (req, res) => {
+    try {
+        res.json({ success: true, config: getDiffEmailConfig() });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/sap-diff/email-config', requireAdmin, (req, res) => {
+    try {
+        const { enabled, to, cc } = req.body || {};
+        const updated = saveDiffEmailConfig({
+            enabled: typeof enabled === 'boolean' ? enabled : true,
+            to: typeof to === 'string' ? to.trim() : '',
+            cc: typeof cc === 'string' ? cc.trim() : ''
+        });
+        res.json({ success: true, config: updated });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/sap-diff/send-email', requireAdmin, async (req, res) => {
+    try {
+        const { baseId, targetId, to, cc } = req.body || {};
+        const result = await sendSapDiffEmail({
+            baseId,
+            targetId,
+            customTo: to,
+            customCc: cc,
+            isAutoAfterSync: false
+        });
+        res.json({ success: true, ...result, config: getDiffEmailConfig() });
+    } catch (e) {
+        console.error('[SAP Diff Email] Send error:', e.message);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
