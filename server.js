@@ -1526,6 +1526,7 @@ app.post('/api/sap-diff/compare', (req, res) => {
         const targetRecords = loadComponentDataset(targetId);
 
         const diffResult = calculateComponentDiff(baseRecords, targetRecords);
+        const sentHist = loadSentHistory();
 
         res.json({
             success: true,
@@ -1534,8 +1535,8 @@ app.post('/api/sap-diff/compare', (req, res) => {
             targetId,
             targetTitle,
             summary: diffResult.summary,
-            changes: diffResult.changes,
-            groupedChanges: diffResult.groupedChanges,
+            changes: annotateSentHistory(diffResult.changes, sentHist),
+            groupedChanges: annotateSentHistory(diffResult.groupedChanges, sentHist),
             unregisteredAll: diffResult.unregisteredAll
         });
     } catch (e) {
@@ -1543,37 +1544,51 @@ app.post('/api/sap-diff/compare', (req, res) => {
     }
 });
 
-function buildDiffExcelBuffer(changes) {
-    const rows = changes.map(c => ({
-        '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'UNREGISTERED_ALL' ? '초도/담당자미등록' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'))),
-        '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
-        'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
-        '호기(시리얼)': c.serial || '-',
-        '계획오더': c.order || '-',
-        '생산월': c.prodMonth || '-',
-        '모품번(기종)': c.material || '-',
-        '기종내역': c.matDesc || '-',
-        '이전 가공품번': c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? c.component : '-'),
-        '변경/최신 가공품번': c.changeType === 'DELETED' ? '-' : (c.component || ''),
-        '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
-            ? `${c.compDesc} (이전: ${c.oldCompDesc})`
-            : (c.compDesc || ''),
-        '담당자(Inv.Manager)': c.invManager || '🚨 미등록',
-        '이전품번 담당자': c.oldInvManager || '-',
-        '단위': c.unit || '',
-        '이전 소요량': c.oldQty,
-        '최신 소요량': c.newQty,
-        '소요량 차이(+/-)': c.diffQty
-    }));
+function buildDiffExcelBuffer(changes, options = {}) {
+    const showSentCol = options.showSentCol !== false && changes.some(c => c.previouslySentAt !== undefined);
+    const rows = changes.map(c => {
+        const row = {
+            '변동유형': c.changeType === 'REPLACED' ? '품번변경(설변교체)' : (c.changeType === 'UNREGISTERED_ALL' ? '초도/담당자미등록' : (c.changeType === 'NEW' ? '신규 투입' : (c.changeType === 'DELETED' ? '삭제/제외' : '소요량 변동'))),
+        };
+        if (showSentCol) {
+            row['발송이력'] = c.previouslySentAt ? `기발송 (${new Date(c.previouslySentAt).getMonth() + 1}/${new Date(c.previouslySentAt).getDate()})` : 'NEW';
+        }
+        Object.assign(row, {
+            '플랜트': c.plant === '1840' ? '1840 (남산+)' : (c.plant === '1842' ? '1842 (성주)' : c.plant),
+            'S/O번호': (c.soOrder && c.soOrder !== '0') ? c.soOrder : '-',
+            '호기(시리얼)': c.serial || '-',
+            '계획오더': c.order || '-',
+            '생산월': c.prodMonth || '-',
+            '모품번(기종)': c.material || '-',
+            '기종내역': c.matDesc || '-',
+            '이전 가공품번': c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? c.component : '-'),
+            '변경/최신 가공품번': c.changeType === 'DELETED' ? '-' : (c.component || ''),
+            '가공품명(Comp.Desc)': c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc
+                ? `${c.compDesc} (이전: ${c.oldCompDesc})`
+                : (c.compDesc || ''),
+            '담당자(Inv.Manager)': c.invManager || '🚨 미등록',
+            '이전품번 담당자': c.oldInvManager || '-',
+            '단위': c.unit || '',
+            '이전 소요량': c.oldQty,
+            '최신 소요량': c.newQty,
+            '소요량 차이(+/-)': c.diffQty
+        });
+        return row;
+    });
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [
-        { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 16 },
+    const cols = [
+        { wch: 16 }
+    ];
+    if (showSentCol) cols.push({ wch: 14 });
+    cols.push(
+        { wch: 14 }, { wch: 12 }, { wch: 16 },
         { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 28 },
         { wch: 18 }, { wch: 18 }, { wch: 32 }, { wch: 16 },
         { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 14 }
-    ];
+    );
+    ws['!cols'] = cols;
     XLSX.utils.book_append_sheet(wb, ws, 'ERP설변_가공품변동');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
@@ -1603,9 +1618,57 @@ const DEFAULT_DIFF_EMAIL_CONFIG = {
     enabled: true,
     to: 'junsic.choi@dncompany.com',
     cc: '',
+    sentMode: 'mark', // 'mark' = 이미 보낸 항목 표시, 'exclude' = 이미 보낸 항목 제외, 'none' = 구분 안 함
     lastSentAt: null,
     lastSentStatus: ''
 };
+
+// ---- 메일 기발송 이력 관리 (항목별 서명 기반) ----
+const SENT_HISTORY_PATH = path.join(SAP_CACHE_DIR, 'sent_diff_history.json');
+const SENT_HISTORY_RETENTION_DAYS = 90;
+
+function getDiffItemSignature(c) {
+    const machine = c.serial || ((c.soOrder && c.soOrder !== '0' && c.soOrder !== '-') ? c.soOrder : '') || c.order || '';
+    const oldComp = c.changeType === 'REPLACED' ? (c.oldComponent || '') : (c.changeType === 'DELETED' ? (c.component || '') : '');
+    const newComp = c.changeType === 'DELETED' ? '' : (c.component || '');
+    const qtyPart = c.changeType === 'QTY_CHANGE' ? `${c.oldQty}->${c.newQty}` : '';
+    return [c.changeType, c.plant || '', machine, oldComp, newComp, qtyPart].join('|');
+}
+
+function loadSentHistory() {
+    try {
+        if (fs.existsSync(SENT_HISTORY_PATH)) {
+            const data = JSON.parse(fs.readFileSync(SENT_HISTORY_PATH, 'utf8'));
+            if (data && typeof data === 'object') return data;
+        }
+    } catch (e) {}
+    return {};
+}
+
+function saveSentHistory(history) {
+    try {
+        const cutoff = Date.now() - SENT_HISTORY_RETENTION_DAYS * 24 * 3600 * 1000;
+        const pruned = {};
+        Object.entries(history).forEach(([k, v]) => {
+            const t = v && v.firstSentAt ? new Date(v.firstSentAt).getTime() : 0;
+            if (t >= cutoff) pruned[k] = v;
+        });
+        fs.writeFileSync(SENT_HISTORY_PATH, JSON.stringify(pruned, null, 2), 'utf8');
+    } catch (e) {
+        console.error('[SAP Diff Email] Failed to save sent history:', e.message);
+    }
+}
+
+function annotateSentHistory(list, history) {
+    const hist = history || loadSentHistory();
+    return (list || []).map(c => {
+        const rec = hist[getDiffItemSignature(c)];
+        if (rec) {
+            return { ...c, previouslySentAt: rec.firstSentAt, sentCount: rec.sentCount || 1 };
+        }
+        return { ...c, previouslySentAt: null, sentCount: 0 };
+    });
+}
 
 function getDiffEmailConfig() {
     try {
@@ -1642,7 +1705,9 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
+function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle, options = {}) {
+    const sentMode = options.sentMode || 'mark';
+    const showSentBadges = options.showSentBadges !== false && sentMode !== 'none';
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -1725,10 +1790,17 @@ function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
         }
 
         const rowBg = isUnreg ? '#fff5f7' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+        const sentBadgeHtml = c.previouslySentAt
+            ? (() => {
+                const sd = new Date(c.previouslySentAt);
+                return `<div style="margin-top:5px;"><span style="font-family:${fontStack}; background-color:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; padding:2px 6px; font-weight:600; font-size:8pt;">기발송 ${sd.getMonth() + 1}/${sd.getDate()}</span></div>`;
+            })()
+            : `<div style="margin-top:5px;"><span style="font-family:${fontStack}; background-color:#fef9c3; color:#a16207; padding:2px 6px; font-weight:700; font-size:8pt;">NEW</span></div>`;
 
         return `<tr style="background-color:${rowBg};">
             <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
                 <span style="font-family:${fontStack}; background-color:${badgeBg}; color:${badgeColor}; padding:4px 9px; font-weight:700; font-size:9pt; display:inline-block;">${badgeText}</span>
+                ${showSentBadges ? sentBadgeHtml : ''}
             </td>
             <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
                 ${plantBadge}${monthSub}
@@ -1895,14 +1967,39 @@ async function sendSapDiffEmail(options = {}) {
         return { skipped: true, reason: msg, summary };
     }
 
+    const sentMode = cfg.sentMode || 'mark';
+    const sentHist = loadSentHistory();
+    const annotatedGrouped = annotateSentHistory(groupedChanges, sentHist);
+
+    let changesToSend = annotatedGrouped;
+    if (sentMode === 'exclude') {
+        changesToSend = annotatedGrouped.filter(c => !c.previouslySentAt);
+        if (changesToSend.length === 0) {
+            const msg = `기발송 항목 제외 후 신규 변동건이 0건이므로 발송 생략 (${baseTitle} -> ${targetTitle})`;
+            console.log(`[SAP Diff Email] ${msg}`);
+            saveDiffEmailConfig({ lastSentStatus: msg });
+            return { skipped: true, reason: msg, summary, allExcluded: true };
+        }
+    }
+
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const fileDateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-    const subject = `[ERP 설변/가공품 변동 알림] ${dateStr} (품번변경 ${summary.totalReplaced || 0}쌍 · 신규 ${summary.totalPureNew || 0}건 · 담당자미등록 ${summary.totalDiffUnregistered || 0}건)`;
-    const htmlBody = buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle);
-    const excelBuf = buildDiffExcelBuffer(groupedChanges);
+    const replacedCount = changesToSend.filter(c => c.changeType === 'REPLACED').length;
+    const newCount = changesToSend.filter(c => c.changeType === 'NEW').length;
+    const unregCount = changesToSend.filter(c => c.changeType !== 'DELETED' && !c.invManager).length;
+
+    const modePrefix = sentMode === 'exclude' ? '[신규변동만] ' : '';
+    const subject = `${modePrefix}[ERP 설변/가공품 변동 알림] ${dateStr} (품번변경 ${replacedCount}쌍 · 신규 ${newCount}건 · 담당자미등록 ${unregCount}건)`;
+    const htmlBody = buildDiffEmailHtml(summary, changesToSend, baseTitle, targetTitle, {
+        sentMode,
+        showSentBadges: sentMode === 'mark'
+    });
+    const excelBuf = buildDiffExcelBuffer(changesToSend, {
+        showSentCol: sentMode === 'mark'
+    });
 
     const tempDir = SAP_CACHE_DIR;
     const excelPath = path.join(tempDir, `ERP_설변_가공품변동_${fileDateStr}.xlsx`);
@@ -1926,15 +2023,34 @@ async function sendSapDiffEmail(options = {}) {
             timeout: 30000
         });
         const sentAt = new Date().toISOString();
-        const statusMsg = `발송 성공 (${toAddr}, 총 ${groupedChanges.length}건)`;
+        const modeLabel = sentMode === 'exclude' ? '기발송제외' : (sentMode === 'mark' ? '기발송표시' : '구분없음');
+        const statusMsg = `발송 성공 (${toAddr}, ${changesToSend.length}건 / ${modeLabel})`;
+
+        // 기발송 이력 업데이트
+        changesToSend.forEach(c => {
+            const sig = getDiffItemSignature(c);
+            const prev = sentHist[sig] || {};
+            sentHist[sig] = {
+                firstSentAt: prev.firstSentAt || sentAt,
+                lastSentAt: sentAt,
+                sentCount: (prev.sentCount || 0) + 1,
+                changeType: c.changeType,
+                plant: c.plant,
+                serial: c.serial,
+                component: c.component
+            };
+        });
+        saveSentHistory(sentHist);
+
         saveDiffEmailConfig({
             to: toAddr,
             cc: ccAddr,
+            sentMode,
             lastSentAt: sentAt,
             lastSentStatus: statusMsg
         });
-        console.log(`[SAP Diff Email] Successfully sent via Outlook to ${toAddr}`);
-        return { sent: true, sentAt, to: toAddr, cc: ccAddr, summary, totalRows: groupedChanges.length };
+        console.log(`[SAP Diff Email] Successfully sent via Outlook to ${toAddr} (${changesToSend.length} items, mode=${sentMode})`);
+        return { sent: true, sentAt, to: toAddr, cc: ccAddr, summary, totalRows: changesToSend.length, sentMode };
     } finally {
         try { fs.unlinkSync(htmlPath); } catch (e) {}
         try { fs.unlinkSync(payloadPath); } catch (e) {}
@@ -1952,13 +2068,24 @@ app.get('/api/sap-diff/email-config', (req, res) => {
 
 app.post('/api/sap-diff/email-config', requireAdmin, (req, res) => {
     try {
-        const { enabled, to, cc } = req.body || {};
+        const { enabled, to, cc, sentMode } = req.body || {};
+        const validModes = ['mark', 'exclude', 'none'];
         const updated = saveDiffEmailConfig({
             enabled: typeof enabled === 'boolean' ? enabled : true,
             to: typeof to === 'string' ? to.trim() : '',
-            cc: typeof cc === 'string' ? cc.trim() : ''
+            cc: typeof cc === 'string' ? cc.trim() : '',
+            sentMode: validModes.includes(sentMode) ? sentMode : 'mark'
         });
         res.json({ success: true, config: updated });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/sap-diff/reset-sent-history', requireAdmin, (req, res) => {
+    try {
+        saveSentHistory({});
+        res.json({ success: true, message: '기발송 이력이 초기화되었습니다.' });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }

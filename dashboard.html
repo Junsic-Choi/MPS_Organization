@@ -1151,6 +1151,20 @@
                             <span>🚀</span> <span>지금 메일 발송</span>
                         </button>
                     </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px dashed rgba(148, 163, 184, 0.25); flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-size: 0.78rem; color: #cbd5e1; font-weight: 600;">기발송 항목 처리:</span>
+                            <select id="diff-email-sent-mode" style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.35); color: #f8fafc; padding: 0.32rem 0.65rem; border-radius: 6px; font-size: 0.78rem; cursor: pointer;">
+                                <option value="mark">📌 기발송 항목 표시 (메일 본문/엑셀에 [기발송 MM/DD] 배지 부착)</option>
+                                <option value="exclude">🚫 기발송 항목 제외 (신규 변동건만 메일 및 엑셀에 포함)</option>
+                                <option value="none">🌐 구분 없음 (전체 변동 발송)</option>
+                            </select>
+                            <span style="font-size: 0.74rem; color: #94a3b8;">※ '기발송 제외' 선택 시 이미 안내된 항목은 다음 메일에서 자동 제외됩니다.</span>
+                        </div>
+                        <div>
+                            <button onclick="resetSentDiffHistoryUI()" class="btn-small" style="background: transparent; color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); padding: 0.28rem 0.65rem; border-radius: 6px; font-size: 0.74rem; cursor: pointer;" title="지금까지 기록된 메일 발송 이력을 지우고 모든 항목을 다시 처음(신규) 상태로 인식합니다.">🔄 발송 이력 초기화</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- KPI Cards (6 Cards) -->
@@ -2969,9 +2983,12 @@ DST: 22. 지티테크`;
             const statusEl = document.getElementById('diff-email-last-status');
             const btnLabel = document.getElementById('diff-email-btn-label');
 
+            const modeEl = document.getElementById('diff-email-sent-mode');
+
             if (enabledEl) enabledEl.checked = !!cfg.enabled;
             if (toEl && cfg.to !== undefined) toEl.value = cfg.to;
             if (ccEl && cfg.cc !== undefined) ccEl.value = cfg.cc;
+            if (modeEl && cfg.sentMode) modeEl.value = cfg.sentMode;
 
             if (btnLabel) {
                 btnLabel.textContent = cfg.enabled ? '자동 메일 ON (설정/발송)' : '자동 메일 OFF (설정/발송)';
@@ -3003,11 +3020,12 @@ DST: 22. 지티테크`;
             const enabled = !!document.getElementById('diff-email-enabled')?.checked;
             const to = (document.getElementById('diff-email-to')?.value || '').trim();
             const cc = (document.getElementById('diff-email-cc')?.value || '').trim();
+            const sentMode = document.getElementById('diff-email-sent-mode')?.value || 'mark';
             try {
                 const res = await fetch('/api/sap-diff/email-config', {
                     method: 'POST',
                     headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ enabled, to, cc })
+                    body: JSON.stringify({ enabled, to, cc, sentMode })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) {
@@ -3019,6 +3037,29 @@ DST: 22. 지티테크`;
                     showToast('✅ Outlook 자동 메일 발송 설정이 저장되었습니다.');
                 } else {
                     alert('설정이 저장되었습니다.');
+                }
+            } catch (e) {
+                alert('서버 오류: ' + e.message);
+            }
+        }
+
+        async function resetSentDiffHistoryUI() {
+            if (!confirm('정말 지금까지의 메일 발송 이력을 초기화하시겠습니까?\n초기화하면 다음 메일 발송 시 모든 변동 항목이 신규(NEW)로 전송됩니다.')) return;
+            try {
+                const res = await fetch('/api/sap-diff/reset-sent-history', {
+                    method: 'POST',
+                    headers: getAdminHeaders({ 'Content-Type': 'application/json' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') {
+                        showToast('✅ 발송 이력이 초기화되었습니다.');
+                    } else {
+                        alert('발송 이력이 초기화되었습니다.');
+                    }
+                    loadSapDiffHistory(true);
+                } else {
+                    alert('초기화 실패: ' + (data.error || '권한 없음'));
                 }
             } catch (e) {
                 alert('서버 오류: ' + e.message);
@@ -3372,6 +3413,14 @@ DST: 22. 지티테크`;
                     typeBadge = '<span style="background: rgba(245, 158, 11, 0.14); color: #f59e0b; padding: 3px 9px; border-radius: 999px; font-weight: 700; font-size: 0.72rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ 수량변동</span>';
                 }
 
+                let sentBadge = '';
+                if (c.previouslySentAt) {
+                    const sd = new Date(c.previouslySentAt);
+                    sentBadge = `<div style="margin-top: 3px;"><span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 0.68rem;">기발송 ${sd.getMonth() + 1}/${sd.getDate()}</span></div>`;
+                } else if (c.previouslySentAt === null) {
+                    sentBadge = `<div style="margin-top: 3px;"><span style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.35); padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 0.68rem;">NEW</span></div>`;
+                }
+
                 const plantText = c.plant === '1840'
                     ? '<div style="color: #2563eb; font-weight: 700;">1840 남산+</div>'
                     : '<div style="color: #9333ea; font-weight: 700;">1842 성주</div>';
@@ -3443,7 +3492,7 @@ DST: 22. 지티테크`;
 
                 html += `<tr style="background: ${bg}; border-bottom: ${bottomBorder}; font-size: 0.78rem; transition: background 0.15s;">
                     <td style="padding: 10px 8px; text-align: center; color: var(--text-secondary);">${idx + 1}</td>
-                    <td style="padding: 10px 8px; text-align: center;">${typeBadge}</td>
+                    <td style="padding: 10px 8px; text-align: center;">${typeBadge}${sentBadge}</td>
                     <td style="padding: 10px 8px; text-align: center;">${plantText}${monthSub}</td>
                     <td style="padding: 10px 10px;">${serialLine}${soOrOrderLine}</td>
                     <td style="padding: 10px 10px;" title="${c.matDesc || ''}">
