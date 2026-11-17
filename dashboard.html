@@ -1629,6 +1629,10 @@
                         <input type="checkbox" id="filter-comp-all" onchange="if(this.checked){ const uCb = document.getElementById('filter-comp-unit-a'); if(uCb) uCb.checked = false; } runWithLoading(() => { rebuildComponentMaterialDropdown(); renderComponentTable(); }, '전체 부품 데이터 조회 중...')" style="width: 15px; height: 15px; cursor: pointer;">
                         전체 부품(F 구매품 포함) 보기
                     </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 700; cursor: pointer; color: var(--accent-color); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.35); padding: 0.25rem 0.65rem; border-radius: 6px;">
+                        <input type="checkbox" id="filter-comp-dedup" onchange="runWithLoading(() => { renderComponentTable(); }, '가공품 품번 기준 중복 제거 중...')" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color);">
+                        품번 기준 중복 제거
+                    </label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; position: relative;">
                         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">가공품 품명 필터:</span>
                         <div class="custom-multiselect" style="position: relative; display: inline-block;">
@@ -9516,6 +9520,58 @@ DST: 22. 지티테크`;
                     });
                 }
             });
+
+            window._lastRawCompCount = filteredComps.length;
+            const dedupByComp = document.getElementById('filter-comp-dedup')?.checked;
+            if (dedupByComp && filteredComps.length > 0) {
+                const dedupMap = new Map();
+                for (let i = 0; i < filteredComps.length; i++) {
+                    const item = filteredComps[i];
+                    const key = (item.Component || '').trim().toUpperCase();
+                    if (!dedupMap.has(key)) {
+                        dedupMap.set(key, {
+                            ...item,
+                            _serialSet: new Set(item.Serial && item.Serial !== '-' ? [item.Serial] : []),
+                            _salesDocSet: new Set(item.SalesDoc && item.SalesDoc !== '-' ? [item.SalesDoc] : []),
+                            _parentMatSet: new Set(item.ParentMat && item.ParentMat !== '-' ? [item.ParentMat] : []),
+                            _modelSet: new Set(item.Model && item.Model !== '-' ? [item.Model] : []),
+                            _mergedCount: 1
+                        });
+                    } else {
+                        const existing = dedupMap.get(key);
+                        existing.Qty += (item.Qty || 0);
+                        existing._mergedCount++;
+                        if (item.Serial && item.Serial !== '-') existing._serialSet.add(item.Serial);
+                        if (item.SalesDoc && item.SalesDoc !== '-') existing._salesDocSet.add(item.SalesDoc);
+                        if (item.ParentMat && item.ParentMat !== '-') existing._parentMatSet.add(item.ParentMat);
+                        if (item.Model && item.Model !== '-') existing._modelSet.add(item.Model);
+                        if (item.IsSq) existing.IsSq = true;
+                        if (item.IsNoHistory) existing.IsNoHistory = true;
+                    }
+                }
+                const dedupList = [];
+                for (const entry of dedupMap.values()) {
+                    if (entry._serialSet.size > 1) {
+                        const firstSerial = Array.from(entry._serialSet)[0];
+                        entry.Serial = `${firstSerial} 외 ${entry._serialSet.size - 1}대`;
+                    }
+                    if (entry._salesDocSet.size > 1) {
+                        const firstSo = Array.from(entry._salesDocSet)[0];
+                        entry.SalesDoc = `${firstSo} 외 ${entry._salesDocSet.size - 1}건`;
+                    }
+                    if (entry._parentMatSet.size > 1) {
+                        const firstPm = Array.from(entry._parentMatSet)[0];
+                        entry.ParentMat = `${firstPm} 외 ${entry._parentMatSet.size - 1}종`;
+                    }
+                    if (entry._modelSet.size > 1) {
+                        const firstMd = Array.from(entry._modelSet)[0];
+                        entry.Model = `${firstMd} 외 ${entry._modelSet.size - 1}종`;
+                    }
+                    dedupList.push(entry);
+                }
+                return dedupList;
+            }
+
             return filteredComps;
         }
 
@@ -9526,6 +9582,8 @@ DST: 22. 지티테크`;
             if (!tbody || !table) return;
             
             const filteredComps = filterComponentData();
+            const isDedup = document.getElementById('filter-comp-dedup')?.checked;
+            const rawCount = window._lastRawCompCount || filteredComps.length;
             
             const subEl = document.getElementById('component-count-sub');
             if (subEl) {
@@ -9535,11 +9593,13 @@ DST: 22. 지티테크`;
                 if (showUnitAOnly) modeText = '⭐ A급 유니트(PS/PZ)만 표시 중';
                 else if (showAllPurchased) modeText = '📋 전체 부품(F 구매품 포함) 표시 중';
 
+                const dedupInfo = isDedup ? ` <span style="color: var(--accent-color); font-weight: 700;">(품번 중복 제거 적용 · 원본 ${rawCount.toLocaleString()}건)</span>` : '';
+
                 if (filteredComps.length > 2000) {
-                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span> (상위 2,000건만 표시 중, 전체 데이터는 엑셀 내보내기를 이용해 주세요)`;
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건${dedupInfo} <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span> (상위 2,000건만 표시 중, 전체 데이터는 엑셀 내보내기를 이용해 주세요)`;
                     subEl.style.color = 'var(--warning)';
                 } else {
-                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건 <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span>`;
+                    subEl.innerHTML = `검색 결과: <b>${filteredComps.length.toLocaleString()}</b>건${dedupInfo} <span style="font-size:0.82rem; margin-left:0.5rem; color:var(--text-secondary); font-weight:600;">[${modeText}]</span>`;
                     subEl.style.color = 'var(--text-secondary)';
                 }
             }
@@ -10073,75 +10133,57 @@ DST: 22. 지티테크`;
                 return;
             }
             
-            const searchVal = searchModel.value.toLowerCase().trim();
-            const showSqOnly = document.getElementById('filter-comp-sq')?.checked;
-            const showNoHistoryOnly = document.getElementById('filter-comp-no-history')?.checked;
-            const showUnitAOnly = document.getElementById('filter-comp-unit-a')?.checked;
-            const showAllPurchased = document.getElementById('filter-comp-all')?.checked;
-            
-            const exportData = [];
-            
-            filteredData.forEach(r => {
-                if (r.isUnmapped) return;
-                
-                let matched = [];
-                if (r.Serial && r.Serial !== '-') {
-                    matched = compBySerial[r.Serial] || [];
-                }
-                if (matched.length === 0 && r.SalesDoc && r.SalesDoc !== '-') {
-                    matched = compBySalesDoc[r.SalesDoc] || [];
-                }
-                
-                matched.forEach(c => {
-                    const model = r.Model || '';
-                    const isSq = c.SortString && (c.SortString === 'SQ' || c.SortString.includes('SQ'));
-                    const isNoHistory = isInitialComponent(c.Component, c.Month);
-                    
-                    if (showSqOnly && !isSq) return;
-                    if (showNoHistoryOnly && !isNoHistory) return;
-                    if (showUnitAOnly) {
-                        if (!c.IsUnitA) return;
-                    } else if (!showAllPurchased) {
-                        if (!c.IsInhouse) return;
+            const filteredComps = filterComponentData();
+            if (commSortRequired()) {
+                // Keep current sort order in export as well
+                filteredComps.sort((a, b) => {
+                    let valA = a[compSortKey];
+                    let valB = b[compSortKey];
+                    if (compSortKey === 'Category') {
+                        valA = a.IsSq ? '1_SQ' : (a.IsNoHistory ? '2_NoHistory' : '3_Mass');
+                        valB = b.IsSq ? '1_SQ' : (b.IsNoHistory ? '2_NoHistory' : '3_Mass');
+                    } else if (compSortKey === 'Month') {
+                        valA = getMonthOrder(a.Month);
+                        valB = getMonthOrder(b.Month);
                     }
-                    if (selectedCompMaterials.length > 0 && !selectedCompMaterials.includes(c.Component)) return;
-                    
-                    if (searchVal) {
-                        const modelLower = model.toLowerCase();
-                        const compLower = (c.Component || '').toLowerCase();
-                        const descLower = (c.CompDesc || '').toLowerCase();
-                        const parentLower = (c.ParentMat || '').toLowerCase();
-                        
-                        const matchSearch = modelLower.includes(searchVal) ||
-                                           compLower.includes(searchVal) ||
-                                           descLower.includes(searchVal) ||
-                                           parentLower.includes(searchVal);
-                        if (!matchSearch) return;
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        return compSortDirection === 'asc' ? valA - valB : valB - valA;
                     }
-                    
-                    let typeLabel = '사내 가공품';
-                    if (c.IsUnitA) typeLabel = `A급 유니트 (${c.WareCtrl || 'PS/PZ'})`;
-                    else if (isSq) typeLabel = '초도품(SQ)';
-                    else if (isNoHistory) typeLabel = '시스템 생산 이력X';
-                    else if (c.ProcType === 'E') typeLabel = '사내 가공품(E)';
-                    else if (c.Plant === '1842') typeLabel = '외주 가공품(44)';
-                    else if (!c.IsInhouse) typeLabel = '구매품(F)';
-                    
-                    const rowObj = {};
-                    compUserVisibleHeaders.forEach(h => {
-                        if (h === 'Month') rowObj['생산월'] = c.Month || '';
-                        else if (h === 'Model') rowObj['기종'] = model;
-                        else if (h === 'ParentMat') rowObj['완제품 품번 (Parent Mat.)'] = c.ParentMat || '';
-                        else if (h === 'SalesDoc') rowObj['Sales Doc'] = c.SalesDoc || '';
-                        else if (h === 'Serial') rowObj['시리얼번호'] = c.Serial || '';
-                        else if (h === 'Component') rowObj['가공품 품번 (Component)'] = c.Component || '';
-                        else if (h === 'CompDesc') rowObj['가공품명 (Description)'] = c.CompDesc || '';
-                        else if (h === 'Qty') rowObj['소요량 (Qty)'] = c.Qty;
-                        else if (h === 'WareCtrl') rowObj['창고관리자'] = c.WareCtrl ? (c.WareCtrlDesc ? `${c.WareCtrl} (${c.WareCtrlDesc})` : c.WareCtrl) : '';
-                        else if (h === 'Category') rowObj['구분'] = typeLabel;
-                    });
-                    exportData.push(rowObj);
+                    valA = (valA || '').toString().toUpperCase();
+                    valB = (valB || '').toString().toUpperCase();
+                    if (valA < valB) return compSortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return compSortDirection === 'asc' ? 1 : -1;
+                    return 0;
                 });
+            }
+            function commSortRequired() {
+                return !!(compSortKey && compSortDirection);
+            }
+
+            const exportData = [];
+            filteredComps.forEach(c => {
+                let typeLabel = '사내 가공품';
+                if (c.IsUnitA) typeLabel = `A급 유니트 (${c.WareCtrl || 'PS/PZ'})`;
+                else if (c.IsSq) typeLabel = '초도품(SQ)';
+                else if (c.IsNoHistory) typeLabel = '시스템 생산 이력X';
+                else if (c.ProcType === 'E') typeLabel = '사내 가공품(E)';
+                else if (c.Plant === '1842') typeLabel = '외주 가공품(44)';
+                else if (!c.IsInhouse) typeLabel = '구매품(F)';
+                
+                const rowObj = {};
+                compUserVisibleHeaders.forEach(h => {
+                    if (h === 'Month') rowObj['생산월'] = c.Month || '';
+                    else if (h === 'Model') rowObj['기종'] = c.Model || '';
+                    else if (h === 'ParentMat') rowObj['완제품 품번 (Parent Mat.)'] = c.ParentMat || '';
+                    else if (h === 'SalesDoc') rowObj['Sales Doc'] = c.SalesDoc || '';
+                    else if (h === 'Serial') rowObj['시리얼번호'] = c.Serial || '';
+                    else if (h === 'Component') rowObj['가공품 품번 (Component)'] = c.Component || '';
+                    else if (h === 'CompDesc') rowObj['가공품명 (Description)'] = c.CompDesc || '';
+                    else if (h === 'Qty') rowObj['소요량 (Qty)'] = c.Qty;
+                    else if (h === 'WareCtrl') rowObj['창고관리자'] = c.WareCtrl ? (c.WareCtrlDesc ? `${c.WareCtrl} (${c.WareCtrlDesc})` : c.WareCtrl) : '';
+                    else if (h === 'Category') rowObj['구분'] = typeLabel;
+                });
+                exportData.push(rowObj);
             });
             
             if (exportData.length === 0) {
