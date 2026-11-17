@@ -1646,66 +1646,68 @@ function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const fontStack = `'Pretendard','Noto Sans KR','Noto Sans CJK KR','LG Smart UI','Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
+    const numFontStack = `'Segoe UI','Pretendard','Noto Sans KR','Malgun Gothic',sans-serif`;
 
     const rowsHtml = groupedChanges.map((c, idx) => {
-        let badgeBg = '#ede9fe', badgeColor = '#6d28d9', badgeText = '품번변경';
+        let badgeBg = '#ede9fe', badgeColor = '#5b21b6', badgeText = '품번변경';
         if (c.changeType === 'NEW') {
-            badgeBg = '#d1fae5'; badgeColor = '#047857'; badgeText = '신규투입';
+            badgeBg = '#d1fae5'; badgeColor = '#065f46'; badgeText = '신규투입';
         } else if (c.changeType === 'DELETED') {
-            badgeBg = '#fee2e2'; badgeColor = '#b91c1c'; badgeText = '삭제/제외';
+            badgeBg = '#fee2e2'; badgeColor = '#991b1b'; badgeText = '삭제/제외';
         } else if (c.changeType === 'QTY_CHANGE') {
-            badgeBg = '#fef3c7'; badgeColor = '#b45309'; badgeText = '수량변동';
+            badgeBg = '#fef3c7'; badgeColor = '#92400e'; badgeText = '수량변동';
         }
 
         const plantBadge = c.plant === '1840'
-            ? '<span style="color:#1d4ed8; font-weight:700;">1840 남산+</span>'
-            : (c.plant === '1842' ? '<span style="color:#7e22ce; font-weight:700;">1842 성주</span>' : escapeHtml(c.plant || '-'));
-        const monthSub = c.prodMonth ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(c.prodMonth)}</div>` : '';
+            ? `<span style="font-family:${fontStack}; color:#1d4ed8; font-weight:700; font-size:10pt;">1840 남산+</span>`
+            : (c.plant === '1842' ? `<span style="font-family:${fontStack}; color:#6d28d9; font-weight:700; font-size:10pt;">1842 성주</span>` : escapeHtml(c.plant || '-'));
+        const monthSub = c.prodMonth ? `<div style="font-family:${numFontStack}; font-size:9pt; color:#64748b; margin-top:2px;">${escapeHtml(c.prodMonth)}</div>` : '';
 
         const serialMain = c.serial
-            ? `<div style="font-weight:700; color:#0f172a; font-family:Consolas,'Malgun Gothic',monospace; font-size:12px;">${escapeHtml(c.serial)}</div>`
-            : `<div style="color:#64748b; font-size:12px;">호기 미지정</div>`;
+            ? `<div style="font-family:${numFontStack}; font-weight:700; color:#0f172a; font-size:10pt; letter-spacing:0;">${escapeHtml(c.serial)}</div>`
+            : `<div style="font-family:${fontStack}; color:#64748b; font-size:9.5pt;">호기 미지정</div>`;
         const orderOrSo = (c.soOrder && c.soOrder !== '0' && c.soOrder !== '-')
-            ? `S/O: ${escapeHtml(c.soOrder)}`
-            : (c.order ? `오더: ${escapeHtml(c.order)}` : '');
-        const orderSub = orderOrSo ? `<div style="font-size:11px; color:#64748b; margin-top:2px; font-family:Consolas,monospace;">${orderOrSo}</div>` : '';
+            ? `S/O ${escapeHtml(c.soOrder)}`
+            : (c.order ? `오더 ${escapeHtml(c.order)}` : '');
+        const orderSub = orderOrSo ? `<div style="font-family:${numFontStack}; font-size:9pt; color:#64748b; margin-top:2px;">${orderOrSo}</div>` : '';
 
         const matTitle = c.matDesc ? escapeHtml(c.matDesc) : escapeHtml(c.material || '-');
         const matSub = (c.material && c.material !== 'SEMI' && c.matDesc)
-            ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(c.material)}</div>`
+            ? `<div style="font-family:${numFontStack}; font-size:9pt; color:#64748b; margin-top:2px;">${escapeHtml(c.material)}</div>`
             : '';
 
         let partNumHtml = '';
         if (c.changeType === 'REPLACED') {
             partNumHtml = `
-                <div style="font-family:Consolas,monospace; font-size:11px; color:#94a3b8; text-decoration:line-through;">${escapeHtml(c.oldComponent || '-')}</div>
-                <div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#0f172a; margin-top:2px;">
-                    <span style="color:#7c3aed; font-weight:700;">➔</span> <span style="background:#f5f3ff; color:#5b21b6; padding:1px 5px; font-weight:700;">${escapeHtml(c.component || '-')}</span>
+                <div style="font-family:${numFontStack}; font-size:9.5pt; color:#94a3b8; text-decoration:line-through;">${escapeHtml(c.oldComponent || '-')}</div>
+                <div style="font-family:${numFontStack}; font-size:10.5pt; font-weight:700; color:#0f172a; margin-top:3px;">
+                    <span style="color:#7c3aed; font-weight:700;">➔</span> <span style="background-color:#f5f3ff; color:#5b21b6; padding:2px 6px; font-weight:700;">${escapeHtml(c.component || '-')}</span>
                 </div>`;
         } else if (c.changeType === 'DELETED') {
-            partNumHtml = `<div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#dc2626; text-decoration:line-through;">${escapeHtml(c.component || '-')}</div>`;
+            partNumHtml = `<div style="font-family:${numFontStack}; font-size:10pt; font-weight:700; color:#dc2626; text-decoration:line-through;">${escapeHtml(c.component || '-')}</div>`;
         } else {
-            partNumHtml = `<div style="font-family:Consolas,monospace; font-size:12px; font-weight:700; color:#0284c7;">${escapeHtml(c.component || '-')}</div>`;
+            partNumHtml = `<div style="font-family:${numFontStack}; font-size:10.5pt; font-weight:700; color:#0284c7;">${escapeHtml(c.component || '-')}</div>`;
         }
 
-        let partDescHtml = `<div style="font-weight:600; color:#1e293b; font-size:12px;">${escapeHtml(c.compDesc || '-')}</div>`;
+        let partDescHtml = `<div style="font-family:${fontStack}; font-weight:600; color:#0f172a; font-size:10pt;">${escapeHtml(c.compDesc || '-')}</div>`;
         if (c.changeType === 'REPLACED' && c.oldCompDesc && c.oldCompDesc !== c.compDesc) {
-            partDescHtml += `<div style="font-size:11px; color:#64748b; margin-top:2px;">이전 품명: ${escapeHtml(c.oldCompDesc)}</div>`;
+            partDescHtml += `<div style="font-family:${fontStack}; font-size:9pt; color:#64748b; margin-top:3px;">이전 품명: ${escapeHtml(c.oldCompDesc)}</div>`;
         }
 
         const isUnreg = c.changeType !== 'DELETED' && !c.invManager;
         let invHtml = '';
         if (c.invManager) {
-            invHtml = `<span style="background:#eff6ff; color:#1d4ed8; padding:3px 8px; font-weight:700; font-size:11px;">${escapeHtml(c.invManager)}</span>`;
+            invHtml = `<span style="font-family:${fontStack}; background-color:#eff6ff; color:#1d4ed8; padding:3px 9px; font-weight:700; font-size:9.5pt;">${escapeHtml(c.invManager)}</span>`;
             if (c.changeType === 'REPLACED' && c.oldInvManager && c.oldInvManager !== c.invManager) {
-                invHtml += `<div style="font-size:11px; color:#64748b; margin-top:3px;">이전: ${escapeHtml(c.oldInvManager)}</div>`;
+                invHtml += `<div style="font-family:${fontStack}; font-size:8.5pt; color:#64748b; margin-top:3px;">이전: ${escapeHtml(c.oldInvManager)}</div>`;
             }
         } else if (c.changeType === 'DELETED') {
-            invHtml = `<span style="color:#94a3b8; font-size:11px;">${escapeHtml(c.oldInvManager || '-')}</span>`;
+            invHtml = `<span style="font-family:${fontStack}; color:#94a3b8; font-size:9.5pt;">${escapeHtml(c.oldInvManager || '-')}</span>`;
         } else {
-            invHtml = `<span style="background:#ffe4e6; color:#e11d48; padding:3px 8px; font-weight:700; font-size:11px;">미등록</span>`;
+            invHtml = `<span style="font-family:${fontStack}; background-color:#ffe4e6; color:#be123c; padding:3px 9px; font-weight:700; font-size:9.5pt;">미등록</span>`;
             if (c.oldInvManager) {
-                invHtml += `<div style="font-size:11px; color:#d97706; font-weight:600; margin-top:3px;">이전담당: ${escapeHtml(c.oldInvManager)}</div>`;
+                invHtml += `<div style="font-family:${fontStack}; font-size:8.5pt; color:#b45309; font-weight:600; margin-top:4px;">이전담당: ${escapeHtml(c.oldInvManager)}</div>`;
             }
         }
 
@@ -1715,92 +1717,103 @@ function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
         const unitStr = c.unit ? ` ${escapeHtml(c.unit)}` : '';
         let qtySubHtml = '';
         if (c.changeType === 'REPLACED' && diffNum === 0) {
-            qtySubHtml = `<span style="color:#6d28d9; font-weight:700; font-size:11px;">1:1 교체</span>`;
+            qtySubHtml = `<span style="font-family:${fontStack}; color:#6d28d9; font-weight:700; font-size:9pt;">1:1 교체</span>`;
         } else if (diffNum > 0) {
-            qtySubHtml = `<span style="color:#059669; font-weight:700; font-size:11px;">+${diffNum.toLocaleString()}${unitStr}</span>`;
+            qtySubHtml = `<span style="font-family:${numFontStack}; color:#059669; font-weight:700; font-size:9pt;">+${diffNum.toLocaleString()}${unitStr}</span>`;
         } else if (diffNum < 0) {
-            qtySubHtml = `<span style="color:#dc2626; font-weight:700; font-size:11px;">${diffNum.toLocaleString()}${unitStr}</span>`;
+            qtySubHtml = `<span style="font-family:${numFontStack}; color:#dc2626; font-weight:700; font-size:9pt;">${diffNum.toLocaleString()}${unitStr}</span>`;
         }
 
         const rowBg = isUnreg ? '#fff5f7' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
 
         return `<tr style="background-color:${rowBg};">
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
-                <span style="background-color:${badgeBg}; color:${badgeColor}; padding:4px 8px; font-weight:700; font-size:11px; display:inline-block;">${badgeText}</span>
+            <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+                <span style="font-family:${fontStack}; background-color:${badgeBg}; color:${badgeColor}; padding:4px 9px; font-weight:700; font-size:9pt; display:inline-block;">${badgeText}</span>
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+            <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
                 ${plantBadge}${monthSub}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+            <td style="font-family:${numFontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
                 ${serialMain}${orderSub}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle; color:#334155; font-size:12px;">
+            <td style="font-family:${numFontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle; color:#1e293b; font-size:9.5pt;">
                 <div style="font-weight:600;">${matTitle}</div>${matSub}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+            <td style="font-family:${numFontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
                 ${partNumHtml}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
+            <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle;">
                 ${partDescHtml}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
+            <td style="font-family:${fontStack}; padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:center; vertical-align:middle;">
                 ${invHtml}
             </td>
-            <td style="padding:11px 10px; border-bottom:1px solid #e2e8f0; text-align:right; vertical-align:middle;">
-                <div style="font-size:12px; color:#334155;"><span style="color:#94a3b8;">${oldQ}</span> ➔ <b style="color:#0f172a;">${newQ}</b><span style="font-size:11px; color:#64748b;">${unitStr}</span></div>
+            <td style="font-family:${numFontStack}; padding:12px 12px; border-bottom:1px solid #e2e8f0; text-align:right; vertical-align:middle;">
+                <div style="font-size:10pt; color:#334155;"><span style="color:#94a3b8;">${oldQ}</span> ➔ <b style="color:#0f172a;">${newQ}</b><span style="font-size:9pt; color:#64748b;">${unitStr}</span></div>
                 <div style="margin-top:2px;">${qtySubHtml}</div>
             </td>
         </tr>`;
     }).join('\r\n');
 
     return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:'Malgun Gothic','맑은 고딕','Segoe UI',sans-serif; color:#0f172a;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9; padding:24px 16px;">
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+    body, table, th, td, div, p, span {
+        font-family: 'Pretendard', 'Noto Sans KR', 'Noto Sans CJK KR', 'LG Smart UI', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif !important;
+        mso-ascii-font-family: 'Segoe UI', 'Noto Sans KR', sans-serif;
+        mso-fareast-font-family: 'Noto Sans KR', 'Noto Sans CJK KR', 'LG Smart UI', 'Malgun Gothic', sans-serif;
+        mso-hansi-font-family: 'Segoe UI', 'Noto Sans KR', sans-serif;
+        letter-spacing: -0.2px;
+    }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:${fontStack}; color:#0f172a;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9; padding:24px 16px; font-family:${fontStack};">
         <tr>
-            <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:1160px; background-color:#ffffff; border:1px solid #e2e8f0; border-top:4px solid #2563eb;">
+            <td align="center" style="font-family:${fontStack};">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:1180px; background-color:#ffffff; border:1px solid #e2e8f0; border-top:4px solid #2563eb; font-family:${fontStack};">
                     <!-- Header Section -->
                     <tr>
-                        <td style="padding:24px 28px 18px 28px; border-bottom:1px solid #f1f5f9;">
-                            <div style="font-size:11px; font-weight:700; color:#2563eb; letter-spacing:0.5px; margin-bottom:4px;">SAP ERP ENGINEERING CHANGE &amp; BOM MONITOR</div>
-                            <div style="font-size:20px; font-weight:800; color:#0f172a; margin-bottom:8px;">설계변경(설변) 및 하위 가공품 소요량 변동 리포트</div>
-                            <div style="font-size:12px; color:#64748b;">
-                                비교 구간: <b style="color:#334155;">${escapeHtml(baseTitle)}</b> &nbsp;➔&nbsp; <b style="color:#2563eb;">${escapeHtml(targetTitle)}</b>
-                                &nbsp;&nbsp;|&nbsp;&nbsp; 자동 발송 일시: <b style="color:#334155;">${nowStr}</b>
+                        <td style="padding:26px 30px 20px 30px; border-bottom:1px solid #f1f5f9; font-family:${fontStack};">
+                            <div style="font-family:${numFontStack}; font-size:9pt; font-weight:700; color:#2563eb; letter-spacing:0.8px; margin-bottom:5px;">SAP ERP ENGINEERING CHANGE &amp; BOM MONITOR</div>
+                            <div style="font-family:${fontStack}; font-size:16pt; font-weight:700; color:#0f172a; margin-bottom:8px; letter-spacing:-0.4px;">설계변경(설변) 및 하위 가공품 소요량 변동 리포트</div>
+                            <div style="font-family:${fontStack}; font-size:10pt; color:#64748b;">
+                                비교 구간: <b style="color:#1e293b;">${escapeHtml(baseTitle)}</b> &nbsp;➔&nbsp; <b style="color:#2563eb;">${escapeHtml(targetTitle)}</b>
+                                &nbsp;&nbsp;|&nbsp;&nbsp; 발송 일시: <b style="color:#1e293b;">${nowStr}</b>
                             </div>
                         </td>
                     </tr>
 
                     <!-- KPI Cards Section -->
                     <tr>
-                        <td style="padding:18px 28px 10px 28px;">
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <td style="padding:20px 30px 12px 30px; font-family:${fontStack};">
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:${fontStack};">
                                 <tr>
-                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #7c3aed; padding:12px 14px;">
-                                        <div style="font-size:11px; color:#64748b; font-weight:700;">품번 변경 (설변 A➔B)</div>
-                                        <div style="font-size:22px; font-weight:800; color:#6d28d9; margin-top:4px;">${summary.totalReplaced || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 쌍</span></div>
+                                    <td width="19%" style="font-family:${fontStack}; background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #7c3aed; padding:14px 16px;">
+                                        <div style="font-size:9.5pt; color:#475569; font-weight:700;">품번 변경 (설변 A➔B)</div>
+                                        <div style="font-family:${numFontStack}; font-size:17pt; font-weight:700; color:#6d28d9; margin-top:5px;">${summary.totalReplaced || 0}<span style="font-family:${fontStack}; font-size:10pt; font-weight:600; color:#64748b;"> 쌍</span></div>
                                     </td>
                                     <td width="1%">&nbsp;</td>
-                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #10b981; padding:12px 14px;">
-                                        <div style="font-size:11px; color:#64748b; font-weight:700;">순수 신규 투입</div>
-                                        <div style="font-size:22px; font-weight:800; color:#059669; margin-top:4px;">${summary.totalPureNew || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalNew || 0})</span></div>
+                                    <td width="19%" style="font-family:${fontStack}; background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #10b981; padding:14px 16px;">
+                                        <div style="font-size:9.5pt; color:#475569; font-weight:700;">순수 신규 투입</div>
+                                        <div style="font-family:${numFontStack}; font-size:17pt; font-weight:700; color:#059669; margin-top:5px;">${summary.totalPureNew || 0}<span style="font-family:${fontStack}; font-size:9.5pt; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalNew || 0})</span></div>
                                     </td>
                                     <td width="1%">&nbsp;</td>
-                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #ef4444; padding:12px 14px;">
-                                        <div style="font-size:11px; color:#64748b; font-weight:700;">순수 삭제/제외</div>
-                                        <div style="font-size:22px; font-weight:800; color:#dc2626; margin-top:4px;">${summary.totalPureDeleted || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalDeleted || 0})</span></div>
+                                    <td width="19%" style="font-family:${fontStack}; background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #ef4444; padding:14px 16px;">
+                                        <div style="font-size:9.5pt; color:#475569; font-weight:700;">순수 삭제/제외</div>
+                                        <div style="font-family:${numFontStack}; font-size:17pt; font-weight:700; color:#dc2626; margin-top:5px;">${summary.totalPureDeleted || 0}<span style="font-family:${fontStack}; font-size:9.5pt; font-weight:600; color:#64748b;"> 건 (전체 ${summary.totalDeleted || 0})</span></div>
                                     </td>
                                     <td width="1%">&nbsp;</td>
-                                    <td width="19%" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #f59e0b; padding:12px 14px;">
-                                        <div style="font-size:11px; color:#64748b; font-weight:700;">소요 수량 변동</div>
-                                        <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;">${summary.totalQtyChanged || 0}<span style="font-size:12px; font-weight:600; color:#64748b;"> 건</span></div>
+                                    <td width="19%" style="font-family:${fontStack}; background-color:#f8fafc; border:1px solid #e2e8f0; border-top:3px solid #f59e0b; padding:14px 16px;">
+                                        <div style="font-size:9.5pt; color:#475569; font-weight:700;">소요 수량 변동</div>
+                                        <div style="font-family:${numFontStack}; font-size:17pt; font-weight:700; color:#d97706; margin-top:5px;">${summary.totalQtyChanged || 0}<span style="font-family:${fontStack}; font-size:10pt; font-weight:600; color:#64748b;"> 건</span></div>
                                     </td>
                                     <td width="1%">&nbsp;</td>
-                                    <td width="20%" style="background-color:#fff1f2; border:1px solid #fecdd3; border-top:3px solid #e11d48; padding:12px 14px;">
-                                        <div style="font-size:11px; color:#be123c; font-weight:700;">변동중 담당자 미등록</div>
-                                        <div style="font-size:22px; font-weight:800; color:#e11d48; margin-top:4px;">${summary.totalDiffUnregistered || 0}<span style="font-size:12px; font-weight:600; color:#9f1239;"> 건 (전체 ${summary.uniqueUnregisteredParts || 0}품번)</span></div>
+                                    <td width="20%" style="font-family:${fontStack}; background-color:#fff1f2; border:1px solid #fecdd3; border-top:3px solid #e11d48; padding:14px 16px;">
+                                        <div style="font-size:9.5pt; color:#be123c; font-weight:700;">변동중 담당자 미등록</div>
+                                        <div style="font-family:${numFontStack}; font-size:17pt; font-weight:700; color:#e11d48; margin-top:5px;">${summary.totalDiffUnregistered || 0}<span style="font-family:${fontStack}; font-size:9.5pt; font-weight:600; color:#9f1239;"> 건 (전체 ${summary.uniqueUnregisteredParts || 0}품번)</span></div>
                                     </td>
                                 </tr>
                             </table>
@@ -1809,21 +1822,21 @@ function buildDiffEmailHtml(summary, groupedChanges, baseTitle, targetTitle) {
 
                     <!-- Table Section -->
                     <tr>
-                        <td style="padding:12px 28px 28px 28px;">
-                            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
+                        <td style="padding:12px 30px 30px 30px; font-family:${fontStack};">
+                            <div style="font-family:${fontStack}; font-size:10pt; color:#64748b; margin-bottom:12px;">
                                 총 <b style="color:#0f172a;">${groupedChanges.length}건</b>의 변동 내역이 감지되었습니다. 상세 원본 데이터는 첨부된 Excel 파일을 참고해 주세요.
                             </div>
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; border-top:2px solid #0f172a;">
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; border-top:2px solid #0f172a; font-family:${fontStack};">
                                 <thead>
-                                    <tr style="background-color:#f8fafc; color:#475569; font-size:11px; text-align:left;">
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:76px;">구분</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:86px;">플랜트/월</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:125px;">호기(Serial)/오더</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:170px;">완제품 기종내역</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; width:165px;">가공품 품번 (이전 ➔ 변경)</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1;">가공품 품명 (Comp.Desc)</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:115px;">담당자 (Inv.Mgr)</th>
-                                        <th style="padding:10px 10px; border-bottom:1px solid #cbd5e1; text-align:right; width:105px;">소요량 (이전➔최신)</th>
+                                    <tr style="background-color:#f8fafc; color:#334155; font-size:9.5pt; text-align:left;">
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:78px;">구분</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:88px;">플랜트/월</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; width:130px;">호기(Serial)/오더</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; width:175px;">완제품 기종내역</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; width:170px;">가공품 품번 (이전 ➔ 변경)</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1;">가공품 품명 (Comp.Desc)</th>
+                                        <th style="font-family:${fontStack}; padding:11px 10px; border-bottom:1px solid #cbd5e1; text-align:center; width:115px;">담당자 (Inv.Mgr)</th>
+                                        <th style="font-family:${fontStack}; padding:11px 12px; border-bottom:1px solid #cbd5e1; text-align:right; width:110px;">소요량 (이전➔최신)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
